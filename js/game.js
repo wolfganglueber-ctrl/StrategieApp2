@@ -2,11 +2,12 @@
 import { getGeo } from './hex.js';
 import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply,
-  cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_MARKET,
+  cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_MARKET, TECHS, TOWER_LEVELS,
+  TOWER_UPGRADE, TOWERS_PER_CITY, MELEE, FOOT,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 
 /*
  config: { seed, cols, rows, biome, players: [{ human: bool, ai: 1..5, name? }], levelId?, villageDensity? }
@@ -32,6 +33,7 @@ export function createGame(config) {
       res: { ...START_RES },
       incomeBonus: p.incomeBonus ?? (!p.human && p.ai >= 5 ? 0.5 : 0),
       alive: true,
+      tech: [],
     })),
     units: [],
     nextUnitId: 1,
@@ -39,7 +41,12 @@ export function createGame(config) {
     turn: 1,
     over: null,
     stats: { kills: new Array(n).fill(0), losses: new Array(n).fill(0) },
+    fog: !!config.fog,
+    explored: {},
   };
+  if (state.fog) {
+    state.players.forEach((p) => { if (p.human) state.explored[p.id] = new Array(geo.n).fill(0); });
+  }
   // Hauptstädte zuweisen (Reihenfolge der Spieler gemischt durch Seed)
   const caps = state.cities.filter((c) => c.capital);
   caps.forEach((c, i) => { c.owner = i; c.level = 2; });
@@ -64,9 +71,95 @@ export function geoOf(state) {
 }
 
 function spawnUnit(state, type, owner, idx, ready) {
-  const u = { id: state.nextUnitId++, type, owner, idx, hp: UNITS[type].hp, moved: !ready, attacked: !ready, acted: false };
+  const u = { id: state.nextUnitId++, type, owner, idx, hp: 1, moved: !ready, attacked: !ready, acted: false };
+  if (type === 'tower') u.level = 1;
+  u.hp = statsOf(state, u).hp;
   state.units.push(u);
   return u;
+}
+
+export function hasTech(state, pid, t) {
+  return !!state.players[pid]?.tech?.includes(t);
+}
+
+// Werte einer Einheit inkl. Turmstufe und Forschung
+export function statsOf(state, u) {
+  const T = UNITS[u.type];
+  const st = { hp: T.hp, atk: T.atk, def: T.def, move: T.move, range: T.range };
+  if (u.type === 'tower') {
+    Object.assign(st, TOWER_LEVELS[u.level || 1]);
+    if (hasTech(state, u.owner, 'stonework')) st.hp += 6;
+  }
+  const techs = state.players[u.owner]?.tech;
+  if (techs) {
+    for (const t of techs) {
+      const mod = TECHS[t].mod;
+      if (!mod) continue;
+      for (const [grp, m] of Object.entries(mod)) {
+        const hit = grp === u.type || grp === 'all' && u.type !== 'tower' || grp === 'melee' && MELEE.includes(u.type) || grp === 'foot' && FOOT.includes(u.type);
+        if (!hit) continue;
+        for (const [k, v] of Object.entries(m)) st[k] += v;
+      }
+    }
+  }
+  return st;
+}
+
+export function isStructure(u) {
+  return !!UNITS[u.type].structure;
+}
+
+// Sichtbarkeit für Kartennebel
+export function visibility(state, pid) {
+  const geo = geoOf(state);
+  const vis = new Uint8Array(geo.n);
+  for (const u of state.units) {
+    if (u.owner !== pid) continue;
+    const r = Math.max(2, statsOf(state, u).range) + (u.type === 'rider' || u.type === 'knight' ? 1 : 0);
+    for (const j of geo.within(u.idx, r)) vis[j] = 1;
+  }
+  for (const c of state.cities) {
+    if (c.owner !== pid) continue;
+    for (const j of geo.within(c.idx, cityRadius(c) + 1)) vis[j] = 1;
+  }
+  return vis;
+}
+
+export function updateExplored(state) {
+  if (!state.fog) return;
+  for (const key of Object.keys(state.explored)) {
+    const vis = visibility(state, +key);
+    const ex = state.explored[key];
+    for (let i = 0; i < vis.length; i++) if (vis[i]) ex[i] = 1;
+  }
+}
+
+export function towersOfCity(state, ci, territory = computeTerritory(state)) {
+  return state.units.filter((u) => u.type === 'tower' && territory[u.idx] === ci).length;
+}
+
+export function canBuildTower(state, pid, idx, territory = computeTerritory(state)) {
+  const ci = territory[idx];
+  if (ci < 0 || state.cities[ci].owner !== pid) return 'territory';
+  if (state.cityAt[idx] >= 0 || !TERRAIN[state.terrain[idx]].pass) return 'tile';
+  if (state.units.some((u) => u.idx === idx)) return 'occupied';
+  if (towersOfCity(state, ci, territory) >= TOWERS_PER_CITY) return 'limit';
+  if (!canAfford(state.players[pid].res, UNITS.tower.cost)) return 'cost';
+  return null;
+}
+
+export function upgradeCostOf(state, city) {
+  const base = upgradeCost(city);
+  if (!base || !hasTech(state, city.owner, 'masonry')) return base;
+  const c = {};
+  for (const k of Object.keys(base)) c[k] = Math.ceil(base[k] * 0.75);
+  return c;
+}
+
+export function techAvailable(state, pid, t) {
+  const T = TECHS[t];
+  if (!T || hasTech(state, pid, t)) return false;
+  return T.req.every((r) => hasTech(state, pid, r));
 }
 
 export function unitById(state, id) {
@@ -85,7 +178,7 @@ export function cityOn(state, idx) {
 }
 
 export function canMove(u) {
-  return !u.moved && !u.attacked;
+  return !u.moved && !u.attacked && u.type !== 'tower';
 }
 export function canAttack(u) {
   return !u.attacked && !(UNITS[u.type].noMoveAttack && u.moved);
@@ -97,13 +190,13 @@ export function canAct(state, u) {
 }
 
 export function unitRange(state, u) {
-  return UNITS[u.type].range;
+  return statsOf(state, u).range;
 }
 
 // Nur Städte geben Verteidigungsbonus, Gelände nicht
 export function defenseMult(state, idx) {
   const c = cityOn(state, idx);
-  return c ? cityDefense(c) : 1;
+  return c ? cityDefense(c, c.owner >= 0 && hasTech(state, c.owner, 'stonework')) : 1;
 }
 
 // Erreichbare Zielfelder: Map ziel -> vorgänger (für Pfade).
@@ -112,7 +205,7 @@ export function getMoves(state, u, occ = buildOcc(state), moveOverride) {
   const geo = geoOf(state);
   const parent = new Map();
   if (!canMove(u) && moveOverride === undefined) return parent;
-  const maxSteps = moveOverride ?? UNITS[u.type].move;
+  const maxSteps = moveOverride ?? statsOf(state, u).move;
   const steps = new Map([[u.idx, 0]]);
   const q = [u.idx];
   for (let h = 0; h < q.length; h++) {
@@ -159,7 +252,7 @@ export function getTargets(state, u, fromIdx, occ = buildOcc(state)) {
 }
 
 export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp) {
-  const A = UNITS[att.type], D = UNITS[def.type];
+  const A = statsOf(state, att), D = statsOf(state, def);
   const aF = A.atk * (attHp / A.hp);
   const dF = D.def * (def.hp / D.hp) * defenseMult(state, def.idx) * (def.shaken ? 0.5 : 1);
   const tot = aF + dF;
@@ -216,9 +309,10 @@ export function cityYield(state, ci, territory = computeTerritory(state)) {
     if (t === 'forest') forests++;
     if (t === 'hill' || t === 'mountain') rocks++;
   }
-  if (hasBuilding(c, 'farm')) inc.food += 3;
-  if (hasBuilding(c, 'lumber')) inc.wood += 1 + forests;
-  if (hasBuilding(c, 'mine')) inc.ore += 1 + rocks * 2;
+  const tech = (t) => c.owner >= 0 && hasTech(state, c.owner, t);
+  if (hasBuilding(c, 'farm')) inc.food += 3 + (tech('plough') ? 2 : 0);
+  if (hasBuilding(c, 'lumber')) inc.wood += 1 + forests + (tech('saw') ? 2 : 0);
+  if (hasBuilding(c, 'mine')) inc.ore += 1 + rocks * 2 + (tech('mining') ? 2 : 0);
   return inc;
 }
 
@@ -237,6 +331,7 @@ export function spawnSpots(state, ci, occ = buildOcc(state), territory = compute
 }
 
 export function tradeRate(state, pid) {
+  if (hasTech(state, pid, 'guild')) return TRADE_RATE_MARKET;
   return state.cities.some((c) => c.owner === pid && hasBuilding(c, 'market')) ? TRADE_RATE_MARKET : TRADE_RATE;
 }
 
@@ -260,7 +355,7 @@ export function unitCap(state, pid) {
 
 export function unitCount(state, pid) {
   let n = 0;
-  for (const u of state.units) if (u.owner === pid) n++;
+  for (const u of state.units) if (u.owner === pid && u.type !== 'tower') n++;
   return n;
 }
 
@@ -306,14 +401,14 @@ export function startTurn(state) {
   // Heilung für Einheiten, die letzte Runde geruht haben
   for (const u of state.units) {
     if (u.owner !== pid) continue;
-    const max = UNITS[u.type].hp;
+    const max = statsOf(state, u).hp;
     if (!u.acted && u.hp < max) {
       let inTerritory = false;
       for (const j of geo.within(u.idx, 1)) {
         const c = cityOn(state, j);
         if (c && c.owner === pid) { inTerritory = true; break; }
       }
-      const h = Math.min(max - u.hp, inTerritory ? 4 : 2);
+      const h = Math.min(max - u.hp, (inTerritory ? 4 : 2) + (hasTech(state, pid, 'medic') ? 2 : 0));
       u.hp += h;
       ev.push({ k: 'heal', id: u.id, idx: u.idx, amount: h });
     }
@@ -327,6 +422,7 @@ export function startTurn(state) {
   for (const k of RES) p.res[k] += inc[k];
   ev.push({ k: 'income', pid, amount: inc });
   checkOver(state);
+  updateExplored(state);
   return ev;
 }
 
@@ -381,12 +477,12 @@ export function applyAction(state, a) {
         state.units = state.units.filter((x) => x !== t);
         state.stats.kills[pid]++;
         state.stats.losses[t.owner]++;
-        if (UNITS[u.type].range === 1) {
+        if (UNITS[u.type].range === 1 && u.type !== 'tower') {
           e.advance = t.idx;
           u.idx = t.idx;
         }
       } else {
-        if (UNITS[u.type].range > 1) { t.shaken = true; e.shaken = true; }
+        if (statsOf(state, u).range > 1 && t.type !== 'tower') { t.shaken = true; e.shaken = true; }
       }
       if (!e.killed && r.counter > 0) {
         u.hp -= r.counter;
@@ -433,11 +529,40 @@ export function applyAction(state, a) {
     case 'upgrade': {
       const c = cityOn(state, a.idx);
       if (!c || c.owner !== pid || c.level >= CITY_MAX_LEVEL) return null;
-      const cost = upgradeCost(c);
+      const cost = upgradeCostOf(state, c);
       if (!canAfford(player.res, cost)) return null;
       for (const k of RES) player.res[k] -= cost[k] || 0;
       c.level++;
       ev.push({ k: 'upgrade', idx: a.idx, level: c.level });
+      break;
+    }
+    case 'tower': {
+      if (canBuildTower(state, pid, a.idx)) return null;
+      for (const k of RES) player.res[k] -= UNITS.tower.cost[k] || 0;
+      const u = spawnUnit(state, 'tower', pid, a.idx, false);
+      ev.push({ k: 'recruit', id: u.id, idx: a.idx });
+      break;
+    }
+    case 'towerUp': {
+      const u = unitById(state, a.unitId);
+      if (!u || u.type !== 'tower' || u.owner !== pid || u.level >= 3) return null;
+      const cost = TOWER_UPGRADE[u.level];
+      if (!canAfford(player.res, cost)) return null;
+      for (const k of RES) player.res[k] -= cost[k] || 0;
+      const before = statsOf(state, u).hp;
+      u.level++;
+      u.hp += statsOf(state, u).hp - before;
+      ev.push({ k: 'upgrade', idx: u.idx, level: u.level, tower: true });
+      break;
+    }
+    case 'research': {
+      const T = TECHS[a.tech];
+      if (!techAvailable(state, pid, a.tech) || !canAfford(player.res, T.cost)) return null;
+      for (const k of RES) player.res[k] -= T.cost[k] || 0;
+      const hpBefore = new Map(state.units.filter((u) => u.owner === pid).map((u) => [u.id, statsOf(state, u).hp]));
+      player.tech.push(a.tech);
+      for (const u of state.units) if (hpBefore.has(u.id)) u.hp += statsOf(state, u).hp - hpBefore.get(u.id);
+      ev.push({ k: 'research', tech: a.tech, pid });
       break;
     }
     case 'end': {
@@ -446,6 +571,7 @@ export function applyAction(state, a) {
     default:
       return null;
   }
+  updateExplored(state);
   return ev;
 }
 

@@ -46,10 +46,11 @@ export function bfsDistances(geo, terrain, sources) {
 
 function generateTerrain(rng, cols, rows, biome) {
   const geo = getGeo(cols, rows);
-  const n1 = makeNoise(rng, cols + 2, rows + 2, 3.2);
-  const n2 = makeNoise(rng, cols + 2, rows + 2, 1.6);
-  const m1 = makeNoise(rng, cols + 2, rows + 2, 2.6);
-  const m2 = makeNoise(rng, cols + 2, rows + 2, 1.3);
+  const f = Math.max(1, cols / 16); // große Karten: größere Landschaftsformen
+  const n1 = makeNoise(rng, cols + 2, rows + 2, 3.2 * f);
+  const n2 = makeNoise(rng, cols + 2, rows + 2, 1.6 * Math.sqrt(f));
+  const m1 = makeNoise(rng, cols + 2, rows + 2, 2.6 * f);
+  const m2 = makeNoise(rng, cols + 2, rows + 2, 1.3 * Math.sqrt(f));
   const elev = new Float32Array(geo.n), moist = new Float32Array(geo.n);
   for (let i = 0; i < geo.n; i++) {
     const c = i % cols, r = (i / cols) | 0;

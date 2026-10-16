@@ -2,7 +2,7 @@
 // pro Frame kommen nur Markierungen, Einheiten und Effekte dazu.
 import { hexCenter, pixelToIndex, boardSize, SQRT3, getGeo } from './hex.js';
 import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS } from './data.js';
-import { computeTerritory } from './game.js';
+import { computeTerritory, statsOf } from './game.js';
 import {
   hash, hexPath, mix, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, FIG_BOX,
 } from './art.js';
@@ -12,6 +12,7 @@ const DEPTH = HEX * 0.3;
 const MARGIN = HEX * 1.4;
 const GREY = '#8d8a85';
 const FIG = 1.3; // Figurengröße relativ zum Feld
+const CHUNK = 512; // Kachelgröße für den Geländepuffer (Weltpixel)
 
 const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
@@ -66,8 +67,11 @@ export class Renderer {
     if (fit || sizeChanged) this.fit(focusIdx);
   }
 
-  invalidate(map = false) {
-    if (map) this.cacheDirty = true;
+  invalidate(map = false, idx) {
+    if (map) {
+      if (idx != null && this.chunks) this.invalidateArea(idx);
+      else this.cacheDirty = true;
+    }
     this.dirty = true;
   }
 
@@ -294,39 +298,103 @@ export class Renderer {
     return own;
   }
 
-  buildCache() {
-    const b = this.board();
-    let scale = Math.min(3, this.cam.z * this.dpr * 1.15);
-    const W = b.w + MARGIN * 2, H = b.h + MARGIN * 2 + DEPTH;
-    const maxArea = 9e6;
-    if (W * H * scale * scale > maxArea) scale = Math.sqrt(maxArea / (W * H));
-    const cv = this.cache?.canvas || document.createElement('canvas');
-    cv.width = Math.ceil(W * scale);
-    cv.height = Math.ceil(H * scale);
-    const ctx = cv.getContext('2d');
-    const ox = (HEX * SQRT3) / 2 + MARGIN, oy = HEX + MARGIN;
-    ctx.setTransform(scale, 0, 0, scale, ox * scale, oy * scale);
-    ctx.clearRect(-ox, -oy, W, H);
-    this.drawTerrain(ctx);
-    this.cache = { canvas: cv, scale, ox, oy, W, H };
+  // Gelände wird in Kacheln (Chunks) vorgerendert – nur sichtbare, mit Speicherbudget
+  chunkScaleWanted() {
+    const want = Math.min(2.6, this.cam.z * this.dpr * 1.1);
+    return Math.pow(2, Math.round(Math.log2(want) * 2) / 2);
+  }
+
+  resetChunks() {
+    this.chunks = new Map();
+    this.ownMap = this.territory();
     this.cacheDirty = false;
   }
 
-  drawTerrain(ctx) {
-    const s = this.state, geo = getGeo(s.cols, s.rows);
+  getChunk(cx, cy) {
+    const key = cx + ',' + cy;
+    let ch = this.chunks.get(key);
+    if (ch && (ch.scale === this.chunkScale || this.gesturing)) {
+      ch.used = this.frameNo;
+      return ch;
+    }
+    const scale = this.chunkScale;
+    const pad = 2 / scale;
+    const size = CHUNK + pad;
+    const cv = ch?.cv || document.createElement('canvas');
+    cv.width = Math.ceil(size * scale);
+    cv.height = Math.ceil(size * scale);
+    const ctx = cv.getContext('2d');
+    const x0 = cx * CHUNK, y0 = cy * CHUNK;
+    ctx.setTransform(scale, 0, 0, scale, -x0 * scale, -y0 * scale);
+    ctx.clearRect(x0, y0, size, size);
+    this.drawTerrain(ctx, x0, y0, x0 + size, y0 + size);
+    ch = { cv, scale, size, used: this.frameNo };
+    this.chunks.set(key, ch);
+    // Speicher begrenzen: älteste Kacheln verwerfen
+    let px = 0;
+    for (const c of this.chunks.values()) px += c.cv.width * c.cv.height;
+    if (px > 18e6) {
+      const old = [...this.chunks.entries()].sort((a, b) => a[1].used - b[1].used);
+      for (const [k, c] of old) {
+        if (px <= 12e6 || c.used === this.frameNo) break;
+        px -= c.cv.width * c.cv.height;
+        this.chunks.delete(k);
+      }
+    }
+    return ch;
+  }
+
+  // Nach Eroberung/Ausbau nur die betroffene Gegend neu zeichnen
+  invalidateArea(idx) {
+    if (!this.chunks) return;
+    this.ownMap = this.territory();
+    const c = this.center(idx);
+    const r = HEX * 6;
+    for (const key of [...this.chunks.keys()]) {
+      const [cx, cy] = key.split(',').map(Number);
+      const x0 = cx * CHUNK, y0 = cy * CHUNK;
+      if (c.x + r < x0 || c.x - r > x0 + CHUNK || c.y + r < y0 || c.y - r > y0 + CHUNK) continue;
+      this.chunks.delete(key);
+    }
+    this.dirty = true;
+  }
+
+  isOnScreen(i, margin = 30) {
+    const c = this.center(i);
+    const p = this.worldToScreen(c.x, c.y);
+    return p.x > -margin && p.x < this.w + margin && p.y > this.viewPad.top - margin && p.y < this.h - this.viewPad.bottom + margin;
+  }
+
+  visibleRange(margin = 0) {
+    const a = this.screenToWorld(-margin, -margin), b = this.screenToWorld(this.w + margin, this.h + margin);
+    return { x0: a.x, y0: a.y, x1: b.x, y1: b.y };
+  }
+
+  drawTerrain(ctx, x0, y0, x1, y1) {
+    const s = this.state;
     const T = s.terrain;
-    const own = this.territory();
+    const own = this.ownMap || this.territory();
     const cityAt = new Map(s.cities.map((c) => [c.idx, c]));
+    const W = HEX * SQRT3;
+    const r0 = Math.max(0, Math.floor((y0 - HEX * 1.5) / (HEX * 1.5)));
+    const r1 = Math.min(s.rows - 1, Math.ceil((y1 + HEX * 3) / (HEX * 1.5)));
+    const c0 = Math.max(0, Math.floor((x0 - W) / W)), c1 = Math.min(s.cols - 1, Math.ceil((x1 + W) / W));
+    const rowIdx = (r) => {
+      const row = [];
+      for (let col = c0; col <= c1; col++) row.push(r * s.cols + col);
+      return row;
+    };
     // Wasser liegt tiefer
-    for (let i = 0; i < geo.n; i++) {
-      if (T[i] !== 'water') continue;
-      const c = this.center(i);
-      drawTileTop(ctx, 'water', c.x, c.y + DEPTH * 0.5, HEX + 0.5, i);
+    for (let r = r0; r <= r1; r++) {
+      for (const i of rowIdx(r)) {
+        if (T[i] !== 'water') continue;
+        const c = this.center(i);
+        drawTileTop(ctx, 'water', c.x, c.y + DEPTH * 0.5, HEX + 0.5, i);
+      }
     }
     ctx.lineCap = 'round';
-    for (let r = 0; r < s.rows; r++) {
-      const row = [];
-      for (let col = 0; col < s.cols; col++) row.push(r * s.cols + col);
+    for (let r = r0; r <= r1; r++) {
+      const row = rowIdx(r);
       for (const i of row) {
         const t = T[i];
         if (t === 'water') continue;
@@ -390,13 +458,13 @@ export class Renderer {
   }
 
   // Figuren werden einmal pro Typ/Farbe/Zoomstufe in einen Puffer gezeichnet
-  sprite(type, owner, exhausted) {
+  sprite(type, owner, exhausted, level) {
     const k = Math.max(0.5, Math.round(this.cam.z * this.dpr * 4) / 4) * (HEX / 40) * FIG;
     if (this.spriteScale !== k) {
       this.sprites = new Map();
       this.spriteScale = k;
     }
-    const key = type + owner + (exhausted ? 'x' : '');
+    const key = type + owner + (exhausted ? 'x' : '') + (level || '');
     let sp = this.sprites.get(key);
     if (sp) return sp;
     const base = PLAYER_COLORS[owner] || NEUTRAL_COLOR;
@@ -409,7 +477,7 @@ export class Renderer {
     cv.height = Math.ceil((B.top + B.bottom) * k);
     const ctx = cv.getContext('2d');
     ctx.setTransform(k, 0, 0, k, B.left * k, B.top * k);
-    drawFigure(ctx, type, col);
+    drawFigure(ctx, type, col, level);
     if (exhausted) {
       ctx.globalCompositeOperation = 'source-atop';
       ctx.fillStyle = 'rgba(70,70,70,0.35)';
@@ -438,7 +506,7 @@ export class Renderer {
       ctx.fillStyle = g;
       ctx.fillRect(x - 30 * s, y - 40 * s, 60 * s, 60 * s);
     }
-    const sp = this.sprite(u.type, u.owner, exhausted);
+    const sp = this.sprite(u.type, u.owner, exhausted, u.level);
     const B = FIG_BOX;
     const w = (B.left + B.right) * s * scale, h = (B.top + B.bottom) * s * scale;
     ctx.drawImage(sp.cv, x - B.left * s * scale, y - B.top * s * scale + (1 - scale) * 6 * s, w, h);
@@ -462,7 +530,7 @@ export class Renderer {
       }
     }
     // Lebensbalken unter dem Sockel
-    const max = UNITS[u.type].hp;
+    const max = statsOf(this.state, u).hp;
     const ratio = Math.max(0, u.hp / max);
     const bw = 24 * s * scale, bh = 4 * s, bx = x - bw / 2, by = y + 13.5 * s;
     ctx.fillStyle = 'rgba(0,0,0,0.75)';
@@ -482,12 +550,12 @@ export class Renderer {
   }
 
   // Vorschaubild einer Figur für Menüs/Panels
-  drawPreview(ctx, type, owner, cx, cy, size) {
+  drawPreview(ctx, type, owner, cx, cy, size, level) {
     const k = size / 60;
     ctx.save();
     ctx.translate(cx, cy + size * 0.22);
     ctx.scale(k, k);
-    drawFigure(ctx, type, PLAYER_COLORS[owner] || NEUTRAL_COLOR);
+    drawFigure(ctx, type, PLAYER_COLORS[owner] || NEUTRAL_COLOR, level);
     ctx.restore();
   }
 
@@ -519,18 +587,27 @@ export class Renderer {
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, this.w, this.h);
     if (!this.state) return;
-    if (this.cache && !this.gesturing) {
-      const want = Math.min(3, this.cam.z * this.dpr * 1.15);
-      const r = want / this.cache.scale;
-      const maxed = this.cache.W * this.cache.H * this.cache.scale * this.cache.scale > 8.5e6;
-      if ((r > 1.4 && this.cache.scale < 2.9 && !maxed) || r < 0.6) this.cacheDirty = true;
+    if (this.cacheDirty || !this.chunks) this.resetChunks();
+    this.frameNo = (this.frameNo || 0) + 1;
+    if (!this.gesturing) {
+      const want = this.chunkScaleWanted();
+      if (want !== this.chunkScale) this.chunkScale = want;
     }
-    if (this.cacheDirty || !this.cache) this.buildCache();
+    if (!this.chunkScale) this.chunkScale = this.chunkScaleWanted();
     const z = this.cam.z * this.dpr;
     ctx.setTransform(z, 0, 0, z, this.dpr * (this.w / 2 - this.cam.x * this.cam.z), this.dpr * (this.h / 2 - this.cam.y * this.cam.z));
-    const cc = this.cache;
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(cc.canvas, -cc.ox, -cc.oy, cc.canvas.width / cc.scale, cc.canvas.height / cc.scale);
+    const vr = this.visibleRange(40);
+    for (let cy = Math.floor(vr.y0 / CHUNK); cy <= Math.floor(vr.y1 / CHUNK); cy++) {
+      for (let cx = Math.floor(vr.x0 / CHUNK); cx <= Math.floor(vr.x1 / CHUNK); cx++) {
+        if (cx < -2 || cy < -2 || cx * CHUNK > this.board().w + MARGIN || cy * CHUNK > this.board().h + MARGIN) continue;
+        const ch = this.getChunk(cx, cy);
+        ctx.drawImage(ch.cv, cx * CHUNK, cy * CHUNK, ch.cv.width / ch.scale, ch.cv.height / ch.scale);
+      }
+    }
+    // Kartennebel
+    const fog = this.overlay.fog;
+    if (fog) this.drawFog(ctx, fog, vr);
 
     const o = this.overlay;
     const pulse = 0.5 + 0.5 * Math.sin(now / 220);
@@ -580,8 +657,10 @@ export class Renderer {
     const sorted = s.units.slice().sort((a, b) => a.idx - b.idx);
     for (const u of sorted) {
       if (this.hidden.has(u.id)) continue;
+      if (fog && !fog.vis[u.idx] && !this.unitPos.has(u.id)) continue;
       const pos = this.unitPos.get(u.id);
       const c = pos || this.center(u.idx);
+      if (c.x < vr.x0 - HEX || c.x > vr.x1 + HEX || c.y < vr.y0 - HEX * 2 || c.y > vr.y1 + HEX * 2) continue;
       const exhausted = !!o.exhausted?.has(u.id);
       const ready = !pos && !!o.ready?.has(u.id) && u.idx !== o.selected;
       this.drawUnit(ctx, u, c.x, c.y, pos?.s ?? 1, exhausted, pos?.flash || 0, ready, now);
@@ -591,6 +670,30 @@ export class Renderer {
     if (o.targets) for (const t of o.targets.values()) this.forecastBubble(ctx, t);
 
     for (const a of this.anims) if (a.draw && a.p >= 0) a.draw(ctx, a.p);
+  }
+
+  drawFog(ctx, fog, vr) {
+    const s = this.state;
+    const W = HEX * SQRT3;
+    const r0 = Math.max(0, Math.floor(vr.y0 / (HEX * 1.5)) - 1), r1 = Math.min(s.rows - 1, Math.ceil(vr.y1 / (HEX * 1.5)) + 1);
+    const c0 = Math.max(0, Math.floor(vr.x0 / W) - 1), c1 = Math.min(s.cols - 1, Math.ceil(vr.x1 / W) + 1);
+    for (let r = r0; r <= r1; r++) {
+      for (let col = c0; col <= c1; col++) {
+        const i = r * s.cols + col;
+        if (fog.vis[i]) continue;
+        const c = this.center(i);
+        if (!fog.explored[i]) {
+          const v = 9 + hash(i) * 3;
+          ctx.fillStyle = `hsl(212, 45%, ${v}%)`;
+          hexPath(ctx, c.x, c.y, HEX + 1.5);
+          ctx.fill();
+        } else {
+          ctx.fillStyle = 'rgba(8,18,34,0.5)';
+          hexPath(ctx, c.x, c.y, HEX + 0.5);
+          ctx.fill();
+        }
+      }
+    }
   }
 
   forecastBubble(ctx, t) {

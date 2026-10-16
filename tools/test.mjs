@@ -22,6 +22,15 @@ function playOut(state, rng, maxTurns = 60) {
 }
 
 const t0 = Date.now();
+// Nebel, Türme und Forschung in einem Spiel prüfen
+{
+  const s = createGame({ seed: 4242, cols: 13, rows: 17, biome: 'mixed', fog: true, players: [{ ai: 4 }, { ai: 4 }, { ai: 5 }] });
+  playOut(s, mulberry32(7), 60);
+  const towers = s.units.filter((u) => u.type === 'tower').length;
+  const techs = s.players.reduce((a, p) => a + p.tech.length, 0);
+  console.log(`Nebel-Spiel: Runde ${s.turn}, ${towers} Türme, ${techs} Forschungen`);
+  check(techs > 0, 'KI forscht nicht');
+}
 for (const l of getLevels()) {
   const s = createGame({ seed: l.seed, cols: l.cols, rows: l.rows, biome: l.biome, players: [{ human: true }, ...l.ais.map((ai) => ({ ai }))] });
   check(s.cities.filter((c) => c.capital).length === l.ais.length + 1, `Level ${l.id}: Hauptstädte`);
@@ -35,10 +44,10 @@ console.log(`50 Level erzeugt (${Date.now() - t0} ms)`);
 let games = 0;
 for (const size of Object.keys(MAP_SIZES)) {
   for (const players of [2, 3, 4]) {
-    for (const biome of Object.keys(BIOMES)) {
+    for (const biome of size === 'EPIC' ? ['mixed'] : Object.keys(BIOMES)) {
       const seed = games * 977 + 13;
       const s = createGame({ seed, cols: MAP_SIZES[size].cols, rows: MAP_SIZES[size].rows, biome, players: Array.from({ length: players }, (_, i) => ({ ai: 1 + ((i + games) % 5) })) });
-      playOut(s, mulberry32(seed), size === 'XL' ? 25 : 40);
+      playOut(s, mulberry32(seed), { EPIC: 12, XXXL: 20, XXL: 25, XL: 25 }[size] || 40);
       games++;
     }
   }

@@ -20,11 +20,11 @@ const WORLDS = [
   },
   {
     name: 'Kronland', biomes: ['mixed', 'forest', 'mountains', 'plains', 'islands'],
-    sizes: 'XXL XXL XXXL XXXL XXXL XXXL XXXL XXXL XXXL XXXL', ai: ['4', '4,4', '5', '4,4,4', '5,4', '5', '5,5', '4,4,5', '5,5,4', '5,5,5'],
+    sizes: 'XXL XXL XXXL XXXL XXXL XXXL XXXL XXXL EPIC EPIC', ai: ['4', '4,4', '5', '4,4,4', '5,4', '5', '5,5', '4,4,5', '5,5,4', '5,5,5'],
   },
 ];
 
-const PAR_BASE = { S: 14, M: 20, L: 26, XL: 32, XXL: 38, XXXL: 44 };
+const PAR_BASE = { S: 14, M: 20, L: 26, XL: 32, XXL: 38, XXXL: 44, EPIC: 70 };
 
 let cache = null;
 export function getLevels() {

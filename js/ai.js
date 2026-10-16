@@ -1,8 +1,11 @@
 // Computergegner. Bewertet für jede Einheit alle Züge (Bewegung + Angriff) und wählt den besten.
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
-import { UNITS, UNIT_ORDER, CITY_MAX_LEVEL, upgradeCost, canAfford, BUILDINGS, citySlots, hasBuilding, RES } from './data.js';
 import {
-  geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit, spawnSpots, computeTerritory, incomeOf, tradeRate,
+  UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY,
+} from './data.js';
+import {
+  geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
+  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -16,42 +19,58 @@ export const AI_PARAMS = {
 
 const memory = { key: '', done: new Set() };
 
-function unitValue(u) {
-  const T = UNITS[u.type];
-  return T.value * (0.4 + 0.6 * (u.hp / T.hp)) + 1;
+function unitValue(u, maxHp) {
+  return UNITS[u.type].value * (0.4 + 0.6 * (u.hp / maxHp)) + 1;
 }
 
 function buildContext(state, pid, P) {
   const geo = geoOf(state);
   const occ = buildOcc(state);
-  const enemies = state.units.filter((u) => u.owner !== pid);
+  const stCache = new Map();
+  const st = (u) => {
+    let v = stCache.get(u);
+    if (!v) { v = statsOf(state, u); stCache.set(u, v); }
+    return v;
+  };
+  // Kartennebel: die KI kennt nur Gegner, die sie sieht
+  const vis = state.fog ? visibility(state, pid) : null;
+  const enemies = state.units.filter((u) => u.owner !== pid && (!vis || vis[u.idx]));
   const mine = state.units.filter((u) => u.owner === pid);
-
-  // Ziel-Distanzfelder (Gelände, ohne Einheiten)
   const targetCities = [];
   const ownCities = [];
   for (const c of state.cities) (c.owner === pid ? ownCities : targetCities).push(c);
-  const distCity = bfsDistances(geo, state.terrain, targetCities.map((c) => c.idx));
-  const distEnemy = bfsDistances(geo, state.terrain, enemies.map((u) => u.idx));
 
-  // Bedrohung: welche Gegner könnten nächste Runde welches Feld angreifen?
-  const threat = new Array(geo.n);
-  if (P.risk > 0) {
-    for (const e of enemies) {
-      const fake = { ...e, moved: false, attacked: false };
-      const moves = getMoves(state, fake, occ);
-      const froms = [e.idx, ...moves.keys()];
-      const seen = new Set();
-      for (const f of froms) {
-        if (UNITS[e.type].noMoveAttack && f !== e.idx) continue;
-        for (const t of geo.within(f, unitRange(state, e, f))) {
-          if (seen.has(t)) continue;
-          seen.add(t);
-          (threat[t] || (threat[t] = [])).push(e);
+  // Teure Felder nur einmal pro Zug berechnen
+  if (memory.ctxKey !== memory.key) {
+    memory.ctxKey = memory.key;
+    memory.distCity = bfsDistances(geo, state.terrain, targetCities.map((c) => c.idx));
+    memory.distEnemy = bfsDistances(geo, state.terrain, enemies.map((u) => u.idx));
+    const threat = new Array(geo.n);
+    if (P.risk > 0) {
+      for (const e of enemies) {
+        if (e.type === 'tower') {
+          for (const t of geo.within(e.idx, st(e).range)) (threat[t] || (threat[t] = [])).push(e);
+          continue;
+        }
+        const fake = { ...e, moved: false, attacked: false };
+        const moves = getMoves(state, fake, occ);
+        const froms = [e.idx, ...moves.keys()];
+        const seen = new Set();
+        const r = st(e).range;
+        for (const f of froms) {
+          if (UNITS[e.type].noMoveAttack && f !== e.idx) continue;
+          for (const t of geo.within(f, r)) {
+            if (seen.has(t)) continue;
+            seen.add(t);
+            (threat[t] || (threat[t] = [])).push(e);
+          }
         }
       }
     }
+    memory.threat = threat;
+    memory.territory = computeTerritory(state);
   }
+  const distCity = memory.distCity, distEnemy = memory.distEnemy, threat = memory.threat;
 
   // Bedrohte eigene Städte
   const cityDanger = new Map();
@@ -59,12 +78,12 @@ function buildContext(state, pid, P) {
     let d = 0;
     for (const e of enemies) {
       const dd = geo.dist(e.idx, c.idx);
-      if (dd <= 3) d += UNITS[e.type].atk * (4 - dd);
+      if (dd <= 3) d += st(e).atk * (4 - dd);
     }
     cityDanger.set(c.idx, d);
   }
 
-  const armyValue = (list) => list.reduce((s, u) => s + unitValue(u), 0);
+  const armyValue = (list) => list.reduce((s, u) => s + unitValue(u, st(u).hp), 0);
   // Aggressivität: wer überlegen ist oder wenn das Spiel sich zieht, greift entschlossener an
   const myArmy = armyValue(mine);
   let enemyArmy = 0;
@@ -75,18 +94,20 @@ function buildContext(state, pid, P) {
   const ratio = myArmy / Math.max(4, enemyArmy);
   let aggr = Math.min(2.5, Math.max(0.6, ratio));
   if (P.smart) aggr *= 1 + Math.min(0.8, Math.max(0, state.turn - 25) * 0.02);
-  const territory = computeTerritory(state);
-  return { geo, occ, enemies, mine, distCity, distEnemy, threat, cityDanger, ownCities, targetCities, armyValue, myArmy, enemyArmy, aggr, territory };
+  const territory = memory.territory;
+  const alive = new Set(state.units);
+  return { geo, occ, enemies, mine, distCity, distEnemy, threat, cityDanger, ownCities, targetCities, armyValue, myArmy, enemyArmy, aggr, territory, st, alive };
 }
 
 function expectedDamage(state, ctx, u, idx, hp) {
   const list = ctx.threat[idx];
   if (!list) return 0;
-  const D = UNITS[u.type];
+  const D = ctx.st(u);
   const dF = D.def * (hp / D.hp) * defenseMult(state, idx);
   let sum = 0;
   for (const e of list) {
-    const A = UNITS[e.type];
+    if (!ctx.alive.has(e)) continue;
+    const A = ctx.st(e);
     const aF = A.atk * (e.hp / A.hp);
     sum += (aF / (aF + dF)) * A.atk * 4.5;
   }
@@ -94,7 +115,8 @@ function expectedDamage(state, ctx, u, idx, hp) {
 }
 
 function positionScore(state, ctx, P, u, idx, hp, pid) {
-  const T = UNITS[u.type];
+  const T = ctx.st(u);
+  const value = UNITS[u.type].value;
   let s = 0;
   const dc = ctx.distCity[idx], de = ctx.distEnemy[idx];
   const near = Math.min(dc < 0 ? 99 : dc, de < 0 ? 99 : de + 1);
@@ -112,8 +134,8 @@ function positionScore(state, ctx, P, u, idx, hp, pid) {
   if (P.risk > 0) {
     const risk = P.risk / ctx.aggr;
     const exp = expectedDamage(state, ctx, u, idx, hp);
-    if (exp >= hp) s -= risk * unitValue({ type: u.type, hp }) * 1.1;
-    else s -= risk * (exp / T.hp) * T.value * 0.6;
+    if (exp >= hp) s -= risk * unitValue({ type: u.type, hp }, T.hp) * 1.1;
+    else s -= risk * (exp / T.hp) * value * 0.6;
   }
   // Fernkämpfer bleiben gern auf Distanz
   if (T.range > 1 && de === 1) s -= 1.5 * (P.smart ? 1 : 0);
@@ -124,23 +146,24 @@ function positionScore(state, ctx, P, u, idx, hp, pid) {
 
 function attackScore(state, ctx, P, u, t, from) {
   const r = computeCombat(state, u, t, from);
-  const DT = UNITS[t.type], UT = UNITS[u.type];
-  let gain = (Math.min(r.dmg, t.hp) / DT.hp) * DT.value * 1.2;
+  const DT = ctx.st(t), UT = ctx.st(u);
+  const dv = UNITS[t.type].value, uv = UNITS[u.type].value;
+  let gain = (Math.min(r.dmg, t.hp) / DT.hp) * dv * 1.2;
   // Fernkampf zuerst: erschütterte Ziele sind für Nahkämpfer leichte Beute
   if (UT.range > 1 && !r.kill && !t.shaken) gain += 1.5;
-  if (r.kill) gain += DT.value + 3;
+  if (r.kill) gain += dv + 3;
   const tc = cityOn(state, t.idx);
   if (tc && tc.owner === u.owner) gain += r.kill ? 8 : 3; // Besetzer aus eigener Stadt werfen
   if (tc && tc.capital && tc.owner === u.owner) gain += r.kill ? 6 : 2;
-  let loss = (Math.min(r.counter, u.hp) / UT.hp) * UT.value;
-  if (r.die) loss += UT.value + 2;
+  let loss = (Math.min(r.counter, u.hp) / UT.hp) * uv;
+  if (r.die) loss += uv + 2;
   return { score: gain - loss * P.lossW, r };
 }
 
 function evaluateUnit(state, ctx, P, u, pid, rng) {
   const options = [];
   const stayBase = positionScore(state, ctx, P, u, u.idx, u.hp, pid);
-  const healBonus = canMove(u) && u.hp < UNITS[u.type].hp ? 0.6 : 0;
+  const healBonus = canMove(u) && u.hp < ctx.st(u).hp ? 0.6 : 0;
   options.push({ score: stayBase + healBonus, actions: [] });
 
   const froms = [];
@@ -158,7 +181,7 @@ function evaluateUnit(state, ctx, P, u, pid, rng) {
           options.push({ score: score, actions: actionsFor(u, f, t) });
           continue;
         }
-        const endIdx = r.kill && UNITS[u.type].range === 1 ? t.idx : f;
+        const endIdx = r.kill && UNITS[u.type].range === 1 && u.type !== 'tower' ? t.idx : f;
         const hpAfter = u.hp - r.counter;
         const pos = positionScore(state, ctx, P, u, endIdx, hpAfter, pid);
         options.push({ score: score + pos, actions: actionsFor(u, f, t) });
@@ -188,7 +211,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
   const neutralLeft = state.cities.filter((c) => c.owner < 0).length;
   const enemyDef = ctx.enemies.filter((e) => e.type === 'defender').length;
   const mineCount = (t) => ctx.mine.filter((u) => u.type === t).length;
-  const melee = ctx.mine.filter((u) => UNITS[u.type].range === 1).length;
+  const melee = ctx.mine.filter((u) => UNITS[u.type].range === 1 && u.type !== 'tower').length;
   const ranged = ctx.mine.length - melee;
   const w = {
     warrior: 3,
@@ -279,9 +302,38 @@ function economyAction(state, ctx, P, pid, rng) {
       if (b) return { type: 'build', idx: c.idx, building: b };
     }
     const ups = safe
-      .filter((c) => c.level < CITY_MAX_LEVEL && c.buildings.length >= citySlots(c) - 1 && canAfford(res, upgradeCost(c)))
+      .filter((c) => c.level < CITY_MAX_LEVEL && c.buildings.length >= citySlots(c) - 1 && canAfford(res, upgradeCostOf(state, c)))
       .sort((a, b) => (b.capital - a.capital) || (a.level - b.level));
     if (ups.length) return { type: 'upgrade', idx: ups[0].idx };
+  }
+  // Türme in bedrohten Städten
+  if (P.smart) {
+    for (const c of ctx.ownCities) {
+      const danger = ctx.cityDanger.get(c.idx) || 0;
+      if (danger < 6) continue;
+      const ci = cityIdx(c);
+      const tower = state.units.find((u) => u.type === 'tower' && u.owner === pid && ctx.territory[u.idx] === ci);
+      if (tower && tower.level < 3 && canAfford(res, TOWER_UPGRADE[tower.level]) && rng() < 0.5) return { type: 'towerUp', unitId: tower.id };
+      if (towersOfCity(state, ci, ctx.territory) < TOWERS_PER_CITY && rng() < 0.5) {
+        let best = null;
+        for (const j of ctx.geo.within(c.idx, 1)) {
+          if (canBuildTower(state, pid, j, ctx.territory)) continue;
+          const d = ctx.distEnemy[j] < 0 ? 99 : ctx.distEnemy[j];
+          if (!best || d < best.d) best = { j, d };
+        }
+        if (best) return { type: 'tower', idx: best.j };
+      }
+    }
+  }
+  // Forschung, wenn Rohstoffe übrig sind
+  if (P.upgrade > 0 && rng() < P.upgrade) {
+    const resSum = res.food + res.wood + res.ore;
+    const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'medic', 'guild'];
+    if (resSum > (wantArmy ? 70 : 35)) {
+      for (const t of prio) {
+        if (techAvailable(state, pid, t) && canAfford(res, TECHS[t].cost)) return { type: 'research', tech: t };
+      }
+    }
   }
   if (capped) return null;
   // Rekrutieren: gefährdete Städte zuerst, sonst nahe an Zielen

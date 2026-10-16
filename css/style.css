@@ -50,7 +50,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .hud-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .turninfo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; }
-.turninfo .units { margin-left: auto; padding: 4px 9px; font-size: 13px; }
+.turninfo .units { padding: 4px 9px; font-size: 13px; }
+.turninfo .tech { margin-left: auto; padding: 4px 9px; font-size: 13px; color: inherit; font: inherit; font-size: 13px; }
+.pill.tech.glow { border-color: #fcd34d; box-shadow: 0 0 0 2px rgba(252, 211, 77, 0.35); }
 .resbar { display: flex; gap: 6px; }
 .resbar .pill { flex: 1; justify-content: center; padding: 5px 6px; }
 .ico { display: inline-block; width: 16px; height: 16px; flex: none; vertical-align: -3px; }
@@ -211,3 +213,28 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .tchip { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 10px 4px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06); font-size: 15px; }
 .tchip.active { background: rgba(251, 191, 36, 0.2); border-color: #fcd34d; }
 .modal-box .btn .ico { width: 18px; height: 18px; }
+
+/* Größere Kauf-/Bausymbole */
+.panel { max-height: 62vh; overflow-y: auto; }
+.recruit-grid { grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.recruit { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding: 4px 4px 7px; font-size: 13px; }
+.recruit canvas { margin: -6px 0 -4px; }
+.recruit .name { font-size: 14px; }
+.bicon { font-size: 28px; width: 38px; }
+.build-row { padding: 7px 8px; }
+.binfo { font-size: 14px; }
+.tower-row { background: rgba(125, 211, 252, 0.08); }
+.modal-box.wide { max-width: 460px; max-height: 88vh; overflow-y: auto; }
+.tech-list { display: flex; flex-direction: column; gap: 6px; }
+.tech-card { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); }
+.tech-card.child { margin-left: 22px; }
+.tech-card.done { background: rgba(34, 197, 94, 0.14); border-color: rgba(34, 197, 94, 0.4); }
+.tech-card.locked { opacity: 0.55; }
+.tech-card .binfo span { font-size: 12.5px; }
+.ticon { font-size: 30px; width: 40px; text-align: center; flex: none; }
+.tech-card .done { color: var(--ok); font-weight: 800; font-size: 20px; padding: 0 8px; }
+
+.turninfo { min-width: 0; }
+.turninfo #turnText { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pill.tech { position: relative; }
+.badge { position: absolute; top: -7px; right: -7px; background: #ef4444; color: #fff; border-radius: 999px; font-size: 11px; font-weight: 800; min-width: 18px; height: 18px; display: grid; place-items: center; padding: 0 4px; border: 2px solid #0d2238; }

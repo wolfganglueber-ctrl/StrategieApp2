@@ -25,6 +25,7 @@
         <div class="turninfo">
           <span class="dot" id="turnDot"></span>
           <span id="turnText">Runde 1</span>
+          <button class="pill tech" id="btnTech" title="Forschung">🔬 <b id="techText">0</b><span class="badge hidden" id="techBadge">0</span></button>
           <span class="pill units" title="Einheiten / Versorgung">⚔ <b id="unitText">0/0</b></span>
         </div>
         <div class="resbar" id="resBar"></div>
@@ -54,7 +55,7 @@
       <button class="btn big" id="btnSkirmish">Freies Spiel</button>
       <button class="btn big" id="btnHelp">Anleitung</button>
       <button class="btn ghost" id="btnSettings">Einstellungen</button>
-      <p class="version">Version 0.3</p>
+      <p class="version">Version 0.4</p>
     </div>
   </div>
 
@@ -86,6 +87,8 @@
       <label>Schwierigkeit</label>
       <div class="seg" id="segDiff"></div>
       <p class="hint" id="diffDesc"></p>
+      <label>Kartennebel <small>(nur Sichtbares wird angezeigt – auch für die KI)</small></label>
+      <div class="seg" id="segFog"></div>
       <label>Karten-Code <small>(gleicher Code = gleiche Karte, zum Teilen)</small></label>
       <div class="seedrow">
         <input id="seedInput" maxlength="12" autocomplete="off" spellcheck="false" />

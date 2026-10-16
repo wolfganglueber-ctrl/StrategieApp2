@@ -721,7 +721,91 @@ function horse(ctx, coat, mane, blanketCol, armored) {
   outline(ctx, 0.8);
 }
 
-export function drawFigure(ctx, type, col) {
+function drawTowerFigure(ctx, col, level) {
+  // Stufe 1: Holzturm, 2: Steinturm, 3: großer Wehrturm mit Fahne
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(3, 10, 18, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const w = level === 1 ? 9 : level === 2 ? 10 : 12;
+  const h = level === 1 ? 30 : level === 2 ? 36 : 44;
+  if (level === 1) {
+    ctx.strokeStyle = '#6b4423';
+    ctx.lineWidth = 2.6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-9, 8); ctx.lineTo(-6, -h + 6);
+    ctx.moveTo(9, 8); ctx.lineTo(6, -h + 6);
+    ctx.moveTo(-8, -2); ctx.lineTo(7, -14);
+    ctx.moveTo(8, -2); ctx.lineTo(-7, -14);
+    ctx.stroke();
+    ctx.fillStyle = grad(ctx, -11, 11, '#c08a52', '#6b4423');
+    ctx.fillRect(-11, -h + 2, 22, 9);
+    outline(ctx, 0.9);
+    ctx.strokeRect(-11, -h + 2, 22, 9);
+  } else {
+    const g = ctx.createLinearGradient(-w, 0, w, 0);
+    g.addColorStop(0, '#f1ebdf');
+    g.addColorStop(0.6, '#c8bca6');
+    g.addColorStop(1, '#8f846f');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(-w - 2, 8);
+    ctx.lineTo(-w, -h + 6);
+    ctx.lineTo(w, -h + 6);
+    ctx.lineTo(w + 2, 8);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 1);
+    ctx.strokeStyle = 'rgba(80,70,55,0.45)';
+    ctx.lineWidth = 0.7;
+    for (let y = 2; y > -h + 8; y -= 6) {
+      ctx.beginPath();
+      ctx.moveTo(-w, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    }
+    // Zinnen
+    ctx.fillStyle = '#e4dccb';
+    const m = 4, mw = (w * 2 + 4) / (m * 2 - 1);
+    for (let k = 0; k < m; k++) {
+      ctx.fillRect(-w - 2 + k * 2 * mw, -h + 1, mw, 6);
+      ctx.strokeStyle = 'rgba(20,14,10,0.7)';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(-w - 2 + k * 2 * mw, -h + 1, mw, 6);
+    }
+    ctx.fillStyle = '#2b2118';
+    ctx.fillRect(-2, -h + 14, 4, 7);
+    ctx.beginPath();
+    ctx.arc(0, 2, 4, Math.PI, 0);
+    ctx.lineTo(4, 8);
+    ctx.lineTo(-4, 8);
+    ctx.fill();
+  }
+  // Wimpel/Fahne in Spielerfarbe
+  const top = level === 1 ? -h + 2 : -h + 1;
+  ctx.strokeStyle = '#3a3a3a';
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  ctx.moveTo(0, top);
+  ctx.lineTo(0, top - (level === 3 ? 16 : 11));
+  ctx.stroke();
+  ctx.fillStyle = col.main;
+  ctx.beginPath();
+  const fy = top - (level === 3 ? 16 : 11);
+  ctx.moveTo(0, fy);
+  ctx.lineTo(level === 3 ? 13 : 9, fy + 3);
+  ctx.lineTo(0, fy + 6.5);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.7);
+  // Stufen-Band in Spielerfarbe
+  ctx.fillStyle = col.main;
+  ctx.fillRect(-w + 1, level === 1 ? -h + 5 : -h + 9, w * 2 - 2, 2.5);
+}
+
+export function drawFigure(ctx, type, col, level = 1) {
+  if (type === 'tower') { drawTowerFigure(ctx, col, level); return; }
   pedestal(ctx, col);
   switch (type) {
     case 'warrior': {
@@ -943,6 +1027,6 @@ export function drawFigure(ctx, type, col) {
 }
 
 // Ausdehnung der Figuren relativ zum Mittelpunkt (für Sprite-Puffer)
-export const FIG_BOX = { left: 26, right: 30, top: 54, bottom: 20 };
+export const FIG_BOX = { left: 26, right: 30, top: 66, bottom: 20 };
 
 export const SQRT3_ = SQRT3;

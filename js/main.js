@@ -4,14 +4,14 @@ import { attachInput } from './input.js';
 import {
   createGame, applyAction, cloneState, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
   incomeOf, unitCap, unitCount, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
-  tradeRate, spawnSpots,
+  tradeRate, spawnSpots, statsOf, visibility, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
 import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
-  hasBuilding,
+  hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
 import { store } from './storage.js';
@@ -73,7 +73,7 @@ function showMenuBackdrop() {
 // ---------------------------------------------------------------- Spielstart
 function levelConfig(level) {
   return {
-    seed: level.seed, cols: level.cols, rows: level.rows, biome: level.biome,
+    seed: level.seed, cols: level.cols, rows: level.rows, biome: level.biome, fog: !!settings.fogCampaign,
     players: [{ human: true }, ...level.ais.map((ai) => ({ ai }))],
   };
 }
@@ -94,7 +94,7 @@ function startSkirmish(setup) {
     biome = keys[seedFromCode(code) % keys.length];
   }
   S = createGame({
-    seed: seedFromCode(code), cols: size.cols, rows: size.rows, biome,
+    seed: seedFromCode(code), cols: size.cols, rows: size.rows, biome, fog: !!setup.fog,
     players: [{ human: true }, ...Array.from({ length: setup.enemies }, () => ({ ai: setup.diff }))],
   });
   S.meta = { mode: 'skirmish', code, setup };
@@ -131,7 +131,7 @@ function saveGame() {
 
 // ---------------------------------------------------------------- Auswahl & Overlay
 function clearSel() {
-  sel = { unitId: null, cityIdx: null, infoIdx: null };
+  sel = { unitId: null, cityIdx: null, infoIdx: null, placeTower: null };
 }
 
 function getGeoOf() {
@@ -142,14 +142,28 @@ function humanTurn() {
   return S && !S.over && S.players[S.current].human;
 }
 
+let curVis = null; // Sichtbarkeit des Menschen bei Kartennebel
+
+function humanId() {
+  return (S.players.find((p) => p.human) || S.players[0]).id;
+}
+
+function updateVis() {
+  curVis = S && S.fog ? visibility(S, humanId()) : null;
+}
+
 function unitTargets(u, occ) {
-  return canAttack(u) ? getTargets(S, u, u.idx, occ) : [];
+  if (!canAttack(u)) return [];
+  const t = getTargets(S, u, u.idx, occ);
+  return curVis ? t.filter((x) => curVis[x.idx]) : t;
 }
 
 function refresh() {
   if (!S) return;
+  updateVis();
   const occ = buildOcc(S);
   const o = { exhausted: new Set(), ready: new Set() };
+  if (curVis) o.fog = { vis: curVis, explored: S.explored[humanId()] };
   if (humanTurn() && !busy) {
     for (const u of S.units) {
       if (u.owner !== S.current) continue;
@@ -162,6 +176,7 @@ function refresh() {
     o.selected = u.idx;
     if (humanTurn() && u.owner === S.current) {
       if (canMove(u)) o.moves = new Set(getMoves(S, u, occ).keys());
+      if (u.type === 'tower') o.moves = null;
       const t = unitTargets(u, occ);
       if (t.length) {
         o.targets = new Map();
@@ -173,6 +188,11 @@ function refresh() {
     }
   }
   if (sel.cityIdx != null) o.cityIdx = sel.cityIdx;
+  if (sel.placeTower != null) {
+    const terr = computeTerritory(S);
+    o.moves = new Set();
+    for (let i = 0; i < terr.length; i++) if (terr[i] === sel.placeTower && !canBuildTower(S, S.current, i, terr)) o.moves.add(i);
+  }
   if (sel.infoIdx != null) o.selected = sel.infoIdx;
   R.overlay = o;
   R.invalidate();
@@ -185,7 +205,16 @@ function onTap(sx, sy) {
   if (!humanTurn()) return;
   const i = R.pick(sx, sy);
   if (i < 0) { clearSel(); refresh(); return; }
+  if (sel.placeTower != null) {
+    const ok = !canBuildTower(S, S.current, i) && computeTerritory(S)[i] === sel.placeTower;
+    const city = S.cities[sel.placeTower].idx;
+    clearSel();
+    if (ok) { sel.cityIdx = city; cityTab = 'build'; act({ type: 'tower', idx: i }); }
+    else { toast('Turmbau abgebrochen.'); refresh(); }
+    return;
+  }
   const occ = buildOcc(S);
+  if (curVis) for (const x of S.units) if (x.owner !== S.current && !curVis[x.idx]) occ[x.idx] = null;
   const u = occ[i];
   const selU = sel.unitId != null ? unitById(S, sel.unitId) : null;
   if (selU && selU.owner === S.current) {
@@ -268,6 +297,41 @@ function doBuild(idx, building) {
   act({ type: 'build', idx, building });
 }
 
+let techBranch = 'mil';
+function openTech() {
+  if (!S || busy) return;
+  const draw = () => {
+    const pid = humanId();
+    const p = S.players[pid];
+    const my = humanTurn();
+    const tabs = el('div', { class: 'ptabs' });
+    for (const [k, label] of TECH_BRANCHES) {
+      const done = TECH_ORDER.filter((t) => TECHS[t].branch === k && hasTech(S, pid, t)).length;
+      const all = TECH_ORDER.filter((t) => TECHS[t].branch === k).length;
+      tabs.append(el('button', { class: techBranch === k ? 'active' : '', onclick: () => { techBranch = k; draw(); } }, `${label} ${done}/${all}`));
+    }
+    const list = el('div', { class: 'tech-list' });
+    for (const t of TECH_ORDER.filter((x) => TECHS[x].branch === techBranch)) {
+      const T = TECHS[t];
+      const done = hasTech(S, pid, t);
+      const avail = techAvailable(S, pid, t);
+      const reqTxt = T.req.length ? `benötigt ${T.req.map((r) => TECHS[r].name).join(' + ')}` : '';
+      list.append(el('div', { class: 'tech-card' + (done ? ' done' : avail ? '' : ' locked') + (T.req.length ? ' child' : '') },
+        el('span', { class: 'ticon' }, T.icon),
+        el('div', { class: 'binfo' }, el('b', {}, T.name), el('span', {}, T.desc), reqTxt ? el('span', { class: 'muted' }, (avail || done ? '↳ ' : '🔒 ') + reqTxt) : null),
+        done ? el('span', { class: 'done' }, '✓')
+          : el('button', {
+            class: 'btn small', disabled: !avail || !my || !canAfford(p.res, T.cost),
+            onclick: async () => { closeModal(); await act({ type: 'research', tech: t }, { undoable: false }); openTech(); },
+          }, costEl(T.cost, p.res))));
+    }
+    openModal(el('h2', {}, '🔬 Forschung'), el('p', {}, 'Erforschte Verbesserungen gelten für dein ganzes Reich.'), tabs, list,
+      el('button', { class: 'btn big', onclick: closeModal }, 'Schließen'));
+    $('modalBox').classList.add('wide');
+  };
+  draw();
+}
+
 function openTrade(preGet) {
   if (!S || !humanTurn() || busy) return;
   let give = null, get = preGet || null;
@@ -326,7 +390,10 @@ async function onEndTurn() {
   busy = true;
   const ev = applyAction(S, { type: 'end' });
   refresh();
-  await play(ev, speedFactor(), true);
+  for (const e of ev) {
+    const pr = aiEventView(e, speedFactor());
+    await playEvent(e, pr.f, true, pr.pan);
+  }
   busy = false;
   if (S.over) return gameOver();
   if (!S.players[S.current].human) await runAI();
@@ -353,8 +420,13 @@ async function runAI() {
       ev = applyAction(S, a);
     }
     if (a.type !== 'end') updateHud();
-    await play(ev, f, true);
-    if (f === 0 && guard % 8 === 0) await sleep(0);
+    let shown = false;
+    for (const e of ev) {
+      const pr = aiEventView(e, f);
+      if (pr.f > 0) shown = true;
+      await playEvent(e, pr.f, true, pr.pan);
+    }
+    if (!shown && guard % 12 === 0) await sleep(0);
   }
   hideBanner();
   busy = false;
@@ -368,14 +440,28 @@ async function runAI() {
 
 // ---------------------------------------------------------------- Ereignisse abspielen
 async function play(events, f, isAI) {
-  for (const ev of events) await playEvent(ev, f, isAI);
+  for (const ev of events) await playEvent(ev, f, isAI, true);
 }
 
-async function playEvent(ev, f, isAI) {
+// KI-Aktionen nur animieren, wenn man sie sieht; wichtige (gegen dich) mit Kameraschwenk
+function aiEventView(ev, f) {
+  const hid = humanId();
+  const vis = S.fog ? visibility(S, hid) : null;
+  const idx = ev.k === 'move' ? ev.path[ev.path.length - 1] : ev.k === 'attack' ? ev.def.idx : ev.idx;
+  if (idx == null) return { f, pan: false };
+  const important = (ev.k === 'attack' && (ev.def.owner === hid || ev.att.owner === hid)) || (ev.k === 'capture' && ev.from === hid);
+  const seen = !vis || vis[idx] || (ev.k === 'move' && ev.path.some((j) => vis[j]));
+  if (important && seen) return { f, pan: true };
+  if (seen && R.isOnScreen(idx)) return { f, pan: false };
+  return { f: 0, pan: false };
+}
+
+async function playEvent(ev, f, isAI, pan = true) {
+  if (isAI && !pan) isAI = 'quiet';
   const pause = (ms) => (ms * f > 0 ? sleep(ms * f) : Promise.resolve());
   switch (ev.k) {
     case 'move': {
-      if (isAI && f > 0) await sleep(R.ensureVisible(ev.path[ev.path.length - 1], 220 * f));
+      if (isAI === true && f > 0) await sleep(R.ensureVisible(ev.path[ev.path.length - 1], 220 * f));
       const d = R.animateMove(ev.id, ev.path, (isAI ? 140 : 110) * f);
       await sleep(d);
       await pause(isAI ? 60 : 0);
@@ -383,8 +469,8 @@ async function playEvent(ev, f, isAI) {
     }
     case 'attack': {
       const { att, def } = ev;
-      const ranged = UNITS[att.type].range > 1;
-      if (isAI && f > 0) await sleep(R.ensureVisible(def.idx, 220 * f));
+      const ranged = statsOf(S, att).range > 1;
+      if (isAI === true && f > 0) await sleep(R.ensureVisible(def.idx, 220 * f));
       const L = 380 * f;
       if (L > 0) {
         const hit = L * 0.5;
@@ -404,26 +490,29 @@ async function playEvent(ev, f, isAI) {
       break;
     }
     case 'recruit':
-      if (isAI && f > 0) await sleep(R.ensureVisible(ev.idx, 200 * f));
+      if (isAI === true && f > 0) await sleep(R.ensureVisible(ev.idx, 200 * f));
       await sleep(R.pop(ev.id, 320 * f));
       await pause(isAI ? 60 : 0);
       break;
     case 'build':
-      R.invalidate(true);
+      R.invalidate(true, ev.idx);
       R.ring(ev.idx, '#7dd3fc', 600 * f);
       R.floatText(ev.idx, BUILDINGS[ev.building].name, '#bae6fd', 1100 * f);
       await pause(isAI ? 250 : 120);
       break;
     case 'upgrade':
-      R.invalidate(true);
+      if (!ev.tower) R.invalidate(true, ev.idx);
       R.ring(ev.idx, '#fde047', 600 * f);
-      R.floatText(ev.idx, CITY_NAMES[ev.level], '#fde047', 1000 * f);
+      R.floatText(ev.idx, ev.tower ? `Turm Stufe ${ev.level}` : CITY_NAMES[ev.level], '#fde047', 1000 * f);
       await pause(isAI ? 300 : 150);
       break;
+    case 'research':
+      if (S.players[ev.pid].human) toast(`Erforscht: ${TECHS[ev.tech].icon} ${TECHS[ev.tech].name}`);
+      break;
     case 'capture': {
-      R.invalidate(true);
+      R.invalidate(true, ev.idx);
       if (f > 0) {
-        await sleep(R.ensureVisible(ev.idx, 220 * f));
+        if (isAI === true) await sleep(R.ensureVisible(ev.idx, 220 * f));
         R.ring(ev.idx, PLAYER_COLORS[ev.pid].main, 700 * f);
         R.floatText(ev.idx, 'Erobert!', PLAYER_COLORS[ev.pid].light, 1100 * f);
       }
@@ -483,6 +572,11 @@ function updateHud() {
     bar.append(el('button', { class: 'pill', title: `${RES_INFO[k].name} – tippen zum Handeln`, onclick: () => openTrade(k) }, icon(k), el('b', {}, human.res[k]), el('small', {}, `+${inc[k]}`)));
   }
   $('unitText').textContent = `${unitCount(S, human.id)}/${unitCap(S, human.id)}`;
+  const nAvail = TECH_ORDER.filter((t) => techAvailable(S, human.id, t) && canAfford(human.res, TECHS[t].cost)).length;
+  $('techText').textContent = human.tech.length;
+  $('techBadge').textContent = nAvail;
+  $('techBadge').classList.toggle('hidden', !nAvail || !humanTurn());
+  $('btnTech').classList.toggle('glow', nAvail > 0 && humanTurn());
   const my = humanTurn();
   $('btnEnd').disabled = !my || busy;
   $('btnNext').disabled = !my || busy;
@@ -490,7 +584,7 @@ function updateHud() {
   $('btnEnd').classList.toggle('pulse', my && !busy && !playerHasActions(S, S.current));
 }
 
-function iconCanvas(type, owner, px = 44) {
+function iconCanvas(type, owner, px = 44, level) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const c = document.createElement('canvas');
   c.width = c.height = Math.round(px * dpr);
@@ -498,7 +592,7 @@ function iconCanvas(type, owner, px = 44) {
   c.className = 'fig';
   const ctx = c.getContext('2d');
   ctx.scale(dpr, dpr);
-  R.drawPreview(ctx, type, owner, px / 2, px * 0.62, px);
+  R.drawPreview(ctx, type, owner, px / 2, type === 'tower' ? px * 0.8 : px * 0.62, type === 'tower' ? px * 0.8 : px, level);
   return c;
 }
 
@@ -517,7 +611,7 @@ function el(tag, attrs = {}, ...children) {
 const fmt = (n) => String(n).replace('.', ',');
 
 function hpBar(u) {
-  const max = UNITS[u.type].hp;
+  const max = statsOf(S, u).hp;
   const r = u.hp / max;
   const color = r > 0.6 ? '#4ade80' : r > 0.3 ? '#facc15' : '#f87171';
   return el('div', { class: 'hp' },
@@ -525,21 +619,22 @@ function hpBar(u) {
     el('span', {}, `${u.hp}/${max}`));
 }
 
-function statRow(type) {
-  const T = UNITS[type];
+function statRow(u) {
+  const T = statsOf(S, u);
   return el('div', { class: 'stats-row' },
     el('span', { title: 'Angriff' }, icon('atk'), fmt(T.atk)),
     el('span', { title: 'Verteidigung' }, icon('def'), fmt(T.def)),
-    el('span', { title: 'Bewegung' }, icon('move'), T.move),
+    T.move ? el('span', { title: 'Bewegung' }, icon('move'), T.move) : null,
     el('span', { title: 'Reichweite' }, icon('range'), T.range));
 }
 
 function unitCard(u, subtitle) {
+  const name = u.type === 'tower' ? `Turm · Stufe ${u.level}` : UNITS[u.type].name;
   return el('div', { class: 'unit-card' },
-    iconCanvas(u.type, u.owner),
+    iconCanvas(u.type, u.owner, 48, u.level),
     el('div', { class: 'uc-main' },
-      el('div', { class: 'uc-top' }, el('span', { class: 'title' }, UNITS[u.type].name), hpBar(u)),
-      el('div', { class: 'uc-bottom' }, el('span', { class: 'muted' }, subtitle), statRow(u.type))));
+      el('div', { class: 'uc-top' }, el('span', { class: 'title' }, name), hpBar(u)),
+      el('div', { class: 'uc-bottom' }, el('span', { class: 'muted' }, subtitle), statRow(u))));
 }
 
 function cityTitle(c) {
@@ -548,7 +643,7 @@ function cityTitle(c) {
 
 function tileInfo(i) {
   const c = cityOn(S, i);
-  if (c) return `${cityTitle(c)} · Verteidigung ×${fmt(cityDefense(c))}`;
+  if (c) return `${cityTitle(c)} · Verteidigung ×${fmt(cityDefense(c, hasTech(S, c.owner, 'stonework')))}`;
   return TERRAIN[S.terrain[i]].name;
 }
 
@@ -580,14 +675,14 @@ function advice(occ) {
     }
   }
   // 2. Fernkämpfer zuerst
-  const shooter = canStill.find((u) => UNITS[u.type].range > 1 && canAttack(u) && (unitTargets(u, occ).length || canMove(u) && [...getMoves(S, u, occ).keys()].some((f) => getTargets(S, u, f, occ).length)));
+  const shooter = canStill.find((u) => u.type !== 'tower' && statsOf(S, u).range > 1 && canAttack(u) && (unitTargets(u, occ).length || canMove(u) && [...getMoves(S, u, occ).keys()].some((f) => getTargets(S, u, f, occ).length)));
   if (shooter) return { text: `Lass zuerst deinen ${UNITS[shooter.type].name} schießen: Getroffene Gegner sind erschüttert und wehren sich nicht.`, unit: shooter.id };
   // 3. Dörfer besetzen
   const free = S.cities.filter((c) => c.owner !== pid && !occ[c.idx]);
   for (const u of canStill.filter(canMove)) {
     const moves = getMoves(S, u, occ);
     const c = free.find((c) => moves.has(c.idx));
-    if (c) return { text: `Dein ${UNITS[u.type].name} kann ${c.owner < 0 ? 'ein Dorf' : 'eine feindliche Stadt'} besetzen – bleibt er stehen, gehört sie dir samt Gebiet.`, unit: u.id };
+    if (c) return { text: `Dein ${UNITS[u.type].name} kann ${c.owner < 0 ? 'ein Dorf' : 'eine feindliche Stadt'} besetzen – bleibt er stehen, gehört ${c.owner < 0 ? 'es' : 'sie'} dir samt Gebiet.`, unit: u.id };
   }
   // 4. Bauen / Ausbauen
   const inc = incomeOf(S, pid, territory);
@@ -660,7 +755,7 @@ function renderCityPanel(panel, ci, occ) {
       const label = why && RECRUIT_BLOCK[why] ? RECRUIT_BLOCK[why](T) : null;
       if (why === 'cap' || why === 'space') note = label;
       grid.append(el('button', { class: 'recruit', disabled: !!why, onclick: () => doRecruit(c.idx, k), title: T.desc },
-        iconCanvas(k, p.id, 34),
+        iconCanvas(k, p.id, 58),
         el('div', { class: 'name' }, T.name),
         why === 'needs' ? el('span', { class: 'lock' }, '🔒 ', BUILDINGS[T.needs].name) : costEl(T.cost, p.res)));
     }
@@ -670,6 +765,14 @@ function renderCityPanel(panel, ci, occ) {
   } else {
     const list = el('div', { class: 'build-list' });
     const full = c.buildings.length >= citySlots(c);
+    const nt = towersOfCity(S, ci);
+    list.append(el('div', { class: 'build-row tower-row' },
+      el('span', { class: 'bicon' }, iconCanvas('tower', p.id, 40, 1)),
+      el('div', { class: 'binfo' }, el('b', {}, `Turm (${nt}/${TOWERS_PER_CITY})`), el('span', { class: 'muted' }, 'Auf einem Feld im Stadtgebiet, schießt auf Gegner. 3 Ausbaustufen. Belegt keinen Bauplatz.')),
+      el('button', {
+        class: 'btn small', disabled: nt >= TOWERS_PER_CITY || !canAfford(p.res, UNITS.tower.cost),
+        onclick: () => { clearSel(); sel.placeTower = ci; refresh(); },
+      }, costEl(UNITS.tower.cost, p.res))));
     for (const b of BUILDING_ORDER) {
       const B = BUILDINGS[b];
       const built = hasBuilding(c, b);
@@ -681,7 +784,7 @@ function renderCityPanel(panel, ci, occ) {
     }
     panel.append(list);
     if (c.level < CITY_MAX_LEVEL) {
-      const cost = upgradeCost(c);
+      const cost = upgradeCostOf(S, c);
       panel.append(el('div', { class: 'upgrade-row' },
         el('span', { class: 'muted' }, `Ausbau zur ${CITY_NAMES[c.level + 1]}: +1 Bauplatz, +1 auf alle Rohstoffe, +1 Versorgung${c.level + 1 === 4 ? ', größeres Gebiet' : ''}`),
         el('button', { class: 'btn small primary', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost, p.res))));
@@ -696,14 +799,31 @@ function renderPanel() {
   panel.innerHTML = '';
   if (!S || !humanTurn()) return;
   const occ = buildOcc(S);
+  if (curVis) for (const x of S.units) if (x.owner !== S.current && !curVis[x.idx]) occ[x.idx] = null;
+  if (sel.placeTower != null) {
+    panel.append(el('div', { class: 'city-head' },
+      el('span', { class: 'title' }, 'Turm platzieren'),
+      el('button', { class: 'btn small', onclick: () => { clearSel(); refresh(); } }, 'Abbrechen')));
+    panel.append(el('div', { class: 'note' }, 'Tippe ein helles Feld im Stadtgebiet an.'));
+    return;
+  }
   const u = sel.unitId != null ? unitById(S, sel.unitId) : null;
   if (u) {
     const targets = unitTargets(u, occ);
     let status;
     if (canMove(u)) status = targets.length ? 'Ziehen oder Ziel antippen' : 'Helles Feld = ziehen';
     else if (targets.length) status = 'Rotes Ziel = angreifen';
-    else status = 'Fertig für diese Runde';
+    else status = u.type === 'tower' ? 'Kein Ziel in Reichweite' : 'Fertig für diese Runde';
     panel.append(unitCard(u, status));
+    if (u.type === 'tower' && u.owner === S.current) {
+      if (u.level < 3) {
+        const cost = TOWER_UPGRADE[u.level];
+        const nx = TOWER_LEVELS[u.level + 1];
+        panel.append(el('div', { class: 'upgrade-row' },
+          el('span', { class: 'muted' }, `Ausbau auf Stufe ${u.level + 1}: ${nx.hp} Leben, Angriff ${fmt(nx.atk)}, Reichweite ${nx.range}`),
+          el('button', { class: 'btn small primary', disabled: !canAfford(S.players[S.current].res, cost), onclick: () => act({ type: 'towerUp', unitId: u.id }) }, costEl(cost, S.players[S.current].res))));
+      } else panel.append(el('div', { class: 'note' }, 'Höchste Turmstufe erreicht.'));
+    }
     return;
   }
   if (sel.cityIdx != null) {
@@ -714,7 +834,10 @@ function renderPanel() {
     const i = sel.infoIdx;
     const o = occ[i];
     const c = cityOn(S, i);
-    if (o) {
+    if (S.fog && !S.explored[humanId()][i]) {
+      panel.append(el('div', { class: 'city-head' }, el('span', { class: 'title' }, 'Unerforscht')));
+      panel.append(el('div', { class: 'note' }, 'Schicke Einheiten hierher, um das Gebiet aufzudecken.'));
+    } else if (o) {
       panel.append(unitCard(o, `${S.players[o.owner].name} · ${tileInfo(i)}`));
     } else if (c) {
       const owner = c.owner >= 0 ? S.players[c.owner].name : 'Neutral';
@@ -766,6 +889,7 @@ function openModal(...children) {
 }
 function closeModal() {
   $('modal').classList.add('hidden');
+  $('modalBox').classList.remove('wide');
 }
 
 function confirmDialog(title, text, yes, no) {
@@ -862,6 +986,8 @@ function openSettings(onClose) {
     toggle('confirmEnd'),
     el('label', {}, 'Alle Level freischalten (Testmodus)'),
     toggle('unlockAll'),
+    el('label', {}, 'Kartennebel in der Kampagne'),
+    toggle('fogCampaign'),
     el('button', { class: 'btn primary big', onclick: () => { closeModal(); if (onClose) onClose(); } }, 'Fertig'),
   );
 }
@@ -903,7 +1029,7 @@ function renderLevels() {
 }
 
 // ---------------------------------------------------------------- Freies Spiel
-const setup = Object.assign({ size: 'M', biome: 'mixed', enemies: 1, diff: 3, code: randomSeedCode() }, store.lastSetup() || {});
+const setup = Object.assign({ size: 'M', biome: 'mixed', enemies: 1, diff: 3, fog: false, code: randomSeedCode() }, store.lastSetup() || {});
 
 function renderSetup() {
   const seg = (id, options, key) => {
@@ -917,6 +1043,7 @@ function renderSetup() {
   seg('segBiome', [...Object.entries(BIOMES).map(([k, v]) => [k, v.name]), ['random', 'Zufall']], 'biome');
   seg('segEnemies', [[1, '1'], [2, '2'], [3, '3']], 'enemies');
   seg('segDiff', DIFFICULTIES.map((d) => [d.level, String(d.level)]), 'diff');
+  seg('segFog', [[false, 'Aus'], [true, 'An']], 'fog');
   const d = DIFFICULTIES[setup.diff - 1];
   $('diffDesc').textContent = `${d.name}: ${d.desc}`;
   $('seedInput').value = setup.code;
@@ -962,6 +1089,12 @@ function renderHelp() {
     Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz, +1 auf alle Rohstoffe und +1 Versorgung. Die Versorgung begrenzt, wie viele Einheiten du haben kannst.</p>
     <h3>Gebäude</h3>
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
+    <h3>Türme</h3>
+    <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt). Türme bewegen sich nicht, greifen aber Gegner in Reichweite an und lassen sich in 3 Stufen ausbauen: tippe den Turm an.</p>
+    <h3>Forschung 🔬</h3>
+    <p>Oben rechts öffnest du den Entwicklungsbaum. Jede Forschung gilt für dein ganzes Reich: ${TECH_ORDER.map((t) => `${TECHS[t].icon} ${TECHS[t].name} (${TECHS[t].desc})`).join(', ')}.</p>
+    <h3>Kartennebel</h3>
+    <p>Optional: Du siehst nur, was deine Einheiten und Städte sehen. Bereits erkundete Gebiete bleiben sichtbar, aber gegnerische Einheiten darin nicht. Die KI unterliegt denselben Regeln.</p>
     <h3>Handel</h3>
     <p>Tippe oben auf einen Rohstoff: 3 beliebige Rohstoffe gegen 1 anderen, mit einem Markt 2 gegen 1.</p>
     <h3>Gelände</h3>
@@ -993,6 +1126,7 @@ $('btnContinue').addEventListener('click', () => {
   enterGame();
 });
 $('btnMenu').addEventListener('click', gameMenu);
+$('btnTech').addEventListener('click', openTech);
 $('btnUndo').addEventListener('click', undo);
 $('btnNext').addEventListener('click', nextUnit);
 $('btnEnd').addEventListener('click', onEndTurn);

@@ -13,9 +13,13 @@ offline-fähig und zum Homescreen hinzufügbar.
 - **Kampf:** Fernkämpfer erschüttern ihr Ziel (halbe Verteidigung, kein Gegenschlag) – danach schlagen Nahkämpfer zu.
   Über jedem Ziel steht der vorhergesagte Schaden, ein Tipp greift an.
 - Beliebig viele Rekrutierungen pro Runde; neue Einheiten erscheinen im Stadtgebiet, mit Kaserne sofort einsatzbereit.
+- **Türme** auf Feldern im Stadtgebiet verteidigen dein Reich (3 Ausbaustufen).
+- **Forschung:** Entwicklungsbaum mit 15 Verbesserungen in Militär, Wirtschaft und Verteidigung
+  (z. B. Reichweite für Schützen, Bewegung und Reichweite für Katapulte, bessere Minen).
+- **Kartennebel** (optional): Man sieht nur, was eigene Einheiten und Städte sehen – die KI ebenso.
 - Ein **Ratgeber** schlägt immer den nächsten sinnvollen Schritt vor.
-- **Kampagne:** 50 Level in 5 Welten, Karten wachsen von 8×10 bis 22×29 Felder.
-- **Freies Spiel:** Zufallskarten in 6 Größen, 5 Landschaften, 1–3 Gegner und 5 KI-Stufen; Karten-Code zum Teilen.
+- **Kampagne:** 50 Level in 5 Welten, Karten wachsen von 8×10 bis zur epischen Karte mit 44×58 Feldern.
+- **Freies Spiel:** Zufallskarten in 7 Größen (bis 44×58), 5 Landschaften, 1–3 Gegner und 5 KI-Stufen; Karten-Code zum Teilen.
 
 ## Starten
 

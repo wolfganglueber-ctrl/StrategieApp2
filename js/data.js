@@ -23,6 +23,7 @@ export const UNITS = {
   rider: { name: 'Reiter', cost: { food: 6, wood: 2 }, hp: 10, atk: 2, def: 1, move: 3, range: 1, desc: 'Schnell – ideal zum Erobern von Dörfern.' },
   defender: { name: 'Wächter', cost: { food: 3, ore: 5 }, hp: 15, atk: 1, def: 3, move: 1, range: 1, desc: 'Starke Verteidigung, schwacher Angriff.' },
   knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 3, def: 1, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
+  tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 2, def: 3, move: 0, range: 2, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
   catapult: { name: 'Katapult', cost: { wood: 8, ore: 6 }, hp: 10, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, needs: 'workshop', desc: 'Reichweite 3, nicht nach Bewegung. Braucht eine Werkstatt.' },
 };
 // Wert einer Einheit für die KI (Rohstoffsumme / 2)
@@ -32,6 +33,38 @@ for (const k of Object.keys(UNITS)) {
   UNITS[k].value = t / 2;
 }
 export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult'];
+export const MELEE = ['warrior', 'rider', 'defender', 'knight'];
+export const FOOT = ['warrior', 'archer', 'defender'];
+
+// Türme: Ausbaustufen 1–3
+export const TOWER_LEVELS = [null,
+  { hp: 12, atk: 2, def: 3, range: 2 },
+  { hp: 18, atk: 3, def: 3.5, range: 2 },
+  { hp: 24, atk: 4, def: 4, range: 3 },
+];
+export const TOWER_UPGRADE = [null, { wood: 6, ore: 8 }, { wood: 8, ore: 12 }];
+export const TOWERS_PER_CITY = 2;
+
+// Entwicklungsbaum: einmalig erforschen, gilt für das ganze Reich
+export const TECH_BRANCHES = [['mil', 'Militär'], ['eco', 'Wirtschaft'], ['def', 'Verteidigung']];
+export const TECHS = {
+  bow: { branch: 'mil', name: 'Langbogen', icon: '🏹', cost: { food: 12, wood: 20 }, req: [], mod: { archer: { range: 1 } }, desc: 'Schützen +1 Reichweite' },
+  horse: { branch: 'mil', name: 'Hufeisen', icon: '🐎', cost: { food: 20, ore: 12 }, req: [], mod: { rider: { move: 1 }, knight: { move: 1 } }, desc: 'Reiter und Ritter +1 Bewegung' },
+  smith: { branch: 'mil', name: 'Schmiedekunst', icon: '⚒️', cost: { wood: 12, ore: 24 }, req: [], mod: { melee: { atk: 0.5 } }, desc: 'Nahkämpfer +0,5 Angriff' },
+  armor: { branch: 'mil', name: 'Plattenrüstung', icon: '🥋', cost: { food: 16, ore: 36 }, req: ['smith'], mod: { all: { def: 0.5 } }, desc: 'Alle Einheiten +0,5 Verteidigung' },
+  oxcart: { branch: 'mil', name: 'Ochsenkarren', icon: '🐂', cost: { food: 12, wood: 24 }, req: [], mod: { catapult: { move: 1 } }, desc: 'Katapulte +1 Bewegung' },
+  ballistics: { branch: 'mil', name: 'Ballistik', icon: '🎯', cost: { wood: 32, ore: 28 }, req: ['oxcart'], mod: { catapult: { range: 1, atk: 1 } }, desc: 'Katapulte +1 Reichweite, +1 Angriff' },
+  roads: { branch: 'mil', name: 'Straßenbau', icon: '🛤️', cost: { food: 24, wood: 24, ore: 12 }, req: ['oxcart'], mod: { foot: { move: 1 } }, desc: 'Krieger, Schützen, Wächter +1 Bewegung' },
+  plough: { branch: 'eco', name: 'Pflug', icon: '🌱', cost: { wood: 16 }, req: [], desc: 'Bauernhöfe +2 Nahrung' },
+  saw: { branch: 'eco', name: 'Sägewerk', icon: '🪓', cost: { food: 16, ore: 8 }, req: [], desc: 'Holzfäller +2 Holz' },
+  mining: { branch: 'eco', name: 'Bergbau', icon: '⛏️', cost: { food: 16, wood: 16 }, req: [], desc: 'Minen +2 Erz' },
+  guild: { branch: 'eco', name: 'Handelsgilde', icon: '💰', cost: { food: 24, wood: 20 }, req: ['plough'], desc: 'Handel überall 2:1' },
+  masonry: { branch: 'eco', name: 'Baukunst', icon: '🏛️', cost: { wood: 24, ore: 16 }, req: ['saw', 'mining'], desc: 'Stadtausbau 25 % günstiger' },
+  medic: { branch: 'def', name: 'Heilkunde', icon: '🌿', cost: { food: 28 }, req: [], desc: 'Einheiten heilen 2 mehr' },
+  stonework: { branch: 'def', name: 'Steinmetz', icon: '🧱', cost: { wood: 12, ore: 20 }, req: [], desc: 'Türme +6 Leben, Mauern stärker (×2,6)' },
+  towers2: { branch: 'def', name: 'Turmbaukunst', icon: '🗼', cost: { wood: 20, ore: 28 }, req: ['stonework'], mod: { tower: { range: 1, atk: 1 } }, desc: 'Türme +1 Reichweite, +1 Angriff' },
+};
+export const TECH_ORDER = Object.keys(TECHS);
 
 export const CITY_MAX_LEVEL = 5;
 export const CITY_NAMES = ['', 'Dorf', 'Siedlung', 'Stadt', 'Burgstadt', 'Metropole'];
@@ -68,8 +101,8 @@ export function citySlots(city) {
 export function upgradeCost(city) {
   return [null, { food: 8, wood: 8 }, { food: 14, wood: 12, ore: 6 }, { food: 22, wood: 18, ore: 14 }, { food: 30, wood: 26, ore: 22 }][city.level];
 }
-export function cityDefense(city) {
-  return city.buildings?.includes('wall') ? 2.2 : 1.5;
+export function cityDefense(city, stonework = false) {
+  return city.buildings?.includes('wall') ? (stonework ? 2.6 : 2.2) : 1.5;
 }
 export function hasBuilding(city, b) {
   return !!city.buildings?.includes(b);
@@ -107,7 +140,8 @@ export const MAP_SIZES = {
   L: { name: 'Groß', cols: 13, rows: 17 },
   XL: { name: 'Riesig', cols: 16, rows: 21 },
   XXL: { name: 'Gewaltig', cols: 19, rows: 25 },
-  XXXL: { name: 'Episch', cols: 22, rows: 29 },
+  XXXL: { name: 'Kolossal', cols: 22, rows: 29 },
+  EPIC: { name: 'Episch', cols: 44, rows: 58 },
 };
 
 export const BIOMES = {
