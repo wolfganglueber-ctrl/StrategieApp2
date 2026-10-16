@@ -520,10 +520,11 @@ export function applyAction(state, a) {
     }
     case 'trade': {
       const rate = tradeRate(state, pid);
-      if (!RES.includes(a.give) || !RES.includes(a.get) || a.give === a.get || player.res[a.give] < rate) return null;
-      player.res[a.give] -= rate;
-      player.res[a.get] += 1;
-      ev.push({ k: 'trade', give: a.give, get: a.get });
+      const n = Math.max(1, Math.floor(a.count || 1));
+      if (!RES.includes(a.give) || !RES.includes(a.get) || a.give === a.get || player.res[a.give] < rate * n) return null;
+      player.res[a.give] -= rate * n;
+      player.res[a.get] += n;
+      ev.push({ k: 'trade', give: a.give, get: a.get, count: n });
       break;
     }
     case 'upgrade': {

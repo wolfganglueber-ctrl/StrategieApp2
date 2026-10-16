@@ -377,27 +377,77 @@ function openTech() {
   draw();
 }
 
+// Knopf, der beim Gedrückthalten immer schneller wiederholt
+function repeatButton(label, onStep) {
+  let timer = null, t0 = 0;
+  const stop = () => { clearTimeout(timer); timer = null; };
+  const tick = () => {
+    const held = performance.now() - t0;
+    const step = held > 2500 ? 10 : held > 1200 ? 5 : held > 500 ? 2 : 1;
+    onStep(step);
+    timer = setTimeout(tick, held > 400 ? 70 : 350);
+  };
+  return el('button', {
+    class: 'btn step',
+    onpointerdown: (e) => { e.preventDefault(); stop(); t0 = performance.now(); tick(); },
+    onpointerup: stop, onpointerleave: stop, onpointercancel: stop,
+    oncontextmenu: (e) => e.preventDefault(),
+  }, label);
+}
+
 function openTrade(preGet) {
   if (!S || !humanTurn() || busy) return;
-  let give = null, get = preGet || null;
+  let give = null, get = preGet || null, n = 1;
   const draw = () => {
     const p = S.players[S.current];
     const rate = tradeRate(S, p.id);
     if (!give || give === get) give = RES.filter((k) => k !== get).sort((a, b) => p.res[b] - p.res[a])[0];
     if (!get || get === give) get = RES.find((k) => k !== give);
+    const max = Math.floor(p.res[give] / rate);
+    n = Math.max(0, Math.min(n, max));
+    if (n === 0 && max > 0) n = 1;
     const row = (label, cur, onPick) => el('div', { class: 'trade-row' }, el('span', { class: 'muted' }, label),
       ...RES.map((k) => el('button', { class: 'tchip' + (cur === k ? ' active' : ''), onclick: () => { onPick(k); draw(); } }, icon(k), el('b', {}, p.res[k]))));
+
+    const slider = el('input', { type: 'range', id: 'tradeSlider', min: 0, max: Math.max(1, max), step: 1, value: n, disabled: max === 0 });
+    const amount = el('div', { class: 'trade-amount' });
+    const go = el('button', { class: 'btn primary big' });
+    const update = () => {
+      n = Math.max(0, Math.min(max, n));
+      slider.value = n;
+      const pct = max ? Math.round((n / max) * 100) : 0;
+      slider.style.setProperty('--pct', pct + '%');
+      amount.innerHTML = '';
+      amount.append(el('b', {}, n * rate), icon(give), ' → ', el('b', {}, n), icon(get), el('span', { class: 'muted' }, ` (${pct} %)`));
+      go.innerHTML = '';
+      go.append(n ? `Tauschen: ${n * rate} ` : 'Menge wählen', ...(n ? [icon(give), ` → ${n} `, icon(get)] : []));
+      go.disabled = n === 0;
+    };
+    slider.addEventListener('input', () => { n = +slider.value; update(); });
+    go.addEventListener('click', () => {
+      if (!n) return;
+      applyAction(S, { type: 'trade', give, get, count: n });
+      undoStack = [];
+      refresh();
+      toast(`Getauscht: ${n * rate} ${RES_INFO[give].name} → ${n} ${RES_INFO[get].name}`);
+      n = 1;
+      draw();
+    });
+    const quick = el('div', { class: 'trade-quick' },
+      ...[[25, '25 %'], [50, '50 %'], [100, 'Alles']].map(([q, l]) => el('button', { class: 'btn small', onclick: () => { n = Math.max(max ? 1 : 0, Math.floor((max * q) / 100)); update(); } }, l)));
+
     openClosable(
       el('h2', {}, 'Handel'),
-      el('p', {}, `Tausche ${rate} gegen 1${rate === 3 ? ' (mit einem Markt 2 gegen 1)' : ''}.`),
+      el('p', {}, `Kurs ${rate} : 1${rate === 3 ? ' · mit Markt 2 : 1' : ''}`),
       row('Gib', give, (k) => { give = k; if (get === k) get = null; }),
       row('Erhalte', get, (k) => { get = k; if (give === k) give = null; }),
-      el('button', {
-        class: 'btn primary big', disabled: p.res[give] < rate,
-        onclick: () => { applyAction(S, { type: 'trade', give, get }); undoStack = []; refresh(); draw(); },
-      }, `${rate} `, icon(give), ' → 1 ', icon(get)),
+      amount,
+      el('div', { class: 'trade-slider' }, repeatButton('−', (st) => { n -= st; update(); }), slider, repeatButton('+', (st) => { n += st; update(); })),
+      quick,
+      go,
       el('button', { class: 'btn big', onclick: closeModal }, 'Schließen'),
     );
+    update();
   };
   draw();
 }

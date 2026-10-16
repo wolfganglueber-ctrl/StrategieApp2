@@ -271,3 +271,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .resbar .ico { width: 24px; height: 24px; }
   .resbar .pill small { font-size: 11px; }
 }
+
+/* Handel: Menge per Regler und −/+ */
+.trade-amount { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 20px; margin-top: 4px; }
+.trade-amount .ico { width: 28px; height: 28px; }
+.trade-amount .muted { font-size: 14px; }
+.trade-slider { display: flex; align-items: center; gap: 8px; }
+.btn.step { width: 52px; height: 48px; padding: 0; font-size: 26px; font-weight: 800; flex: none; touch-action: none; user-select: none; -webkit-user-select: none; }
+#tradeSlider { flex: 1; min-width: 0; height: 34px; accent-color: var(--primary); }
+.trade-quick { display: flex; gap: 6px; }
+.trade-quick .btn { flex: 1; }
