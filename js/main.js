@@ -202,7 +202,7 @@ function refresh() {
 
 function onTap(sx, sy) {
   if (!S || busy || $('hud').classList.contains('hidden')) return;
-  hideTip();
+  hoverUnit = null;
   if (!humanTurn()) return;
   const i = R.pick(sx, sy);
   if (i < 0) { clearSel(); refresh(); return; }
@@ -242,45 +242,25 @@ function onTap(sx, sy) {
   refresh();
 }
 
-// Info-Kärtchen zu Einheiten: Mouse-over am PC, langes Drücken auf dem Handy
-function unitTip(u, isPreview) {
+// Einheiten-Info im Panel unten: Mouse-over am PC, langes Drücken auf dem Handy
+function unitStatsText(u, isPreview) {
   const st = statsOf(S, u);
-  const T = UNITS[u.type];
-  const owner = isPreview ? '' : ` · ${S.players[u.owner].name}`;
-  const name = u.type === 'tower' ? `Turm Stufe ${u.level || 1}` : T.name;
-  const rows = [
-    ['❤', 'Leben', isPreview ? st.hp : `${u.hp}/${st.hp}`],
-    ['⚔', 'Angriff', fmt(st.atk)],
-    ['🛡', 'Verteidigung', fmt(st.def)],
-    ['👣', 'Bewegung', st.move],
-    ['🎯', 'Reichweite', st.range],
-  ];
-  const box = el('div', {},
-    el('div', { class: 'tip-title' }, name, el('span', { class: 'muted' }, owner)),
-    el('div', { class: 'tip-grid' }, ...rows.map(([i, l, v]) => el('div', {}, el('span', {}, `${i} ${l}`), el('b', {}, v)))),
-    el('div', { class: 'tip-desc' }, T.desc));
-  if (!isPreview) {
-    const notes = [];
-    if (u.shaken) notes.push('⭐ Erschüttert: halbe Verteidigung, kein Gegenschlag');
-    if (S.players[u.owner].human && u.owner === S.current && !isStructure(u)) notes.push(canMove(u) ? 'Kann noch ziehen' : canAttack(u) ? 'Kann noch angreifen' : 'Hat diese Runde gehandelt');
-    for (const n of notes) box.append(el('div', { class: 'tip-note' }, n));
-  }
-  return box;
+  const hp = isPreview ? st.hp : `${u.hp}/${st.hp}`;
+  return `❤ ${hp} · ⚔ ${fmt(st.atk)} · 🛡 ${fmt(st.def)} · 👣 ${st.move} · 🎯 ${st.range}`;
 }
 
-let tipFor = null;
-function showTip(content, x, y) {
-  const t = $('tip');
-  t.innerHTML = '';
-  t.append(content);
-  t.classList.remove('hidden');
-  const w = t.offsetWidth, h = t.offsetHeight;
-  t.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, x + 16)) + 'px';
-  t.style.top = Math.max(8, Math.min(window.innerHeight - h - 8, y - h - 12 < 60 ? y + 20 : y - h - 12)) + 'px';
+function unitNotes(u) {
+  const notes = [UNITS[u.type].desc];
+  if (u.shaken) notes.push('⭐ Erschüttert: halbe Verteidigung, kein Gegenschlag.');
+  return notes.join(' ');
 }
-function hideTip() {
-  tipFor = null;
-  $('tip').classList.add('hidden');
+
+let hoverUnit = null;
+function setHover(u) {
+  const id = u ? u.id : null;
+  if (id === hoverUnit) return;
+  hoverUnit = id;
+  renderPanel();
 }
 
 function unitAtScreen(x, y) {
@@ -292,18 +272,18 @@ function unitAtScreen(x, y) {
 }
 
 function onHover(x, y) {
-  const u = unitAtScreen(x, y);
-  if (!u) { if (tipFor) hideTip(); return; }
-  tipFor = u.id;
-  showTip(unitTip(u), x, y);
+  if (!S || $('hud').classList.contains('hidden') || sel.cityIdx != null || sel.placeTower != null) return;
+  setHover(unitAtScreen(x, y));
 }
 
+let holdTimer = null;
 function onHold(x, y) {
   const u = unitAtScreen(x, y);
-  if (!u) return;
+  if (!u || sel.cityIdx != null) return;
   vibrate(15);
-  showTip(unitTip(u), x, y);
-  setTimeout(hideTip, 3500);
+  setHover(u);
+  clearTimeout(holdTimer);
+  holdTimer = setTimeout(() => setHover(null), 4000);
 }
 
 attachInput(canvas, R, onTap, onHold, onHover);
@@ -821,9 +801,9 @@ function renderCityPanel(panel, ci, occ) {
       if (why === 'cap' || why === 'space') note = label;
       const preview = { type: k, owner: p.id, hp: 1 };
       grid.append(el('button', {
-        class: 'recruit', disabled: !!why, onclick: () => { hideTip(); doRecruit(c.idx, k); },
-        onmouseenter: (e) => { const r = e.currentTarget.getBoundingClientRect(); showTip(unitTip(preview, true), r.left, r.top); },
-        onmouseleave: hideTip,
+        class: 'recruit', disabled: !!why, onclick: () => doRecruit(c.idx, k),
+        onmouseenter: () => { const n = $('recruitNote'); if (n) { n.dataset.base ??= n.textContent; n.textContent = `${T.name}: ${unitStatsText(preview, true)} – ${T.desc}`; } },
+        onmouseleave: () => { const n = $('recruitNote'); if (n && n.dataset.base != null) n.textContent = n.dataset.base; },
       },
         iconCanvas(k, p.id, 58),
         el('div', { class: 'name' }, T.name),
@@ -831,7 +811,7 @@ function renderCityPanel(panel, ci, occ) {
     }
     panel.append(grid);
     const ready = hasBuilding(c, 'barracks') ? ' Dank Kaserne können sie sofort ziehen.' : '';
-    panel.append(el('div', { class: 'note' }, note ? `Rekrutieren nicht möglich: ${note}.` : `Neue Einheiten erscheinen im Stadtgebiet.${ready}`));
+    panel.append(el('div', { class: 'note', id: 'recruitNote' }, note ? `Rekrutieren nicht möglich: ${note}.` : `Neue Einheiten erscheinen im Stadtgebiet.${ready}`));
   } else {
     const list = el('div', { class: 'build-list' });
     const full = c.buildings.length >= citySlots(c);
@@ -875,6 +855,13 @@ function renderPanel() {
       el('span', { class: 'title' }, 'Turm platzieren'),
       el('button', { class: 'btn small', onclick: () => { clearSel(); refresh(); } }, 'Abbrechen')));
     panel.append(el('div', { class: 'note' }, 'Tippe ein helles Feld im Stadtgebiet an.'));
+    return;
+  }
+  const hu = hoverUnit != null ? unitById(S, hoverUnit) : null;
+  if (hu && hu.id !== sel.unitId) {
+    const who = hu.owner === S.current ? 'Deine Einheit' : S.players[hu.owner].name;
+    panel.append(unitCard(hu, `${who} · ${tileInfo(hu.idx)}`));
+    panel.append(el('div', { class: 'note' }, unitNotes(hu)));
     return;
   }
   const u = sel.unitId != null ? unitById(S, sel.unitId) : null;
