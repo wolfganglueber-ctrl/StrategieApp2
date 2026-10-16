@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d2238" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="description" content="Hexkrone – rundenbasiertes Strategiespiel" />
+  <title>Hexkrone</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <canvas id="board"></canvas>
+
+  <!-- Spiel-HUD -->
+  <div id="hud" class="hidden">
+    <div class="topbar">
+      <button class="icon-btn" id="btnMenu" aria-label="Menü">☰</button>
+      <div class="turninfo">
+        <span class="dot" id="turnDot"></span>
+        <span id="turnText">Runde 1</span>
+      </div>
+      <div class="stats">
+        <span class="pill"><i class="coin"></i><b id="goldText">0</b><small id="incomeText">+0</small></span>
+        <span class="pill" title="Einheiten / Versorgung"><i class="sword">⚔</i><b id="unitText">0/0</b></span>
+      </div>
+    </div>
+    <div id="banner" class="banner hidden"></div>
+    <div class="bottom">
+      <div id="panel" class="panel"></div>
+      <div class="actionbar">
+        <button class="btn ghost" id="btnUndo" aria-label="Rückgängig">↶</button>
+        <button class="btn ghost" id="btnNext">Nächste Einheit</button>
+        <button class="btn primary" id="btnEnd">Zug beenden</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hauptmenü -->
+  <div id="scrMenu" class="screen">
+    <div class="menu-box">
+      <div class="logo">
+        <svg viewBox="0 0 100 100" class="logo-hex"><polygon points="50,4 90,27 90,73 50,96 10,73 10,27" /><path d="M28 62 L32 38 L42 50 L50 32 L58 50 L68 38 L72 62 Z" /></svg>
+        <h1>Hexkrone</h1>
+        <p class="sub">Erobere das Reich – Zug um Zug</p>
+      </div>
+      <button class="btn primary big hidden" id="btnContinue">Fortsetzen</button>
+      <button class="btn primary big" id="btnCampaign">Kampagne</button>
+      <button class="btn big" id="btnSkirmish">Freies Spiel</button>
+      <button class="btn big" id="btnHelp">Anleitung</button>
+      <button class="btn ghost" id="btnSettings">Einstellungen</button>
+      <p class="version">Version 0.1</p>
+    </div>
+  </div>
+
+  <!-- Levelauswahl -->
+  <div id="scrLevels" class="screen hidden">
+    <div class="screen-head">
+      <button class="icon-btn" data-back>←</button>
+      <h2>Kampagne</h2>
+      <span class="stars-total" id="starsTotal"></span>
+    </div>
+    <div class="tabs" id="worldTabs"></div>
+    <div class="level-grid" id="levelGrid"></div>
+  </div>
+
+  <!-- Freies Spiel -->
+  <div id="scrSetup" class="screen hidden">
+    <div class="screen-head">
+      <button class="icon-btn" data-back>←</button>
+      <h2>Freies Spiel</h2>
+      <span></span>
+    </div>
+    <div class="form">
+      <label>Kartengröße</label>
+      <div class="seg" id="segSize"></div>
+      <label>Landschaft</label>
+      <div class="seg" id="segBiome"></div>
+      <label>Gegner</label>
+      <div class="seg" id="segEnemies"></div>
+      <label>Schwierigkeit</label>
+      <div class="seg" id="segDiff"></div>
+      <p class="hint" id="diffDesc"></p>
+      <label>Karten-Code <small>(gleicher Code = gleiche Karte, zum Teilen)</small></label>
+      <div class="seedrow">
+        <input id="seedInput" maxlength="12" autocomplete="off" spellcheck="false" />
+        <button class="btn" id="btnDice" aria-label="Neuer Code">🎲</button>
+      </div>
+      <button class="btn primary big" id="btnStartSkirmish">Spiel starten</button>
+    </div>
+  </div>
+
+  <!-- Anleitung -->
+  <div id="scrHelp" class="screen hidden">
+    <div class="screen-head">
+      <button class="icon-btn" data-back>←</button>
+      <h2>Anleitung</h2>
+      <span></span>
+    </div>
+    <div class="help" id="helpContent"></div>
+  </div>
+
+  <!-- Dialog -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-box" id="modalBox"></div>
+  </div>
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

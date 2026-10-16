@@ -1,0 +1,13 @@
+{
+  "name": "hexkrone",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rundenbasiertes Hex-Strategiespiel als Web-App (PWA)",
+  "type": "module",
+  "scripts": {
+    "start": "npx --yes http-server -c-1 -p 8080 .",
+    "sim": "node tools/sim.mjs",
+    "test": "node tools/test.mjs",
+    "build": "node tools/build-single.mjs"
+  }
+}
