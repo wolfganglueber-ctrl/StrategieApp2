@@ -676,6 +676,7 @@ function updateHud() {
   $('btnEnd').disabled = !my || busy;
   $('btnNext').disabled = !my || busy;
   $('btnUndo').disabled = !my || busy || undoStack.length === 0;
+  $('btnTip').disabled = !my || busy;
   $('btnEnd').classList.toggle('pulse', my && !busy && !playerHasActions(S, S.current));
 }
 
@@ -867,7 +868,7 @@ function renderCityPanel(panel, ci, occ) {
     const full = c.buildings.length >= citySlots(c);
     const nt = towersOfCity(S, ci);
     list.append(el('div', { class: 'build-row tower-row' },
-      el('span', { class: 'bicon' }, iconCanvas('tower', p.id, 40, 1)),
+      el('span', { class: 'bicon' }, iconCanvas('tower', p.id, 56, 1)),
       el('div', { class: 'binfo' }, el('b', {}, `Turm (${nt}/${TOWERS_PER_CITY})`), el('span', { class: 'muted' }, 'Auf einem Feld im Stadtgebiet, schießt auf Gegner. 3 Ausbaustufen. Belegt keinen Bauplatz.')),
       el('button', {
         class: 'btn small', disabled: nt >= TOWERS_PER_CITY || !canAfford(p.res, UNITS.tower.cost),
@@ -964,9 +965,7 @@ function renderPanel() {
     }
     return;
   }
-  const tip = advice(occ);
-  panel.append(el('button', { class: 'advice', onclick: () => followAdvice(tip) },
-    el('span', { class: 'advice-icon' }, '💡'), el('span', {}, tip.text)));
+  // Ohne Auswahl bleibt das Panel leer; Tipps gibt es über den 💡-Knopf
 }
 
 // ---------------------------------------------------------------- Banner, Toast, Dialoge
@@ -980,12 +979,21 @@ function hideBanner() {
   $('banner').classList.add('hidden');
 }
 let toastTimer = null;
-function toast(text) {
+function showAdvice() {
+  if (!S || busy || !humanTurn()) return;
+  const occ = buildOcc(S);
+  if (curVis) for (const x of S.units) if (x.owner !== S.current && !curVis[x.idx]) occ[x.idx] = null;
+  const tip = advice(occ);
+  followAdvice(tip);
+  toast('💡 ' + tip.text, 5000);
+}
+
+function toast(text, ms = 2400) {
   const t = $('toast');
   t.textContent = text;
   t.classList.remove('hidden');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.add('hidden'), 2400);
+  toastTimer = setTimeout(() => t.classList.add('hidden'), ms);
 }
 
 function openModal(...children) {
@@ -1029,7 +1037,7 @@ function showIntro() {
     el('p', {}, 'Ziel: Erobere alle Städte deiner Gegner.'),
     el('p', {}, 'Tippe eine Einheit an und dann ein helles Feld, um zu ziehen. Rote Felder zeigen angreifbare Gegner samt Schaden – ein Tipp greift an.'),
     el('p', {}, 'Stelle eine Einheit auf ein Dorf. Steht sie zu Beginn deines nächsten Zuges noch dort, gehört es dir – samt Gebiet: Wiesen liefern Nahrung, Wälder Holz, Hügel und Berge Erz.'),
-    el('p', {}, 'Tippe eine Stadt an, um Einheiten zu rekrutieren oder Gebäude zu bauen. Unten zeigt dir der 💡 Ratgeber immer den nächsten sinnvollen Schritt.'),
+    el('p', {}, 'Tippe eine Stadt an, um Einheiten zu rekrutieren oder Gebäude zu bauen. Der 💡-Knopf unten links zeigt dir den nächsten sinnvollen Schritt.'),
     el('button', { class: 'btn primary big', onclick: closeModal }, "Los geht's"),
   );
 }
@@ -1194,7 +1202,7 @@ function renderHelp() {
     <b>4. Armee:</b> Eine <b>Kaserne</b> in Frontstädten lässt neue Einheiten sofort ziehen und ermöglicht Ritter. Fehlt ein Rohstoff, tippe oben auf die Rohstoffleiste und handle.<br>
     <b>5. Angriff:</b> Erst die Fernkämpfer schießen lassen, dann mit Nahkämpfern zuschlagen.</p>
     <h3>Ablauf einer Runde</h3>
-    <p>Jede Einheit darf pro Runde einmal ziehen und einmal angreifen (erst ziehen, dann angreifen). Durch eigene Einheiten kannst du hindurchziehen.
+    <p>Jede Einheit darf pro Runde einmal ziehen und einmal angreifen (erst ziehen, dann angreifen). Über eigene Einheiten springst du hinweg – das kostet keine Bewegung.
     Du kannst pro Runde beliebig viele Einheiten rekrutieren (begrenzt durch Rohstoffe und Versorgung). Sie erscheinen auf freien Feldern im Stadtgebiet und handeln ab der nächsten Runde – mit Kaserne sofort.
     Einheiten, die noch etwas tun können, haben einen leuchtenden Ring.</p>
     <h3>Angreifen</h3>
@@ -1245,6 +1253,7 @@ $('btnContinue').addEventListener('click', () => {
 $('btnMenu').addEventListener('click', gameMenu);
 $('btnTech').addEventListener('click', openTech);
 $('btnUndo').addEventListener('click', undo);
+$('btnTip').addEventListener('click', showAdvice);
 $('btnNext').addEventListener('click', nextUnit);
 $('btnEnd').addEventListener('click', onEndTurn);
 

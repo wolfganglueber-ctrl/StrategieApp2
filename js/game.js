@@ -206,25 +206,30 @@ export function getMoves(state, u, occ = buildOcc(state), moveOverride) {
   const parent = new Map();
   if (!canMove(u) && moveOverride === undefined) return parent;
   const maxSteps = moveOverride ?? statsOf(state, u).move;
+  // 0-1-Breitensuche: Felder mit eigenen Einheiten kosten keine Bewegung (man springt darüber)
   const steps = new Map([[u.idx, 0]]);
-  const q = [u.idx];
-  for (let h = 0; h < q.length; h++) {
-    const i = q[h];
+  const front = [], back = [u.idx];
+  let head = 0;
+  while (front.length || head < back.length) {
+    const i = front.length ? front.pop() : back[head++];
     const s = steps.get(i);
-    if (s >= maxSteps) continue;
     for (const j of geo.nb[i]) {
-      if (steps.has(j)) continue;
-      if (!TERRAIN[state.terrain[j]].pass) continue;
+      if (j === u.idx || !TERRAIN[state.terrain[j]].pass) continue;
       const o = occ[j];
       if (o && o.owner !== u.owner) continue;
-      steps.set(j, s + 1);
+      const cost = o ? 0 : 1;
+      const ns = s + cost;
+      if (ns > maxSteps || (o && ns >= maxSteps)) continue;
+      if (steps.has(j) && steps.get(j) <= ns) continue;
+      steps.set(j, ns);
       parent.set(j, i);
-      q.push(j);
+      if (cost === 0) front.push(j);
+      else back.push(j);
     }
   }
   const res = new Map();
   for (const [j, p] of parent) if (!occ[j]) res.set(j, p);
-  // Vorgänger auch für durchquerte (besetzte) Felder behalten, für Pfadrekonstruktion
+  // Vorgänger auch für übersprungene (besetzte) Felder behalten, für Pfadrekonstruktion
   res.parents = parent;
   return res;
 }

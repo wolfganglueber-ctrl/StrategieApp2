@@ -281,3 +281,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #tradeSlider { flex: 1; min-width: 0; height: 34px; accent-color: var(--primary); }
 .trade-quick { display: flex; gap: 6px; }
 .trade-quick .btn { flex: 1; }
+
+.actionbar #btnTip { flex: 0 0 52px; font-size: 20px; padding: 10px; }
+.toast { bottom: auto; top: calc(108px + var(--safe-top)); max-width: min(92vw, 460px); border-radius: 16px; line-height: 1.35; }
