@@ -17,7 +17,8 @@ offline-fähig und zum Homescreen hinzufügbar.
 - **Forschung:** Entwicklungsbaum mit 15 Verbesserungen in Militär, Wirtschaft und Verteidigung
   (z. B. Reichweite für Schützen, Bewegung und Reichweite für Katapulte, bessere Minen).
 - **Kartennebel** (optional): Man sieht nur, was eigene Einheiten und Städte sehen – die KI ebenso.
-- Ein **Ratgeber** schlägt immer den nächsten sinnvollen Schritt vor.
+- **Gruppen:** Mehrere Einheiten auswählen und gemeinsam bewegen oder angreifen lassen (Fernkämpfer zuerst).
+- Ein **Ratgeber** (💡) schlägt auf Knopfdruck den nächsten sinnvollen Schritt vor.
 - **Kampagne:** 50 Level in 5 Welten, Karten wachsen von 8×10 bis zur epischen Karte mit 44×58 Feldern.
 - **Freies Spiel:** Zufallskarten in 7 Größen (bis 44×58), 5 Landschaften, 1–3 Gegner und 5 KI-Stufen; Karten-Code zum Teilen.
 

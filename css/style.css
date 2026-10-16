@@ -284,3 +284,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .actionbar #btnTip { flex: 0 0 52px; font-size: 20px; padding: 10px; }
 .toast { bottom: auto; top: calc(108px + var(--safe-top)); max-width: min(92vw, 460px); border-radius: 16px; line-height: 1.35; }
+
+/* Gruppen */
+.group-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; max-height: 96px; overflow-y: auto; }
+.group-row .gm { border: 1px solid rgba(125, 211, 252, 0.5); background: rgba(125, 211, 252, 0.1); border-radius: 10px; padding: 0; }
+.group-btns { display: inline-flex; gap: 6px; }

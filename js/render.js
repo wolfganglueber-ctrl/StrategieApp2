@@ -640,6 +640,15 @@ export class Renderer {
       hexPath(ctx, c.x, c.y, HEX - 3);
       ctx.stroke();
     }
+    if (o.selectedSet) {
+      for (const i of o.selectedSet) {
+        const c = this.center(i);
+        ctx.strokeStyle = '#7dd3fc';
+        ctx.lineWidth = 5;
+        hexPath(ctx, c.x, c.y, HEX - 3);
+        ctx.stroke();
+      }
+    }
     if (o.targets) {
       for (const t of o.targets.values()) {
         const c = this.center(t.idx);
@@ -662,7 +671,7 @@ export class Renderer {
       const c = pos || this.center(u.idx);
       if (c.x < vr.x0 - HEX || c.x > vr.x1 + HEX || c.y < vr.y0 - HEX * 2 || c.y > vr.y1 + HEX * 2) continue;
       const exhausted = !!o.exhausted?.has(u.id);
-      const ready = !pos && !!o.ready?.has(u.id) && u.idx !== o.selected;
+      const ready = !pos && !!o.ready?.has(u.id) && u.idx !== o.selected && !o.selectedSet?.has(u.idx);
       this.drawUnit(ctx, u, c.x, c.y, pos?.s ?? 1, exhausted, pos?.flash || 0, ready, now);
     }
 
@@ -700,7 +709,7 @@ export class Renderer {
     const c = this.center(t.idx);
     const fs = Math.max(HEX * 0.36, 13 / this.cam.z);
     ctx.font = `800 ${fs}px system-ui, sans-serif`;
-    const main = t.kill ? '✖' : `−${t.dmg}`;
+    const main = (t.n > 1 ? `${t.n}× ` : '') + (t.kill ? '✖' : `−${t.dmg}`);
     const sub = !t.kill && t.counter > 0 ? ` ↩${t.counter}` : '';
     const wMain = ctx.measureText(main).width;
     ctx.font = `700 ${fs * 0.72}px system-ui, sans-serif`;

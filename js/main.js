@@ -131,7 +131,112 @@ function saveGame() {
 
 // ---------------------------------------------------------------- Auswahl & Overlay
 function clearSel() {
-  sel = { unitId: null, cityIdx: null, infoIdx: null, placeTower: null };
+  sel = { unitId: null, cityIdx: null, infoIdx: null, placeTower: null, group: null };
+}
+
+// ---------------------------------------------------------------- Gruppen
+let shiftDown = false;
+window.addEventListener('keydown', (e) => { if (e.key === 'Shift') shiftDown = true; });
+window.addEventListener('keyup', (e) => { if (e.key === 'Shift') shiftDown = false; });
+
+function groupUnits() {
+  return (sel.group || []).map((id) => unitById(S, id)).filter((u) => u && u.owner === S.current);
+}
+
+function startGroup(u) {
+  clearSel();
+  sel.group = [u.id];
+  refresh();
+}
+
+function toggleGroupMember(u) {
+  if (u.type === 'tower') return;
+  const g = sel.group || [];
+  sel.group = g.includes(u.id) ? g.filter((x) => x !== u.id) : [...g, u.id];
+  if (!sel.group.length) clearSel();
+  refresh();
+}
+
+function addNearbyToGroup() {
+  const geo = getGeoOf();
+  const members = groupUnits();
+  // Zusammenhängender Trupp: Einheiten im Abstand ≤ 2 zueinander, höchstens 20
+  const ids = new Set(sel.group);
+  const front = members.slice();
+  while (front.length && ids.size < 20) {
+    const m = front.shift();
+    for (const x of S.units) {
+      if (ids.size >= 20) break;
+      if (x.owner !== S.current || ids.has(x.id) || x.type === 'tower') continue;
+      if (!canMove(x) && !canAttack(x)) continue;
+      if (geo.dist(m.idx, x.idx) <= 2) { ids.add(x.id); front.push(x); }
+    }
+  }
+  sel.group = [...ids];
+  refresh();
+}
+
+function groupMoves(occ) {
+  const all = new Set();
+  for (const u of groupUnits()) if (canMove(u)) for (const j of getMoves(S, u, occ).keys()) all.add(j);
+  return all;
+}
+
+// Angreifer für ein Ziel: erst Fernkämpfer, dann Nahkämpfer
+function groupAttackers(target, occ) {
+  return groupUnits()
+    .filter((u) => unitTargets(u, occ).includes(target))
+    .sort((a, b) => statsOf(S, b).range - statsOf(S, a).range);
+}
+
+async function doGroupMove(target) {
+  if (busy) return;
+  const geo = getGeoOf();
+  const snap = cloneState(S);
+  const members = groupUnits().filter(canMove).sort((a, b) => geo.dist(a.idx, target) - geo.dist(b.idx, target));
+  const events = [];
+  for (const u of members) {
+    const moves = getMoves(S, u, buildOcc(S));
+    const cur = geo.dist(u.idx, target);
+    let best = null;
+    for (const d of moves.keys()) {
+      const dd = geo.dist(d, target);
+      if (dd < cur && (!best || dd < best.dd)) best = { d, dd };
+    }
+    if (!best) continue;
+    const ev = applyAction(S, { type: 'move', unitId: u.id, to: best.d });
+    if (ev) events.push(...ev);
+  }
+  if (!events.length) { toast('Die Gruppe kommt dort nicht näher heran.'); return; }
+  undoStack.push(snap);
+  busy = true;
+  refresh();
+  let longest = 0;
+  for (const e of events) if (e.k === 'move') longest = Math.max(longest, R.animateMove(e.id, e.path, 100));
+  await sleep(longest);
+  busy = false;
+  refresh();
+}
+
+async function doGroupAttack(target) {
+  if (busy) return;
+  const occ = buildOcc(S);
+  const attackers = groupAttackers(target, occ);
+  if (!attackers.length) return;
+  undoStack = [];
+  busy = true;
+  vibrate(30);
+  for (const u of attackers) {
+    const t = unitById(S, target.id);
+    if (!t || !unitById(S, u.id) || !canAttack(u)) continue;
+    const ev = applyAction(S, { type: 'attack', unitId: u.id, targetId: t.id });
+    if (!ev) continue;
+    refresh();
+    await play(ev, 1, false);
+  }
+  busy = false;
+  refresh();
+  if (S.over) gameOver();
 }
 
 function getGeoOf() {
@@ -187,6 +292,21 @@ function refresh() {
       }
     }
   }
+  if (sel.group) {
+    const members = groupUnits();
+    o.selectedSet = new Set(members.map((m) => m.idx));
+    o.moves = groupMoves(occ);
+    const targets = new Map();
+    for (const x of S.units) {
+      if (x.owner === S.current || (curVis && !curVis[x.idx])) continue;
+      const att = groupAttackers(x, occ);
+      if (!att.length) continue;
+      // Vorschau: Schaden des ersten Angreifers (Fernkämpfer zuerst)
+      const r = computeCombat(S, att[0], x);
+      targets.set(x.idx, { idx: x.idx, dmg: r.dmg, counter: r.counter, kill: r.kill, die: r.die, n: att.length });
+    }
+    if (targets.size) o.targets = targets;
+  }
   if (sel.cityIdx != null) o.cityIdx = sel.cityIdx;
   if (sel.placeTower != null) {
     const terr = computeTerritory(S);
@@ -217,7 +337,22 @@ function onTap(sx, sy) {
   const occ = buildOcc(S);
   if (curVis) for (const x of S.units) if (x.owner !== S.current && !curVis[x.idx]) occ[x.idx] = null;
   const u = occ[i];
+  if (sel.group) {
+    if (u && u.owner === S.current) { toggleGroupMember(u); return; }
+    if (u && groupAttackers(u, occ).length) { doGroupAttack(u); return; }
+    if (!u && groupMoves(occ).has(i)) { doGroupMove(i); return; }
+    clearSel();
+    refresh();
+    return;
+  }
   const selU = sel.unitId != null ? unitById(S, sel.unitId) : null;
+  // Shift + Klick (PC): Gruppe bilden
+  if (shiftDown && u && u.owner === S.current && selU && selU.owner === S.current && u.id !== selU.id) {
+    sel.group = [selU.id];
+    sel.unitId = null;
+    toggleGroupMember(u);
+    return;
+  }
   if (selU && selU.owner === S.current) {
     if (u && u.owner !== S.current && unitTargets(selU, occ).includes(u)) { doAttack(selU, u); return; }
     if (!u && canMove(selU) && getMoves(S, selU, occ).has(i)) { doMove(selU, i); return; }
@@ -908,6 +1043,19 @@ function renderPanel() {
     panel.append(el('div', { class: 'note' }, 'Tippe ein helles Feld im Stadtgebiet an.'));
     return;
   }
+  if (sel.group) {
+    const members = groupUnits();
+    const row = el('div', { class: 'group-row' });
+    for (const m of members) row.append(el('button', { class: 'gm', title: UNITS[m.type].name, onclick: () => toggleGroupMember(m) }, iconCanvas(m.type, m.owner, 38)));
+    panel.append(el('div', { class: 'city-head' },
+      el('span', { class: 'title' }, `👥 Gruppe · ${members.length} Einheit${members.length === 1 ? '' : 'en'}`),
+      el('span', { class: 'group-btns' },
+        el('button', { class: 'btn small', onclick: addNearbyToGroup }, '+ Umgebung'),
+        el('button', { class: 'btn small', onclick: () => { clearSel(); refresh(); } }, 'Auflösen'))));
+    panel.append(row);
+    panel.append(el('div', { class: 'note' }, 'Zielfeld antippen = alle ziehen · Gegner antippen = Gruppenangriff (Fernkämpfer zuerst) · eigene Einheit antippen = hinzufügen/entfernen'));
+    return;
+  }
   const hu = hoverUnit != null ? unitById(S, hoverUnit) : null;
   if (hu && hu.id !== sel.unitId) {
     const who = hu.owner === S.current ? 'Deine Einheit' : S.players[hu.owner].name;
@@ -923,6 +1071,11 @@ function renderPanel() {
     else if (targets.length) status = 'Rotes Ziel = angreifen';
     else status = u.type === 'tower' ? 'Kein Ziel in Reichweite' : 'Fertig für diese Runde';
     panel.append(unitCard(u, status));
+    if (u.type !== 'tower' && u.owner === S.current) {
+      panel.append(el('div', { class: 'upgrade-row' },
+        el('span', { class: 'muted' }, 'Mehrere Einheiten zusammen bewegen?'),
+        el('button', { class: 'btn small', onclick: () => startGroup(u) }, '👥 Gruppe')));
+    }
     if (u.type === 'tower' && u.owner === S.current) {
       if (u.level < 3) {
         const cost = TOWER_UPGRADE[u.level];
@@ -1205,6 +1358,9 @@ function renderHelp() {
     <p>Jede Einheit darf pro Runde einmal ziehen und einmal angreifen (erst ziehen, dann angreifen). Über eigene Einheiten springst du hinweg – das kostet keine Bewegung.
     Du kannst pro Runde beliebig viele Einheiten rekrutieren (begrenzt durch Rohstoffe und Versorgung). Sie erscheinen auf freien Feldern im Stadtgebiet und handeln ab der nächsten Runde – mit Kaserne sofort.
     Einheiten, die noch etwas tun können, haben einen leuchtenden Ring.</p>
+    <h3>Gruppen 👥</h3>
+    <p>Wähle eine Einheit und tippe auf „👥 Gruppe“ (am PC: Shift + Klick). Weitere eigene Einheiten fügst du per Tipp hinzu, „+ Umgebung“ nimmt alle in der Nähe auf.
+    Ein Tipp auf ein Zielfeld bewegt die ganze Gruppe dorthin, ein Tipp auf einen Gegner startet einen Gruppenangriff – Fernkämpfer schießen zuerst.</p>
     <h3>Angreifen</h3>
     <p>Wählst du eine Einheit, zeigen rote Felder alle Ziele. Die Blase über dem Ziel nennt den Schaden (↩ = Gegenschlag, ✖ = Ziel wird besiegt). Ein Tipp auf das Ziel greift an.
     Nahkämpfer rücken nach einem Sieg auf das Feld vor.<br>
