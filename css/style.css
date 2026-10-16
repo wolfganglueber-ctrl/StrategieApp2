@@ -55,7 +55,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .pill.tech.glow { border-color: #fcd34d; box-shadow: 0 0 0 2px rgba(252, 211, 77, 0.35); }
 .resbar { display: flex; gap: 6px; }
 .resbar .pill { flex: 1; justify-content: center; padding: 5px 6px; }
-.ico { display: inline-block; width: 16px; height: 16px; flex: none; vertical-align: -3px; }
+.ico { display: inline-block; width: 24px; height: 24px; flex: none; vertical-align: -6px; }
 .ico svg { width: 100%; height: 100%; display: block; }
 .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; display: inline-block; }
 .stats { display: flex; gap: 6px; }
@@ -87,7 +87,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .hp-fill { height: 100%; border-radius: 99px; }
 .stats-row { display: flex; gap: 8px; font-size: 12.5px; font-weight: 700; flex: none; }
 .stats-row span { display: inline-flex; align-items: center; gap: 2px; }
-.stats-row .ico { width: 13px; height: 13px; }
+.stats-row .ico { width: 18px; height: 18px; }
 .city-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .yield { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #d1fae5; }
 .yield span { display: inline-flex; align-items: center; gap: 2px; }
@@ -95,7 +95,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .btn.small { padding: 7px 10px; font-size: 13px; flex: none; }
 .cost { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 12px; }
 .cost > span { display: inline-flex; align-items: center; gap: 1px; }
-.cost .ico { width: 13px; height: 13px; }
+.cost .ico { width: 20px; height: 20px; }
 .cost .short { color: #fca5a5; }
 .panel .title { font-weight: 750; font-size: 16px; }
 .panel .muted { color: var(--muted); font-size: 13px; }
@@ -212,7 +212,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .trade-row > .muted { width: 58px; flex: none; }
 .tchip { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 10px 4px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06); font-size: 15px; }
 .tchip.active { background: rgba(251, 191, 36, 0.2); border-color: #fcd34d; }
-.modal-box .btn .ico { width: 18px; height: 18px; }
+.modal-box .btn .ico { width: 26px; height: 26px; }
 
 /* Größere Kauf-/Bausymbole */
 .panel { max-height: 62vh; overflow-y: auto; }
@@ -238,3 +238,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .turninfo #turnText { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .pill.tech { position: relative; }
 .badge { position: absolute; top: -7px; right: -7px; background: #ef4444; color: #fff; border-radius: 999px; font-size: 11px; font-weight: 800; min-width: 18px; height: 18px; display: grid; place-items: center; padding: 0 4px; border: 2px solid #0d2238; }
+
+/* Größere Rohstoff- und Forschungssymbole */
+.resbar .pill { font-size: 16px; padding: 4px 6px; gap: 6px; }
+.resbar .ico { width: 30px; height: 30px; }
+.yield .ico { width: 24px; height: 24px; }
+.cost { font-size: 13.5px; }
+.tchip .ico { width: 30px; height: 30px; }
+.pill.tech { font-size: 26px; line-height: 1; padding: 2px 10px; }
+.pill.tech b { font-size: 15px; }
+.ticon { font-size: 40px; width: 52px; }
+.tip {
+  position: fixed; z-index: 30; pointer-events: none; max-width: 250px; background: rgba(10, 20, 36, 0.96); border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px; padding: 10px 12px; font-size: 13px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.tip-title { font-weight: 800; font-size: 15px; margin-bottom: 6px; }
+.tip-grid { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; }
+.tip-grid > div { display: contents; }
+.tip-desc { color: var(--muted); margin-top: 6px; }
+.tip-note { color: #fde68a; margin-top: 4px; }

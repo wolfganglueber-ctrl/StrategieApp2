@@ -4,7 +4,7 @@ import { attachInput } from './input.js';
 import {
   createGame, applyAction, cloneState, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
   incomeOf, unitCap, unitCount, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
-  tradeRate, spawnSpots, statsOf, visibility, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
+  tradeRate, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
@@ -202,6 +202,7 @@ function refresh() {
 
 function onTap(sx, sy) {
   if (!S || busy || $('hud').classList.contains('hidden')) return;
+  hideTip();
   if (!humanTurn()) return;
   const i = R.pick(sx, sy);
   if (i < 0) { clearSel(); refresh(); return; }
@@ -241,7 +242,71 @@ function onTap(sx, sy) {
   refresh();
 }
 
-attachInput(canvas, R, onTap);
+// Info-Kärtchen zu Einheiten: Mouse-over am PC, langes Drücken auf dem Handy
+function unitTip(u, isPreview) {
+  const st = statsOf(S, u);
+  const T = UNITS[u.type];
+  const owner = isPreview ? '' : ` · ${S.players[u.owner].name}`;
+  const name = u.type === 'tower' ? `Turm Stufe ${u.level || 1}` : T.name;
+  const rows = [
+    ['❤', 'Leben', isPreview ? st.hp : `${u.hp}/${st.hp}`],
+    ['⚔', 'Angriff', fmt(st.atk)],
+    ['🛡', 'Verteidigung', fmt(st.def)],
+    ['👣', 'Bewegung', st.move],
+    ['🎯', 'Reichweite', st.range],
+  ];
+  const box = el('div', {},
+    el('div', { class: 'tip-title' }, name, el('span', { class: 'muted' }, owner)),
+    el('div', { class: 'tip-grid' }, ...rows.map(([i, l, v]) => el('div', {}, el('span', {}, `${i} ${l}`), el('b', {}, v)))),
+    el('div', { class: 'tip-desc' }, T.desc));
+  if (!isPreview) {
+    const notes = [];
+    if (u.shaken) notes.push('⭐ Erschüttert: halbe Verteidigung, kein Gegenschlag');
+    if (S.players[u.owner].human && u.owner === S.current && !isStructure(u)) notes.push(canMove(u) ? 'Kann noch ziehen' : canAttack(u) ? 'Kann noch angreifen' : 'Hat diese Runde gehandelt');
+    for (const n of notes) box.append(el('div', { class: 'tip-note' }, n));
+  }
+  return box;
+}
+
+let tipFor = null;
+function showTip(content, x, y) {
+  const t = $('tip');
+  t.innerHTML = '';
+  t.append(content);
+  t.classList.remove('hidden');
+  const w = t.offsetWidth, h = t.offsetHeight;
+  t.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, x + 16)) + 'px';
+  t.style.top = Math.max(8, Math.min(window.innerHeight - h - 8, y - h - 12 < 60 ? y + 20 : y - h - 12)) + 'px';
+}
+function hideTip() {
+  tipFor = null;
+  $('tip').classList.add('hidden');
+}
+
+function unitAtScreen(x, y) {
+  if (!S || x < 0) return null;
+  const i = R.pick(x, y);
+  if (i < 0) return null;
+  if (curVis && !curVis[i]) return null;
+  return S.units.find((u) => u.idx === i) || null;
+}
+
+function onHover(x, y) {
+  const u = unitAtScreen(x, y);
+  if (!u) { if (tipFor) hideTip(); return; }
+  tipFor = u.id;
+  showTip(unitTip(u), x, y);
+}
+
+function onHold(x, y) {
+  const u = unitAtScreen(x, y);
+  if (!u) return;
+  vibrate(15);
+  showTip(unitTip(u), x, y);
+  setTimeout(hideTip, 3500);
+}
+
+attachInput(canvas, R, onTap, onHold, onHover);
 
 // ---------------------------------------------------------------- Aktionen
 function vibrate(ms) {
@@ -754,7 +819,12 @@ function renderCityPanel(panel, ci, occ) {
       const why = canRecruit(S, p.id, ci, k);
       const label = why && RECRUIT_BLOCK[why] ? RECRUIT_BLOCK[why](T) : null;
       if (why === 'cap' || why === 'space') note = label;
-      grid.append(el('button', { class: 'recruit', disabled: !!why, onclick: () => doRecruit(c.idx, k), title: T.desc },
+      const preview = { type: k, owner: p.id, hp: 1 };
+      grid.append(el('button', {
+        class: 'recruit', disabled: !!why, onclick: () => { hideTip(); doRecruit(c.idx, k); },
+        onmouseenter: (e) => { const r = e.currentTarget.getBoundingClientRect(); showTip(unitTip(preview, true), r.left, r.top); },
+        onmouseleave: hideTip,
+      },
         iconCanvas(k, p.id, 58),
         el('div', { class: 'name' }, T.name),
         why === 'needs' ? el('span', { class: 'lock' }, '🔒 ', BUILDINGS[T.needs].name) : costEl(T.cost, p.res)));
