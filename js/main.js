@@ -3,12 +3,15 @@ import { Renderer } from './render.js';
 import { attachInput } from './input.js';
 import {
   createGame, applyAction, cloneState, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
-  incomeOf, unitCap, unitCount, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION,
+  incomeOf, unitCap, unitCount, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
+  tradeRate, spawnSpots,
 } from './game.js';
 import { planAction } from './ai.js';
+import { getGeo } from './hex.js';
 import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
-  upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO,
+  upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
+  hasBuilding,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
 import { store } from './storage.js';
@@ -131,6 +134,10 @@ function clearSel() {
   sel = { unitId: null, cityIdx: null, infoIdx: null };
 }
 
+function getGeoOf() {
+  return getGeo(S.cols, S.rows);
+}
+
 function humanTurn() {
   return S && !S.over && S.players[S.current].human;
 }
@@ -200,7 +207,7 @@ function onTap(sx, sy) {
   }
   const c = cityOn(S, i);
   clearSel();
-  if (c && c.owner === S.current && !u) sel.cityIdx = i;
+  if (c && c.owner === S.current && !u) { if (sel.cityIdx !== i) cityTab = 'units'; sel.cityIdx = i; }
   else sel.infoIdx = i;
   refresh();
 }
@@ -255,6 +262,35 @@ function doRecruit(idx, type) {
 
 function doUpgrade(idx) {
   act({ type: 'upgrade', idx });
+}
+
+function doBuild(idx, building) {
+  act({ type: 'build', idx, building });
+}
+
+function openTrade(preGet) {
+  if (!S || !humanTurn() || busy) return;
+  let give = null, get = preGet || null;
+  const draw = () => {
+    const p = S.players[S.current];
+    const rate = tradeRate(S, p.id);
+    if (!give || give === get) give = RES.filter((k) => k !== get).sort((a, b) => p.res[b] - p.res[a])[0];
+    if (!get || get === give) get = RES.find((k) => k !== give);
+    const row = (label, cur, onPick) => el('div', { class: 'trade-row' }, el('span', { class: 'muted' }, label),
+      ...RES.map((k) => el('button', { class: 'tchip' + (cur === k ? ' active' : ''), onclick: () => { onPick(k); draw(); } }, icon(k), el('b', {}, p.res[k]))));
+    openModal(
+      el('h2', {}, 'Handel'),
+      el('p', {}, `Tausche ${rate} gegen 1${rate === 3 ? ' (mit einem Markt 2 gegen 1)' : ''}.`),
+      row('Gib', give, (k) => { give = k; if (get === k) get = null; }),
+      row('Erhalte', get, (k) => { get = k; if (give === k) give = null; }),
+      el('button', {
+        class: 'btn primary big', disabled: p.res[give] < rate,
+        onclick: () => { applyAction(S, { type: 'trade', give, get }); undoStack = []; refresh(); draw(); },
+      }, `${rate} `, icon(give), ' → 1 ', icon(get)),
+      el('button', { class: 'btn big', onclick: closeModal }, 'Fertig'),
+    );
+  };
+  draw();
 }
 
 function undo() {
@@ -357,6 +393,7 @@ async function playEvent(ev, f, isAI) {
         if (ev.killed) R.ghost({ ...def, hp: 0 }, hit + 420 * f, hit / (hit + 420 * f));
         else R.shake(def.id, def.idx, 300 * f, hit);
         R.floatText(def.idx, `−${ev.dmg}`, '#fecaca', 900 * f, hit);
+        if (ev.shaken) R.floatText(def.idx, 'erschüttert!', '#fde68a', 1100 * f, hit + 350 * f);
         if (ev.counter > 0) R.floatText(att.idx, `−${ev.counter}`, '#fecaca', 900 * f, hit + 200 * f);
         await sleep(hit);
         vibrate(ev.killed ? 40 : 15);
@@ -371,10 +408,16 @@ async function playEvent(ev, f, isAI) {
       await sleep(R.pop(ev.id, 320 * f));
       await pause(isAI ? 60 : 0);
       break;
+    case 'build':
+      R.invalidate(true);
+      R.ring(ev.idx, '#7dd3fc', 600 * f);
+      R.floatText(ev.idx, BUILDINGS[ev.building].name, '#bae6fd', 1100 * f);
+      await pause(isAI ? 250 : 120);
+      break;
     case 'upgrade':
       R.invalidate(true);
       R.ring(ev.idx, '#fde047', 600 * f);
-      R.floatText(ev.idx, `Stufe ${ev.level}`, '#fde047', 1000 * f);
+      R.floatText(ev.idx, CITY_NAMES[ev.level], '#fde047', 1000 * f);
       await pause(isAI ? 300 : 150);
       break;
     case 'capture': {
@@ -437,7 +480,7 @@ function updateHud() {
   const bar = $('resBar');
   bar.innerHTML = '';
   for (const k of RES) {
-    bar.append(el('span', { class: 'pill', title: RES_INFO[k].name }, icon(k), el('b', {}, human.res[k]), el('small', {}, `+${inc[k]}`)));
+    bar.append(el('button', { class: 'pill', title: `${RES_INFO[k].name} – tippen zum Handeln`, onclick: () => openTrade(k) }, icon(k), el('b', {}, human.res[k]), el('small', {}, `+${inc[k]}`)));
   }
   $('unitText').textContent = `${unitCount(S, human.id)}/${unitCap(S, human.id)}`;
   const my = humanTurn();
@@ -499,10 +542,153 @@ function unitCard(u, subtitle) {
       el('div', { class: 'uc-bottom' }, el('span', { class: 'muted' }, subtitle), statRow(u.type))));
 }
 
+function cityTitle(c) {
+  return `${c.capital ? 'Hauptstadt' : CITY_NAMES[c.level]} · Stufe ${c.level}`;
+}
+
 function tileInfo(i) {
   const c = cityOn(S, i);
-  if (c) return `${c.capital ? 'Hauptstadt' : 'Dorf'} · Verteidigung ×${fmt(cityDefense(c))}`;
+  if (c) return `${cityTitle(c)} · Verteidigung ×${fmt(cityDefense(c))}`;
   return TERRAIN[S.terrain[i]].name;
+}
+
+let cityTab = 'units';
+const RECRUIT_BLOCK = {
+  needs: (T) => `braucht ${BUILDINGS[T.needs].name}`,
+  cap: () => 'Versorgung voll',
+  space: () => 'kein freies Feld',
+  cost: () => null,
+};
+
+// Ratgeber: schlägt den sinnvollsten nächsten Schritt vor
+function advice(occ) {
+  const pid = S.current;
+  const p = S.players[pid];
+  const geo = getGeoOf();
+  const mine = S.units.filter((u) => u.owner === pid);
+  const canStill = mine.filter((u) => canMove(u) || unitTargets(u, occ).length);
+  const territory = computeTerritory(S);
+  // 1. Erschütterte Gegner angreifen
+  for (const u of canStill) {
+    if (UNITS[u.type].range > 1) continue;
+    const reach = canMove(u) ? [u.idx, ...getMoves(S, u, occ).keys()] : [u.idx];
+    for (const f of reach) {
+      for (const j of geo.nb[f]) {
+        const e = occ[j];
+        if (e && e.owner !== pid && e.shaken && canAttack(u)) return { text: `Ein Gegner ist erschüttert ⭐ – greife ihn jetzt mit deinem ${UNITS[u.type].name} an: kein Gegenschlag!`, unit: u.id };
+      }
+    }
+  }
+  // 2. Fernkämpfer zuerst
+  const shooter = canStill.find((u) => UNITS[u.type].range > 1 && canAttack(u) && (unitTargets(u, occ).length || canMove(u) && [...getMoves(S, u, occ).keys()].some((f) => getTargets(S, u, f, occ).length)));
+  if (shooter) return { text: `Lass zuerst deinen ${UNITS[shooter.type].name} schießen: Getroffene Gegner sind erschüttert und wehren sich nicht.`, unit: shooter.id };
+  // 3. Dörfer besetzen
+  const free = S.cities.filter((c) => c.owner !== pid && !occ[c.idx]);
+  for (const u of canStill.filter(canMove)) {
+    const moves = getMoves(S, u, occ);
+    const c = free.find((c) => moves.has(c.idx));
+    if (c) return { text: `Dein ${UNITS[u.type].name} kann ${c.owner < 0 ? 'ein Dorf' : 'eine feindliche Stadt'} besetzen – bleibt er stehen, gehört sie dir samt Gebiet.`, unit: u.id };
+  }
+  // 4. Bauen / Ausbauen
+  const inc = incomeOf(S, pid, territory);
+  for (const c of S.cities.filter((c) => c.owner === pid)) {
+    if (c.buildings.length >= citySlots(c)) continue;
+    const ci = S.cityAt[c.idx];
+    let rocks = 0, forests = 0;
+    for (let i = 0; i < territory.length; i++) {
+      if (territory[i] !== ci) continue;
+      if (S.terrain[i] === 'hill' || S.terrain[i] === 'mountain') rocks++;
+      if (S.terrain[i] === 'forest') forests++;
+    }
+    const pick = !hasBuilding(c, 'mine') && rocks && inc.ore <= inc.wood ? 'mine'
+      : !hasBuilding(c, 'lumber') && forests > 1 ? 'lumber'
+      : !hasBuilding(c, 'barracks') && c.capital ? 'barracks'
+      : !hasBuilding(c, 'farm') ? 'farm' : null;
+    if (pick && canAfford(p.res, BUILDINGS[pick].cost)) {
+      return { text: `Freier Bauplatz: Baue in deiner ${c.capital ? 'Hauptstadt' : CITY_NAMES[c.level]} ${BUILDINGS[pick].art} ${BUILDINGS[pick].name} (${BUILDINGS[pick].desc}).`, city: c.idx, tab: 'build' };
+    }
+  }
+  const up = S.cities.find((c) => c.owner === pid && c.level < CITY_MAX_LEVEL && canAfford(p.res, upgradeCost(c)));
+  if (up) return { text: `Du kannst eine Stadt zur ${CITY_NAMES[up.level + 1]} ausbauen: mehr Bauplätze und Rohstoffe.`, city: up.idx, tab: 'build' };
+  // 5. Rekrutieren
+  const rc = S.cities.find((c) => c.owner === pid && UNIT_ORDER.some((k) => !canRecruit(S, pid, S.cityAt[c.idx], k)));
+  if (rc) return { text: 'Rekrutiere Einheiten: Mische Fernkämpfer (Schützen) und Nahkämpfer.', city: rc.idx, tab: 'units' };
+  // 6. Handel
+  const rate = tradeRate(S, pid);
+  const low = RES.slice().sort((a, b) => p.res[a] - p.res[b])[0];
+  const high = RES.slice().sort((a, b) => p.res[b] - p.res[a])[0];
+  if (p.res[low] < 4 && p.res[high] >= rate + 4) return { text: `Dir fehlt ${RES_INFO[low].name}. Tausche ${RES_INFO[high].name} – tippe oben auf die Rohstoffleiste.`, trade: low };
+  if (canStill.length) return { text: `${canStill.length} Einheit${canStill.length > 1 ? 'en können' : ' kann'} noch handeln (leuchtender Ring).`, unit: canStill[0].id };
+  return { text: 'Alles erledigt – beende deinen Zug.' };
+}
+
+function followAdvice(tip) {
+  if (busy || !humanTurn()) return;
+  clearSel();
+  if (tip.unit != null) {
+    sel.unitId = tip.unit;
+    const u = unitById(S, tip.unit);
+    if (u) R.ensureVisible(u.idx);
+  } else if (tip.city != null) {
+    sel.cityIdx = tip.city;
+    cityTab = tip.tab || 'units';
+    R.ensureVisible(tip.city);
+  } else if (tip.trade) {
+    openTrade(tip.trade);
+  }
+  refresh();
+}
+
+function renderCityPanel(panel, ci, occ) {
+  const c = S.cities[ci];
+  const p = S.players[S.current];
+  const y = cityYield(S, ci);
+  panel.append(el('div', { class: 'city-head' },
+    el('span', { class: 'title' }, cityTitle(c)),
+    el('span', { class: 'yield' }, ...RES.map((k) => el('span', {}, icon(k), `+${y[k]}`)))));
+  const tabs = el('div', { class: 'ptabs' });
+  for (const [k, label] of [['units', 'Einheiten'], ['build', `Gebäude ${c.buildings.length}/${citySlots(c)}`]]) {
+    tabs.append(el('button', { class: cityTab === k ? 'active' : '', onclick: () => { cityTab = k; renderPanel(); } }, label));
+  }
+  panel.append(tabs);
+  if (cityTab === 'units') {
+    const grid = el('div', { class: 'recruit-grid' });
+    let note = null;
+    for (const k of UNIT_ORDER) {
+      const T = UNITS[k];
+      const why = canRecruit(S, p.id, ci, k);
+      const label = why && RECRUIT_BLOCK[why] ? RECRUIT_BLOCK[why](T) : null;
+      if (why === 'cap' || why === 'space') note = label;
+      grid.append(el('button', { class: 'recruit', disabled: !!why, onclick: () => doRecruit(c.idx, k), title: T.desc },
+        iconCanvas(k, p.id, 34),
+        el('div', { class: 'name' }, T.name),
+        why === 'needs' ? el('span', { class: 'lock' }, '🔒 ', BUILDINGS[T.needs].name) : costEl(T.cost, p.res)));
+    }
+    panel.append(grid);
+    const ready = hasBuilding(c, 'barracks') ? ' Dank Kaserne können sie sofort ziehen.' : '';
+    panel.append(el('div', { class: 'note' }, note ? `Rekrutieren nicht möglich: ${note}.` : `Neue Einheiten erscheinen im Stadtgebiet.${ready}`));
+  } else {
+    const list = el('div', { class: 'build-list' });
+    const full = c.buildings.length >= citySlots(c);
+    for (const b of BUILDING_ORDER) {
+      const B = BUILDINGS[b];
+      const built = hasBuilding(c, b);
+      list.append(el('div', { class: 'build-row' + (built ? ' built' : '') },
+        el('span', { class: 'bicon' }, B.icon),
+        el('div', { class: 'binfo' }, el('b', {}, B.name), el('span', { class: 'muted' }, B.desc)),
+        built ? el('span', { class: 'done' }, '✓')
+          : el('button', { class: 'btn small', disabled: full || !canAfford(p.res, B.cost), onclick: () => doBuild(c.idx, b) }, costEl(B.cost, p.res))));
+    }
+    panel.append(list);
+    if (c.level < CITY_MAX_LEVEL) {
+      const cost = upgradeCost(c);
+      panel.append(el('div', { class: 'upgrade-row' },
+        el('span', { class: 'muted' }, `Ausbau zur ${CITY_NAMES[c.level + 1]}: +1 Bauplatz, +1 auf alle Rohstoffe, +1 Versorgung${c.level + 1 === 4 ? ', größeres Gebiet' : ''}`),
+        el('button', { class: 'btn small primary', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost, p.res))));
+    } else {
+      panel.append(el('div', { class: 'note' }, 'Höchste Ausbaustufe erreicht.'));
+    }
+  }
 }
 
 function renderPanel() {
@@ -521,33 +707,7 @@ function renderPanel() {
     return;
   }
   if (sel.cityIdx != null) {
-    const ci = S.cityAt[sel.cityIdx];
-    const c = S.cities[ci];
-    const p = S.players[S.current];
-    const occupied = !!occ[c.idx];
-    const capped = unitCount(S, p.id) >= unitCap(S, p.id);
-    const y = cityYield(S, ci);
-    panel.append(el('div', { class: 'city-head' },
-      el('span', { class: 'title' }, `${c.capital ? 'Hauptstadt' : 'Dorf'} · Stufe ${c.level}`),
-      el('span', { class: 'yield' }, ...RES.map((k) => el('span', {}, icon(k), `+${y[k]}`)))));
-    const grid = el('div', { class: 'recruit-grid' });
-    for (const k of UNIT_ORDER) {
-      const T = UNITS[k];
-      const dis = occupied || capped || !canAfford(p.res, T.cost);
-      grid.append(el('button', { class: 'recruit', disabled: dis, onclick: () => doRecruit(c.idx, k), title: T.desc },
-        iconCanvas(k, p.id, 34),
-        el('div', { class: 'name' }, T.name),
-        costEl(T.cost, p.res)));
-    }
-    panel.append(grid);
-    if (occupied) panel.append(el('div', { class: 'note' }, 'Feld besetzt – zum Rekrutieren muss die Stadt frei sein.'));
-    else if (capped) panel.append(el('div', { class: 'note' }, 'Versorgung erschöpft – erobere oder baue Städte aus.'));
-    if (c.level < CITY_MAX_LEVEL) {
-      const cost = upgradeCost(c);
-      panel.append(el('div', { class: 'upgrade-row' },
-        el('span', { class: 'muted' }, `Ausbau → Stufe ${c.level + 1}: +1 auf alle Rohstoffe, +1 Versorgung${c.level + 1 >= 3 ? ', Mauern' : ''}`),
-        el('button', { class: 'btn small', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost))));
-    }
+    renderCityPanel(panel, S.cityAt[sel.cityIdx], occ);
     return;
   }
   if (sel.infoIdx != null) {
@@ -574,7 +734,9 @@ function renderPanel() {
     }
     return;
   }
-  panel.append(el('div', { class: 'muted hint-line' }, 'Tippe eine Einheit oder eine eigene Stadt an.'));
+  const tip = advice(occ);
+  panel.append(el('button', { class: 'advice', onclick: () => followAdvice(tip) },
+    el('span', { class: 'advice-icon' }, '💡'), el('span', {}, tip.text)));
 }
 
 // ---------------------------------------------------------------- Banner, Toast, Dialoge
@@ -625,7 +787,8 @@ function showIntro() {
     el('h2', {}, 'Willkommen!'),
     el('p', {}, 'Ziel: Erobere alle Städte deiner Gegner.'),
     el('p', {}, 'Tippe eine Einheit an und dann ein helles Feld, um zu ziehen. Rote Felder zeigen angreifbare Gegner samt Schaden – ein Tipp greift an.'),
-    el('p', {}, 'Stelle eine Einheit auf ein Dorf. Steht sie zu Beginn deines nächsten Zuges noch dort, gehört es dir – samt Gebiet: Wiesen liefern Nahrung, Wälder Holz, Hügel und Berge Erz. Damit rekrutierst du in deinen Städten neue Einheiten.'),
+    el('p', {}, 'Stelle eine Einheit auf ein Dorf. Steht sie zu Beginn deines nächsten Zuges noch dort, gehört es dir – samt Gebiet: Wiesen liefern Nahrung, Wälder Holz, Hügel und Berge Erz.'),
+    el('p', {}, 'Tippe eine Stadt an, um Einheiten zu rekrutieren oder Gebäude zu bauen. Unten zeigt dir der 💡 Ratgeber immer den nächsten sinnvollen Schritt.'),
     el('button', { class: 'btn primary big', onclick: closeModal }, "Los geht's"),
   );
 }
@@ -780,22 +943,34 @@ function renderHelp() {
     <p>Jede Stadt besitzt das Gebiet um sich herum (farbig umrandet). Jedes Feld darin liefert dir jede Runde einen Rohstoff:
     <b>Wiese</b> und <b>See</b> → Nahrung, <b>Wald</b> → Holz, <b>Hügel</b> und <b>Gebirge</b> → Erz.
     Das Stadtzentrum liefert zusätzlich von allem etwas. Städte mit vielen Wäldern und Hügeln im Gebiet sind deshalb besonders wertvoll.</p>
+    <h3>So baust du dein Reich auf</h3>
+    <p><b>1. Ausbreiten:</b> Besetze mit Reitern und Kriegern früh neutrale Dörfer – jedes bringt Gebiet und Rohstoffe.<br>
+    <b>2. Wirtschaft:</b> Baue Gebäude passend zum Gebiet: eine <b>Mine</b> bei Hügeln und Bergen, einen <b>Holzfäller</b> bei Wäldern, einen <b>Bauernhof</b> sonst.<br>
+    <b>3. Wachsen:</b> Baue Städte aus (bis Stufe 5): mehr Bauplätze, mehr Ertrag, mehr Versorgung, ab Stufe 4 ein größeres Gebiet.<br>
+    <b>4. Armee:</b> Eine <b>Kaserne</b> in Frontstädten lässt neue Einheiten sofort ziehen und ermöglicht Ritter. Fehlt ein Rohstoff, tippe oben auf die Rohstoffleiste und handle.<br>
+    <b>5. Angriff:</b> Erst die Fernkämpfer schießen lassen, dann mit Nahkämpfern zuschlagen.</p>
     <h3>Ablauf einer Runde</h3>
     <p>Jede Einheit darf pro Runde einmal ziehen und einmal angreifen (erst ziehen, dann angreifen). Durch eigene Einheiten kannst du hindurchziehen.
-    Neue Einheiten erscheinen in einer freien eigenen Stadt und handeln ab der nächsten Runde. Einheiten, die noch etwas tun können, haben einen leuchtenden Ring.</p>
+    Du kannst pro Runde beliebig viele Einheiten rekrutieren (begrenzt durch Rohstoffe und Versorgung). Sie erscheinen auf freien Feldern im Stadtgebiet und handeln ab der nächsten Runde – mit Kaserne sofort.
+    Einheiten, die noch etwas tun können, haben einen leuchtenden Ring.</p>
     <h3>Angreifen</h3>
     <p>Wählst du eine Einheit, zeigen rote Felder alle Ziele. Die Blase über dem Ziel nennt den Schaden (↩ = Gegenschlag, ✖ = Ziel wird besiegt). Ein Tipp auf das Ziel greift an.
-    Nahkämpfer rücken nach einem Sieg auf das Feld vor.</p>
+    Nahkämpfer rücken nach einem Sieg auf das Feld vor.<br>
+    <b>Erschüttert ⭐:</b> Wer von einem Fernkämpfer getroffen wird, hat bis zu seinem nächsten Zug nur halbe Verteidigung und schlägt nicht zurück.</p>
     <h3>Städte</h3>
-    <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert. Ausbau (Holz + Erz) bringt mehr Rohstoffe und Versorgung;
-    auf Stufe 3 bekommt die Stadt Mauern. Die Versorgung begrenzt, wie viele Einheiten du haben kannst.</p>
+    <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden.
+    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz, +1 auf alle Rohstoffe und +1 Versorgung. Die Versorgung begrenzt, wie viele Einheiten du haben kannst.</p>
+    <h3>Gebäude</h3>
+    <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
+    <h3>Handel</h3>
+    <p>Tippe oben auf einen Rohstoff: 3 beliebige Rohstoffe gegen 1 anderen, mit einem Markt 2 gegen 1.</p>
     <h3>Gelände</h3>
     <p>Alle Felder sind gleich gut begehbar – nur <b>Gebirge</b> und <b>Seen</b> sind unpassierbar. Verteidigungsbonus gibt es nur in Städten.</p>
     <h3>Heilung</h3>
     <p>Einheiten, die eine Runde nichts tun, heilen 2 Lebenspunkte – in der Nähe eigener Städte 4.</p>
     <h3>Einheiten</h3>
     <table><tr><th>Einheit</th><th>❤</th><th>Angr.</th><th>Vert.</th><th>Bew.</th><th>Reichw.</th></tr>${rows}</table>
-    <p>Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
+    <p>Ritter brauchen eine Kaserne, Katapulte eine Werkstatt in der Stadt. Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
     <h3>Schwierigkeit</h3>
     <p>${DIFFICULTIES.map((d) => `<b>${d.level} ${d.name}</b>: ${d.desc}`).join('<br>')}</p>`;
 }

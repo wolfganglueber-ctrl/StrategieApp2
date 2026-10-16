@@ -442,6 +442,25 @@ export class Renderer {
     const B = FIG_BOX;
     const w = (B.left + B.right) * s * scale, h = (B.top + B.bottom) * s * scale;
     ctx.drawImage(sp.cv, x - B.left * s * scale, y - B.top * s * scale + (1 - scale) * 6 * s, w, h);
+    if (u.shaken) {
+      // Erschüttert: kreisende Sterne über dem Kopf
+      const t = now / 300;
+      for (let k = 0; k < 3; k++) {
+        const a = t + (k * Math.PI * 2) / 3;
+        const px = x + Math.cos(a) * 9 * s, py = y - 46 * s * scale + Math.sin(a) * 3 * s;
+        ctx.fillStyle = '#ffe14d';
+        ctx.strokeStyle = '#7a5200';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < 10; i++) {
+          const ang = -Math.PI / 2 + (i * Math.PI) / 5, r = i % 2 ? 1.6 * s : 3.6 * s;
+          ctx.lineTo(px + r * Math.cos(ang), py + r * Math.sin(ang));
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
     // Lebensbalken unter dem Sockel
     const max = UNITS[u.type].hp;
     const ratio = Math.max(0, u.hp / max);
@@ -482,7 +501,7 @@ export class Renderer {
       }
       this.dirty = true;
     }
-    const pulsing = this.overlay.targets?.size || this.overlay.ready?.size;
+    const pulsing = this.overlay.targets?.size || this.overlay.ready?.size || this.state?.units.some((u) => u.shaken);
     if (!this.dirty && pulsing && now - (this.lastDraw || 0) > 40) this.dirty = true; // Pulsieren mit ~25 fps
     if (!this.dirty) return;
     this.lastDraw = now;

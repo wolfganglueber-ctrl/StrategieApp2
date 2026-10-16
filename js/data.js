@@ -22,8 +22,8 @@ export const UNITS = {
   archer: { name: 'Schütze', cost: { food: 3, wood: 5 }, hp: 10, atk: 2, def: 1, move: 2, range: 2, desc: 'Greift aus 2 Feldern Entfernung an.' },
   rider: { name: 'Reiter', cost: { food: 6, wood: 2 }, hp: 10, atk: 2, def: 1, move: 3, range: 1, desc: 'Schnell – ideal zum Erobern von Dörfern.' },
   defender: { name: 'Wächter', cost: { food: 3, ore: 5 }, hp: 15, atk: 1, def: 3, move: 1, range: 1, desc: 'Starke Verteidigung, schwacher Angriff.' },
-  knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 3, def: 1, move: 3, range: 1, desc: 'Stark und schnell, aber teuer.' },
-  catapult: { name: 'Katapult', cost: { wood: 8, ore: 6 }, hp: 10, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, desc: 'Reichweite 3, kann nach Bewegung nicht angreifen.' },
+  knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 3, def: 1, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
+  catapult: { name: 'Katapult', cost: { wood: 8, ore: 6 }, hp: 10, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, needs: 'workshop', desc: 'Reichweite 3, nicht nach Bewegung. Braucht eine Werkstatt.' },
 };
 // Wert einer Einheit für die KI (Rohstoffsumme / 2)
 for (const k of Object.keys(UNITS)) {
@@ -33,25 +33,46 @@ for (const k of Object.keys(UNITS)) {
 }
 export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult'];
 
-export const CITY_MAX_LEVEL = 3;
-export const START_RES = { food: 5, wood: 3, ore: 3 };
+export const CITY_MAX_LEVEL = 5;
+export const CITY_NAMES = ['', 'Dorf', 'Siedlung', 'Stadt', 'Burgstadt', 'Metropole'];
+export const START_RES = { food: 6, wood: 6, ore: 4 };
+export const TRADE_RATE = 3;
+export const TRADE_RATE_MARKET = 2;
 
-// Stadtzentrum liefert von jedem Rohstoff (Stufe + 1 bei Hauptstadt)
+// Gebäude: jede Stadt hat so viele Bauplätze wie ihre Stufe
+export const BUILDINGS = {
+  farm: { art: 'einen', name: 'Bauernhof', icon: '🌾', cost: { wood: 4 }, desc: '+3 Nahrung' },
+  lumber: { art: 'einen', name: 'Holzfäller', icon: '🌲', cost: { food: 4 }, desc: '+1 Holz, +1 je Wald im Gebiet' },
+  mine: { art: 'eine', name: 'Mine', icon: '⛏️', cost: { food: 4, wood: 4 }, desc: '+1 Erz, +2 je Hügel/Berg im Gebiet' },
+  barracks: { art: 'eine', name: 'Kaserne', icon: '🛡️', cost: { wood: 6, ore: 4 }, desc: 'Ritter möglich, neue Einheiten können sofort ziehen' },
+  workshop: { art: 'eine', name: 'Werkstatt', icon: '⚙️', cost: { wood: 8, ore: 4 }, desc: 'Katapulte möglich' },
+  wall: { art: 'eine', name: 'Mauer', icon: '🧱', cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt ×2,2' },
+  market: { art: 'einen', name: 'Markt', icon: '⚖️', cost: { food: 6, wood: 6 }, desc: 'Handel 2:1 statt 3:1' },
+};
+export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'wall', 'market'];
+
+// Stadtzentrum liefert von jedem Rohstoff so viel wie die Stufe
 export function cityCenterYield(city) {
-  return city.level + (city.capital ? 1 : 0);
+  return city.level;
 }
 // Versorgung: wie viele Einheiten eine Stadt unterhält
 export function citySupply(city) {
-  return 1 + city.level + (city.capital ? 1 : 0);
+  return 1 + city.level;
 }
 export function cityRadius(city) {
-  return 1;
+  return city.level >= 4 ? 2 : 1;
+}
+export function citySlots(city) {
+  return city.level;
 }
 export function upgradeCost(city) {
-  return city.level === 1 ? { wood: 8, ore: 6 } : { wood: 12, ore: 10 };
+  return [null, { food: 8, wood: 8 }, { food: 14, wood: 12, ore: 6 }, { food: 22, wood: 18, ore: 14 }, { food: 30, wood: 26, ore: 22 }][city.level];
 }
 export function cityDefense(city) {
-  return city.level >= 3 ? 2 : 1.5;
+  return city.buildings?.includes('wall') ? 2.2 : 1.5;
+}
+export function hasBuilding(city, b) {
+  return !!city.buildings?.includes(b);
 }
 
 export function canAfford(have, cost) {

@@ -186,3 +186,28 @@ button { font: inherit; color: inherit; cursor: pointer; }
   position: fixed; left: 50%; bottom: calc(190px + var(--safe-bottom)); transform: translateX(-50%); background: rgba(0, 0, 0, 0.82);
   padding: 9px 16px; border-radius: 999px; font-size: 14px; z-index: 20; pointer-events: none; max-width: 90vw; text-align: center;
 }
+
+/* Stadt-Panel: Reiter, Gebäude, Ratgeber, Handel */
+.ptabs { display: flex; gap: 6px; margin-top: 8px; }
+.ptabs button { flex: 1; padding: 7px 8px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05); font-weight: 650; font-size: 13px; }
+.ptabs button.active { background: rgba(251, 191, 36, 0.18); border-color: rgba(251, 191, 36, 0.6); color: #fde68a; }
+.lock { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.build-list { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; max-height: 34vh; overflow-y: auto; }
+.build-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
+.build-row.built { background: rgba(34, 197, 94, 0.12); }
+.bicon { font-size: 20px; width: 28px; text-align: center; flex: none; }
+.binfo { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 13px; line-height: 1.25; }
+.binfo .muted { font-size: 11.5px; }
+.build-row .done { color: var(--ok); font-weight: 800; font-size: 18px; padding: 0 8px; }
+.upgrade-row .btn.primary { box-shadow: 0 2px 0 var(--primary-dark); }
+.advice {
+  width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; border: 0; background: transparent; padding: 2px; font-size: 14px; line-height: 1.35;
+}
+.advice-icon { font-size: 20px; flex: none; }
+.resbar .pill { cursor: pointer; color: inherit; font: inherit; }
+.resbar .pill:active { transform: scale(0.96); }
+.trade-row { display: flex; align-items: center; gap: 6px; }
+.trade-row > .muted { width: 58px; flex: none; }
+.tchip { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 10px 4px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06); font-size: 15px; }
+.tchip.active { background: rgba(251, 191, 36, 0.2); border-color: #fcd34d; }
+.modal-box .btn .ico { width: 18px; height: 18px; }

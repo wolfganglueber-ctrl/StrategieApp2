@@ -455,15 +455,46 @@ export function drawCity(ctx, city, x, y, H, col) {
     ctx.lineWidth = 0.8;
     ctx.stroke();
     tower(ctx, x + 16 * s, y + 14 * s, 5 * s, 18 * s, roof, s);
-    if (city.level >= 2) house(ctx, x - 20 * s, y + 22 * s, 9 * s, 7 * s, roof, s);
-    if (city.level >= 3) house(ctx, x + 4 * s, y + 24 * s, 9 * s, 7 * s, roof, s);
+    if (city.level >= 3) house(ctx, x - 20 * s, y + 22 * s, 9 * s, 7 * s, roof, s);
+    if (city.level >= 4) house(ctx, x + 4 * s, y + 24 * s, 9 * s, 7 * s, roof, s);
+    if (city.level >= 5) house(ctx, x + 22 * s, y + 24 * s, 8 * s, 6 * s, roof, s);
   } else {
     const layouts = {
       1: [[-7, 8, 12], [9, 14, 10]],
       2: [[-10, 4, 11], [10, 6, 11], [-1, 18, 12]],
       3: [[-13, 2, 10], [4, -2, 12], [16, 10, 10], [-6, 19, 11], [10, 22, 9]],
-    }[city.level];
-    for (const [dx, dy, w] of layouts) house(ctx, x + dx * s, y + dy * s, w * s, w * 0.75 * s, roof, s);
+    }[Math.min(3, city.level)];
+    if (city.level >= 4) {
+      // Burgstadt / Metropole: Turm in der Mitte
+      tower(ctx, x + 2 * s, y + 6 * s, 5 * s, city.level >= 5 ? 24 * s : 18 * s, roof, s);
+      for (const [dx, dy, w] of [[-16, 8, 10], [18, 10, 10], [-8, 22, 11], [10, 24, 10], ...(city.level >= 5 ? [[-22, 20, 8], [24, 22, 8]] : [])]) {
+        house(ctx, x + dx * s, y + dy * s, w * s, w * 0.75 * s, roof, s);
+      }
+    } else {
+      for (const [dx, dy, w] of layouts) house(ctx, x + dx * s, y + dy * s, w * s, w * 0.75 * s, roof, s);
+    }
+  }
+  if (city.buildings?.includes('wall')) {
+    // Steinmauer vorne um die Stadt
+    ctx.lineCap = 'butt';
+    ctx.strokeStyle = '#6f675c';
+    ctx.lineWidth = 6 * s;
+    ctx.beginPath();
+    ctx.ellipse(x, y + 8 * s, 30 * s, 19 * s, 0, 0.1 * Math.PI, 0.9 * Math.PI);
+    ctx.stroke();
+    ctx.strokeStyle = '#b9b0a2';
+    ctx.lineWidth = 4 * s;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(70,60,50,0.6)';
+    ctx.lineWidth = 0.8 * s;
+    for (let k = 0; k <= 8; k++) {
+      const a = (0.1 + (0.8 * k) / 8) * Math.PI;
+      const px = x + Math.cos(a) * 30 * s, py = y + 8 * s + Math.sin(a) * 19 * s;
+      ctx.beginPath();
+      ctx.moveTo(px, py - 2.5 * s);
+      ctx.lineTo(px, py + 2.5 * s);
+      ctx.stroke();
+    }
   }
   // Stufenanzeige
   if (city.level > 1) {

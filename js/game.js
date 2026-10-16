@@ -2,11 +2,11 @@
 import { getGeo } from './hex.js';
 import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply,
-  cityRadius, canAfford,
+  cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_MARKET,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 /*
  config: { seed, cols, rows, biome, players: [{ human: bool, ai: 1..5, name? }], levelId?, villageDensity? }
@@ -42,7 +42,8 @@ export function createGame(config) {
   };
   // Hauptstädte zuweisen (Reihenfolge der Spieler gemischt durch Seed)
   const caps = state.cities.filter((c) => c.capital);
-  caps.forEach((c, i) => (c.owner = i));
+  caps.forEach((c, i) => { c.owner = i; c.level = 2; });
+  for (const c of state.cities) c.buildings = [];
   state.cities.forEach((c, i) => (state.cityAt[c.idx] = i));
   // Startkrieger neben der Hauptstadt
   for (const c of caps) {
@@ -160,13 +161,13 @@ export function getTargets(state, u, fromIdx, occ = buildOcc(state)) {
 export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp) {
   const A = UNITS[att.type], D = UNITS[def.type];
   const aF = A.atk * (attHp / A.hp);
-  const dF = D.def * (def.hp / D.hp) * defenseMult(state, def.idx);
+  const dF = D.def * (def.hp / D.hp) * defenseMult(state, def.idx) * (def.shaken ? 0.5 : 1);
   const tot = aF + dF;
   const dmg = Math.round((aF / tot) * A.atk * 4.5);
   const kill = dmg >= def.hp;
   let counter = 0;
   const geo = geoOf(state);
-  if (!kill && geo.dist(fromIdx, def.idx) <= unitRange(state, def)) {
+  if (!kill && !def.shaken && geo.dist(fromIdx, def.idx) <= unitRange(state, def)) {
     counter = Math.round((dF / tot) * D.def * 4.5);
   }
   return { dmg, counter, kill, die: counter >= attHp };
@@ -189,32 +190,65 @@ export function computeTerritory(state) {
 // Rohstoffertrag pro Runde, aufgeschlüsselt
 export function incomeOf(state, pid, territory = computeTerritory(state)) {
   const inc = { food: 0, wood: 0, ore: 0 };
-  for (let i = 0; i < territory.length; i++) {
-    const ci = territory[i];
-    if (ci < 0) continue;
-    const c = state.cities[ci];
-    if (c.owner !== pid) continue;
-    if (c.idx === i) {
-      const y = cityCenterYield(c);
-      for (const k of RES) inc[k] += y;
-    } else {
-      inc[TERRAIN[state.terrain[i]].res]++;
-    }
-  }
+  state.cities.forEach((c, ci) => {
+    if (c.owner !== pid) return;
+    const y = cityYield(state, ci, territory);
+    for (const k of RES) inc[k] += y[k];
+  });
   const bonus = state.players[pid].incomeBonus || 0;
   if (bonus) for (const k of RES) inc[k] = Math.round(inc[k] * (1 + bonus));
   return inc;
 }
 
+// Ertrag einer Stadt: Gebiet + Zentrum + Gebäude
 export function cityYield(state, ci, territory = computeTerritory(state)) {
   const inc = { food: 0, wood: 0, ore: 0 };
   const c = state.cities[ci];
+  let forests = 0, rocks = 0;
   for (let i = 0; i < territory.length; i++) {
     if (territory[i] !== ci) continue;
-    if (i === c.idx) for (const k of RES) inc[k] += cityCenterYield(c);
-    else inc[TERRAIN[state.terrain[i]].res]++;
+    if (i === c.idx) {
+      for (const k of RES) inc[k] += cityCenterYield(c);
+      continue;
+    }
+    const t = state.terrain[i];
+    inc[TERRAIN[t].res]++;
+    if (t === 'forest') forests++;
+    if (t === 'hill' || t === 'mountain') rocks++;
   }
+  if (hasBuilding(c, 'farm')) inc.food += 3;
+  if (hasBuilding(c, 'lumber')) inc.wood += 1 + forests;
+  if (hasBuilding(c, 'mine')) inc.ore += 1 + rocks * 2;
   return inc;
+}
+
+// Freie Felder, auf denen eine Stadt neue Einheiten aufstellen kann (Zentrum zuerst)
+export function spawnSpots(state, ci, occ = buildOcc(state), territory = computeTerritory(state)) {
+  const c = state.cities[ci];
+  const geo = geoOf(state);
+  const spots = [];
+  for (const j of geo.within(c.idx, cityRadius(c))) {
+    if (territory[j] !== ci || occ[j] || !TERRAIN[state.terrain[j]].pass) continue;
+    if (state.cityAt[j] >= 0 && j !== c.idx) continue;
+    spots.push(j);
+  }
+  spots.sort((a, b) => geo.dist(c.idx, a) - geo.dist(c.idx, b) || a - b);
+  return spots;
+}
+
+export function tradeRate(state, pid) {
+  return state.cities.some((c) => c.owner === pid && hasBuilding(c, 'market')) ? TRADE_RATE_MARKET : TRADE_RATE;
+}
+
+export function canRecruit(state, pid, ci, type) {
+  const c = state.cities[ci];
+  const T = UNITS[type];
+  if (!T || !c || c.owner !== pid) return 'invalid';
+  if (T.needs && !hasBuilding(c, T.needs)) return 'needs';
+  if (unitCount(state, pid) >= unitCap(state, pid)) return 'cap';
+  if (!canAfford(state.players[pid].res, T.cost)) return 'cost';
+  if (!spawnSpots(state, ci).length) return 'space';
+  return null;
 }
 
 // Versorgung: jede Stadt versorgt so viele Einheiten, wie sie Gold einbringt
@@ -286,6 +320,7 @@ export function startTurn(state) {
     u.moved = false;
     u.attacked = false;
     u.acted = false;
+    u.shaken = false;
   }
   const inc = incomeOf(state, pid);
   const p = state.players[pid];
@@ -350,7 +385,10 @@ export function applyAction(state, a) {
           e.advance = t.idx;
           u.idx = t.idx;
         }
-      } else if (r.counter > 0) {
+      } else {
+        if (UNITS[u.type].range > 1) { t.shaken = true; e.shaken = true; }
+      }
+      if (!e.killed && r.counter > 0) {
         u.hp -= r.counter;
         e.counter = r.counter;
         if (u.hp <= 0) {
@@ -364,14 +402,32 @@ export function applyAction(state, a) {
       break;
     }
     case 'recruit': {
+      const ci = state.cityAt[a.idx];
+      if (ci < 0 || canRecruit(state, pid, ci, a.unitType)) return null;
       const T = UNITS[a.unitType];
-      const c = cityOn(state, a.idx);
-      if (!T || !c || c.owner !== pid || !canAfford(player.res, T.cost)) return null;
-      if (state.units.some((u) => u.idx === a.idx)) return null;
-      if (unitCount(state, pid) >= unitCap(state, pid)) return null;
+      const c = state.cities[ci];
+      const spot = spawnSpots(state, ci)[0];
       for (const k of RES) player.res[k] -= T.cost[k] || 0;
-      const u = spawnUnit(state, a.unitType, pid, a.idx, false);
-      ev.push({ k: 'recruit', id: u.id, idx: a.idx });
+      const u = spawnUnit(state, a.unitType, pid, spot, hasBuilding(c, 'barracks'));
+      ev.push({ k: 'recruit', id: u.id, idx: spot });
+      break;
+    }
+    case 'build': {
+      const c = cityOn(state, a.idx);
+      const B = BUILDINGS[a.building];
+      if (!c || !B || c.owner !== pid || hasBuilding(c, a.building)) return null;
+      if (c.buildings.length >= citySlots(c) || !canAfford(player.res, B.cost)) return null;
+      for (const k of RES) player.res[k] -= B.cost[k] || 0;
+      c.buildings.push(a.building);
+      ev.push({ k: 'build', idx: a.idx, building: a.building });
+      break;
+    }
+    case 'trade': {
+      const rate = tradeRate(state, pid);
+      if (!RES.includes(a.give) || !RES.includes(a.get) || a.give === a.get || player.res[a.give] < rate) return null;
+      player.res[a.give] -= rate;
+      player.res[a.get] += 1;
+      ev.push({ k: 'trade', give: a.give, get: a.get });
       break;
     }
     case 'upgrade': {

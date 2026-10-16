@@ -1,8 +1,8 @@
 // Computergegner. Bewertet für jede Einheit alle Züge (Bewegung + Angriff) und wählt den besten.
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
-import { UNITS, UNIT_ORDER, CITY_MAX_LEVEL, upgradeCost, canAfford } from './data.js';
+import { UNITS, UNIT_ORDER, CITY_MAX_LEVEL, upgradeCost, canAfford, BUILDINGS, citySlots, hasBuilding, RES } from './data.js';
 import {
-  geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap,
+  geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit, spawnSpots, computeTerritory, incomeOf, tradeRate,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -75,7 +75,8 @@ function buildContext(state, pid, P) {
   const ratio = myArmy / Math.max(4, enemyArmy);
   let aggr = Math.min(2.5, Math.max(0.6, ratio));
   if (P.smart) aggr *= 1 + Math.min(0.8, Math.max(0, state.turn - 25) * 0.02);
-  return { geo, occ, enemies, mine, distCity, distEnemy, threat, cityDanger, ownCities, targetCities, armyValue, myArmy, enemyArmy, aggr };
+  const territory = computeTerritory(state);
+  return { geo, occ, enemies, mine, distCity, distEnemy, threat, cityDanger, ownCities, targetCities, armyValue, myArmy, enemyArmy, aggr, territory };
 }
 
 function expectedDamage(state, ctx, u, idx, hp) {
@@ -125,6 +126,8 @@ function attackScore(state, ctx, P, u, t, from) {
   const r = computeCombat(state, u, t, from);
   const DT = UNITS[t.type], UT = UNITS[u.type];
   let gain = (Math.min(r.dmg, t.hp) / DT.hp) * DT.value * 1.2;
+  // Fernkampf zuerst: erschütterte Ziele sind für Nahkämpfer leichte Beute
+  if (UT.range > 1 && !r.kill && !t.shaken) gain += 1.5;
   if (r.kill) gain += DT.value + 3;
   const tc = cityOn(state, t.idx);
   if (tc && tc.owner === u.owner) gain += r.kill ? 8 : 3; // Besetzer aus eigener Stadt werfen
@@ -173,27 +176,30 @@ function actionsFor(u, from, t) {
   return acts;
 }
 
-function chooseRecruit(state, ctx, P, pid, city, res, rng) {
-  const affordable = UNIT_ORDER.filter((k) => canAfford(res, UNITS[k].cost));
-  if (!affordable.length) return null;
+function chooseRecruit(state, ctx, P, pid, ci, rng) {
+  const city = state.cities[ci];
+  const options = UNIT_ORDER.filter((k) => !canRecruit(state, pid, ci, k));
+  if (!options.length) return null;
   if (!P.smart) {
     const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, catapult: 0.5 };
-    return weightedPick(affordable, (k) => w[k], rng);
+    return weightedPick(options, (k) => w[k], rng);
   }
   const danger = ctx.cityDanger.get(city.idx) || 0;
   const neutralLeft = state.cities.filter((c) => c.owner < 0).length;
   const enemyDef = ctx.enemies.filter((e) => e.type === 'defender').length;
   const mineCount = (t) => ctx.mine.filter((u) => u.type === t).length;
+  const melee = ctx.mine.filter((u) => UNITS[u.type].range === 1).length;
+  const ranged = ctx.mine.length - melee;
   const w = {
     warrior: 3,
-    archer: 2.5 + (danger > 0 ? 1.5 : 0),
+    archer: 2.5 + (danger > 0 ? 1.5 : 0) + (ranged * 2 < melee ? 2 : 0),
     rider: neutralLeft > 0 ? 3.5 : 1.2,
     defender: danger > 4 ? 3 : 0.6,
     knight: 4,
     catapult: 1.5 + enemyDef * 0.8,
   };
   for (const k of Object.keys(w)) w[k] /= 1 + mineCount(k) * 0.35;
-  return weightedPick(affordable, (k) => w[k], rng);
+  return weightedPick(options, (k) => w[k], rng);
 }
 
 function weightedPick(list, wf, rng) {
@@ -208,10 +214,46 @@ function weightedPick(list, wf, rng) {
   return list[list.length - 1];
 }
 
+function chooseBuilding(state, ctx, pid, ci, inc) {
+  const c = state.cities[ci];
+  if (c.buildings.length >= citySlots(c)) return null;
+  const res = state.players[pid].res;
+  const territory = ctx.territory;
+  let forests = 0, rocks = 0;
+  for (let i = 0; i < territory.length; i++) {
+    if (territory[i] !== ci) continue;
+    if (state.terrain[i] === 'forest') forests++;
+    if (state.terrain[i] === 'hill' || state.terrain[i] === 'mountain') rocks++;
+  }
+  const score = {
+    farm: inc.food < 6 ? 3 : 1,
+    lumber: 1 + forests * 1.2 - (inc.wood > inc.ore + 4 ? 1 : 0),
+    mine: 1 + rocks * 2.4 + (inc.ore < inc.wood ? 1 : 0),
+    barracks: c.capital || ctx.ownCities.length >= 3 ? 2.2 : 0.3,
+    workshop: ctx.ownCities.length >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'barracks')) ? 1.4 : 0.2,
+    wall: (ctx.cityDanger.get(c.idx) || 0) > 3 ? 3 : 0.4,
+    market: ctx.ownCities.some((x) => hasBuilding(x, 'market')) ? 0 : 1.2,
+  };
+  let best = null;
+  for (const [b, v] of Object.entries(score)) {
+    if (hasBuilding(c, b) || v <= 0.5 || !canAfford(res, BUILDINGS[b].cost)) continue;
+    if (!best || v > best.v) best = { b, v };
+  }
+  return best && best.b;
+}
+
+function tradeAction(state, pid) {
+  const res = state.players[pid].res;
+  const rate = tradeRate(state, pid);
+  const sorted = RES.slice().sort((a, b) => res[a] - res[b]);
+  const low = sorted[0], high = sorted[2];
+  if (res[low] < 4 && res[high] >= rate + 8) return { type: 'trade', give: high, get: low };
+  return null;
+}
+
 function economyAction(state, ctx, P, pid, rng) {
   const player = state.players[pid];
   const res = player.res;
-  const freeCities = ctx.ownCities.filter((c) => !ctx.occ[c.idx]);
   const myArmy = ctx.armyValue(ctx.mine);
   let maxEnemyArmy = 0;
   for (const p of state.players) {
@@ -220,22 +262,37 @@ function economyAction(state, ctx, P, pid, rng) {
   }
   const totalDanger = [...ctx.cityDanger.values()].reduce((a, b) => a + b, 0);
   const capped = ctx.mine.length >= unitCap(state, pid);
-  const wantArmy = !capped && (ctx.mine.length < ctx.ownCities.length + 1 || myArmy < maxEnemyArmy * 0.9 || totalDanger > 6);
+  const wantArmy = !capped && (ctx.mine.length < ctx.ownCities.length + 2 || myArmy < maxEnemyArmy * 0.9 || totalDanger > 6);
+  const cityIdx = (c) => state.cityAt[c.idx];
 
-  // Ausbau (kostet Holz und Erz)
-  const resSum = res.food + res.wood + res.ore;
-  if (P.upgrade > 0 && (!wantArmy || capped || !freeCities.length || resSum > 20) && rng() < P.upgrade) {
-    const ups = ctx.ownCities
-      .filter((c) => c.level < CITY_MAX_LEVEL && canAfford(res, upgradeCost(c)) && (ctx.cityDanger.get(c.idx) || 0) === 0)
+  if (P.smart) {
+    const t = tradeAction(state, pid);
+    if (t && rng() < 0.8) return t;
+  }
+
+  // Wirtschaft: Gebäude und Ausbau, wenn keine akute Gefahr
+  if (P.upgrade > 0 && (!wantArmy || capped || rng() < 0.3) && rng() < P.upgrade) {
+    const inc = incomeOf(state, pid, ctx.territory);
+    const safe = ctx.ownCities.filter((c) => (ctx.cityDanger.get(c.idx) || 0) < 4);
+    for (const c of safe.sort((a, b) => (b.capital - a.capital) || (b.level - a.level))) {
+      const b = chooseBuilding(state, ctx, pid, cityIdx(c), inc);
+      if (b) return { type: 'build', idx: c.idx, building: b };
+    }
+    const ups = safe
+      .filter((c) => c.level < CITY_MAX_LEVEL && c.buildings.length >= citySlots(c) - 1 && canAfford(res, upgradeCost(c)))
       .sort((a, b) => (b.capital - a.capital) || (a.level - b.level));
     if (ups.length) return { type: 'upgrade', idx: ups[0].idx };
   }
-  if (!freeCities.length || capped) return null;
-  freeCities.sort((a, b) => (ctx.cityDanger.get(b.idx) || 0) - (ctx.cityDanger.get(a.idx) || 0) || ctx.distCity[a.idx] - ctx.distCity[b.idx]);
-  const city = freeCities[0];
-  const type = chooseRecruit(state, ctx, P, pid, city, res, rng);
-  if (!type) return null;
-  return { type: 'recruit', idx: city.idx, unitType: type };
+  if (capped) return null;
+  // Rekrutieren: gefährdete Städte zuerst, sonst nahe an Zielen
+  const cities = ctx.ownCities
+    .filter((c) => spawnSpots(state, cityIdx(c), ctx.occ, ctx.territory).length)
+    .sort((a, b) => (ctx.cityDanger.get(b.idx) || 0) - (ctx.cityDanger.get(a.idx) || 0) || ctx.distCity[a.idx] - ctx.distCity[b.idx]);
+  for (const city of cities) {
+    const type = chooseRecruit(state, ctx, P, pid, cityIdx(city), rng);
+    if (type) return { type: 'recruit', idx: city.idx, unitType: type };
+  }
+  return null;
 }
 
 // Liefert die nächste Aktion für den aktuellen KI-Spieler.
@@ -278,7 +335,7 @@ export function planAction(state, rng = Math.random) {
     if (best.action.type === 'attack') memory.done.add(best.u.id);
     return best.action;
   }
-  if (memory.econ++ < 20) {
+  if (memory.econ++ < 40) {
     const e = economyAction(state, ctx, P, pid, rng);
     if (e) return e;
   }
