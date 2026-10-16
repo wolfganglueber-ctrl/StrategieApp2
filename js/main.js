@@ -370,7 +370,7 @@ function openTech() {
             onclick: async () => { closeModal(); await act({ type: 'research', tech: t }, { undoable: false }); openTech(); },
           }, costEl(T.cost, p.res))));
     }
-    openModal(el('h2', {}, '🔬 Forschung'), el('p', {}, 'Erforschte Verbesserungen gelten für dein ganzes Reich.'), tabs, list,
+    openClosable(el('h2', {}, '🔬 Forschung'), el('p', {}, 'Erforschte Verbesserungen gelten für dein ganzes Reich.'), tabs, list,
       el('button', { class: 'btn big', onclick: closeModal }, 'Schließen'));
     $('modalBox').classList.add('wide');
   };
@@ -387,7 +387,7 @@ function openTrade(preGet) {
     if (!get || get === give) get = RES.find((k) => k !== give);
     const row = (label, cur, onPick) => el('div', { class: 'trade-row' }, el('span', { class: 'muted' }, label),
       ...RES.map((k) => el('button', { class: 'tchip' + (cur === k ? ' active' : ''), onclick: () => { onPick(k); draw(); } }, icon(k), el('b', {}, p.res[k]))));
-    openModal(
+    openClosable(
       el('h2', {}, 'Handel'),
       el('p', {}, `Tausche ${rate} gegen 1${rate === 3 ? ' (mit einem Markt 2 gegen 1)' : ''}.`),
       row('Gib', give, (k) => { give = k; if (get === k) get = null; }),
@@ -396,7 +396,7 @@ function openTrade(preGet) {
         class: 'btn primary big', disabled: p.res[give] < rate,
         onclick: () => { applyAction(S, { type: 'trade', give, get }); undoStack = []; refresh(); draw(); },
       }, `${rate} `, icon(give), ' → 1 ', icon(get)),
-      el('button', { class: 'btn big', onclick: closeModal }, 'Fertig'),
+      el('button', { class: 'btn big', onclick: closeModal }, 'Schließen'),
     );
   };
   draw();
@@ -943,7 +943,17 @@ function openModal(...children) {
   box.innerHTML = '';
   box.append(...children);
   $('modal').classList.remove('hidden');
+  $('modal').dataset.closable = '';
 }
+
+// Fenster, das man jederzeit verlassen kann: ✕ oben rechts und Tipp daneben
+function openClosable(...children) {
+  openModal(el('button', { class: 'modal-x', 'aria-label': 'Schließen', onclick: closeModal }, '✕'), ...children);
+  $('modal').dataset.closable = '1';
+}
+$('modal').addEventListener('click', (e) => {
+  if (e.target === $('modal') && $('modal').dataset.closable === '1') closeModal();
+});
 function closeModal() {
   $('modal').classList.add('hidden');
   $('modalBox').classList.remove('wide');

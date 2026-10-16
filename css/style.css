@@ -174,7 +174,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* Dialog */
 .modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); display: grid; place-items: center; padding: 20px; z-index: 10; animation: fade 0.2s; }
 .modal-box {
-  width: 100%; max-width: 360px; background: var(--card-solid); border: 1px solid var(--line); border-radius: 18px; padding: 20px;
+  position: relative; width: 100%; max-width: 360px; background: var(--card-solid); border: 1px solid var(--line); border-radius: 18px; padding: 20px;
   display: flex; flex-direction: column; gap: 10px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); animation: pop 0.25s;
 }
 .modal-box h2 { margin: 0 0 4px; text-align: center; }
@@ -257,3 +257,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .tip-grid > div { display: contents; }
 .tip-desc { color: var(--muted); margin-top: 6px; }
 .tip-note { color: #fde68a; margin-top: 4px; }
+
+.modal-x {
+  position: absolute; top: 10px; right: 10px; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.08); font-size: 18px; display: grid; place-items: center; z-index: 1;
+}
+.modal-x:active { transform: scale(0.94); }
+.modal-box { max-height: calc(100vh - 40px); overflow-y: auto; }
+.resbar .pill { min-width: 0; }
+@media (max-width: 400px) {
+  .resbar { gap: 4px; }
+  .resbar .pill { font-size: 14px; padding: 3px 4px; gap: 3px; }
+  .resbar .ico { width: 24px; height: 24px; }
+  .resbar .pill small { font-size: 11px; }
+}
