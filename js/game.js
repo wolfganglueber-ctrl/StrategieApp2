@@ -1,9 +1,12 @@
 // Spielregeln und Spielzustand. Komplett ohne DOM, damit auch Simulationen in Node laufen.
 import { getGeo } from './hex.js';
-import { TERRAIN, UNITS, cityIncome, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS } from './data.js';
+import {
+  TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply,
+  cityRadius, canAfford,
+} from './data.js';
 import { generateMap } from './mapgen.js';
 
-export const START_GOLD = 2;
+export const STATE_VERSION = 2;
 
 /*
  config: { seed, cols, rows, biome, players: [{ human: bool, ai: 1..5, name? }], levelId?, villageDensity? }
@@ -13,7 +16,7 @@ export function createGame(config) {
   const map = generateMap({ seed: config.seed, cols: config.cols, rows: config.rows, players: n, biome: config.biome, villageDensity: config.villageDensity });
   const geo = getGeo(map.cols, map.rows);
   const state = {
-    v: 1,
+    v: STATE_VERSION,
     gameId: Math.floor(Math.random() * 1e9),
     config,
     cols: map.cols,
@@ -26,7 +29,7 @@ export function createGame(config) {
       name: p.name || (p.human ? 'Du' : PLAYER_COLORS[i].name),
       human: !!p.human,
       ai: p.ai || 3,
-      gold: START_GOLD + (p.startGold || 0),
+      res: { ...START_RES },
       incomeBonus: p.incomeBonus ?? (!p.human && p.ai >= 5 ? 0.5 : 0),
       alive: true,
     })),
@@ -92,30 +95,19 @@ export function canAct(state, u) {
   return getTargets(state, u, u.idx, buildOcc(state)).length > 0;
 }
 
-export function unitRange(state, u, fromIdx) {
-  const T = UNITS[u.type];
-  return T.range + (T.range > 1 && state.terrain[fromIdx] === 'hill' ? 1 : 0);
+export function unitRange(state, u) {
+  return UNITS[u.type].range;
 }
 
+// Nur Städte geben Verteidigungsbonus, Gelände nicht
 export function defenseMult(state, idx) {
   const c = cityOn(state, idx);
-  if (c) return cityDefense(c);
-  return TERRAIN[state.terrain[idx]].def || 1;
+  return c ? cityDefense(c) : 1;
 }
 
-// Felder neben gegnerischen Einheiten (Zone of Control)
-function zocMap(state, owner) {
-  const geo = geoOf(state);
-  const z = new Uint8Array(geo.n);
-  for (const e of state.units) {
-    if (e.owner === owner) continue;
-    for (const j of geo.nb[e.idx]) z[j] = 1;
-  }
-  return z;
-}
-
-// Erreichbare Zielfelder: Map ziel -> vorgänger (für Pfade)
-export function getMoves(state, u, occ = buildOcc(state), zoc = zocMap(state, u.owner), moveOverride) {
+// Erreichbare Zielfelder: Map ziel -> vorgänger (für Pfade).
+// Eigene Einheiten können durchquert werden, gegnerische nicht.
+export function getMoves(state, u, occ = buildOcc(state), moveOverride) {
   const geo = geoOf(state);
   const parent = new Map();
   if (!canMove(u) && moveOverride === undefined) return parent;
@@ -126,7 +118,6 @@ export function getMoves(state, u, occ = buildOcc(state), zoc = zocMap(state, u.
     const i = q[h];
     const s = steps.get(i);
     if (s >= maxSteps) continue;
-    if (i !== u.idx && (TERRAIN[state.terrain[i]].stop || zoc[i])) continue;
     for (const j of geo.nb[i]) {
       if (steps.has(j)) continue;
       if (!TERRAIN[state.terrain[j]].pass) continue;
@@ -157,7 +148,7 @@ export function pathTo(moves, from, to) {
 
 export function getTargets(state, u, fromIdx, occ = buildOcc(state)) {
   const geo = geoOf(state);
-  const rng = unitRange(state, u, fromIdx);
+  const rng = unitRange(state, u);
   const res = [];
   for (const j of geo.within(fromIdx, rng)) {
     const o = occ[j];
@@ -175,23 +166,61 @@ export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp
   const kill = dmg >= def.hp;
   let counter = 0;
   const geo = geoOf(state);
-  if (!kill && geo.dist(fromIdx, def.idx) <= unitRange(state, def, def.idx)) {
+  if (!kill && geo.dist(fromIdx, def.idx) <= unitRange(state, def)) {
     counter = Math.round((dF / tot) * D.def * 4.5);
   }
   return { dmg, counter, kill, die: counter >= attHp };
 }
 
-export function incomeOf(state, pid) {
-  let sum = 0;
-  for (const c of state.cities) if (c.owner === pid) sum += cityIncome(c);
-  const p = state.players[pid];
-  return Math.round(sum * (1 + (p.incomeBonus || 0)));
+// Gebiet: jedes Feld gehört der nächstgelegenen Stadt in Reichweite (Gleichstand: höhere Stufe)
+export function computeTerritory(state) {
+  const geo = geoOf(state);
+  const owner = new Int16Array(geo.n).fill(-1);
+  const best = new Float32Array(geo.n).fill(1e9);
+  state.cities.forEach((c, ci) => {
+    for (const j of geo.within(c.idx, cityRadius(c))) {
+      const d = geo.dist(c.idx, j) - c.level * 0.01;
+      if (d < best[j]) { best[j] = d; owner[j] = ci; }
+    }
+  });
+  return owner;
+}
+
+// Rohstoffertrag pro Runde, aufgeschlüsselt
+export function incomeOf(state, pid, territory = computeTerritory(state)) {
+  const inc = { food: 0, wood: 0, ore: 0 };
+  for (let i = 0; i < territory.length; i++) {
+    const ci = territory[i];
+    if (ci < 0) continue;
+    const c = state.cities[ci];
+    if (c.owner !== pid) continue;
+    if (c.idx === i) {
+      const y = cityCenterYield(c);
+      for (const k of RES) inc[k] += y;
+    } else {
+      inc[TERRAIN[state.terrain[i]].res]++;
+    }
+  }
+  const bonus = state.players[pid].incomeBonus || 0;
+  if (bonus) for (const k of RES) inc[k] = Math.round(inc[k] * (1 + bonus));
+  return inc;
+}
+
+export function cityYield(state, ci, territory = computeTerritory(state)) {
+  const inc = { food: 0, wood: 0, ore: 0 };
+  const c = state.cities[ci];
+  for (let i = 0; i < territory.length; i++) {
+    if (territory[i] !== ci) continue;
+    if (i === c.idx) for (const k of RES) inc[k] += cityCenterYield(c);
+    else inc[TERRAIN[state.terrain[i]].res]++;
+  }
+  return inc;
 }
 
 // Versorgung: jede Stadt versorgt so viele Einheiten, wie sie Gold einbringt
 export function unitCap(state, pid) {
   let sum = 0;
-  for (const c of state.cities) if (c.owner === pid) sum += cityIncome(c);
+  for (const c of state.cities) if (c.owner === pid) sum += citySupply(c);
   return sum;
 }
 
@@ -259,7 +288,8 @@ export function startTurn(state) {
     u.acted = false;
   }
   const inc = incomeOf(state, pid);
-  state.players[pid].gold += inc;
+  const p = state.players[pid];
+  for (const k of RES) p.res[k] += inc[k];
   ev.push({ k: 'income', pid, amount: inc });
   checkOver(state);
   return ev;
@@ -303,7 +333,7 @@ export function applyAction(state, a) {
       const u = unitById(state, a.unitId);
       const t = unitById(state, a.targetId);
       if (!u || !t || u.owner !== pid || t.owner === pid || !canAttack(u)) return null;
-      if (geoOf(state).dist(u.idx, t.idx) > unitRange(state, u, u.idx)) return null;
+      if (geoOf(state).dist(u.idx, t.idx) > unitRange(state, u)) return null;
       const r = computeCombat(state, u, t);
       const attSnap = snapshotUnit(u), defSnap = snapshotUnit(t);
       t.hp -= r.dmg;
@@ -336,10 +366,10 @@ export function applyAction(state, a) {
     case 'recruit': {
       const T = UNITS[a.unitType];
       const c = cityOn(state, a.idx);
-      if (!T || !c || c.owner !== pid || player.gold < T.cost) return null;
+      if (!T || !c || c.owner !== pid || !canAfford(player.res, T.cost)) return null;
       if (state.units.some((u) => u.idx === a.idx)) return null;
       if (unitCount(state, pid) >= unitCap(state, pid)) return null;
-      player.gold -= T.cost;
+      for (const k of RES) player.res[k] -= T.cost[k] || 0;
       const u = spawnUnit(state, a.unitType, pid, a.idx, false);
       ev.push({ k: 'recruit', id: u.id, idx: a.idx });
       break;
@@ -348,8 +378,8 @@ export function applyAction(state, a) {
       const c = cityOn(state, a.idx);
       if (!c || c.owner !== pid || c.level >= CITY_MAX_LEVEL) return null;
       const cost = upgradeCost(c);
-      if (player.gold < cost) return null;
-      player.gold -= cost;
+      if (!canAfford(player.res, cost)) return null;
+      for (const k of RES) player.res[k] -= cost[k] || 0;
       c.level++;
       ev.push({ k: 'upgrade', idx: a.idx, level: c.level });
       break;

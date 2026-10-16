@@ -2,27 +2,16 @@
 // pro Frame kommen nur Markierungen, Einheiten und Effekte dazu.
 import { hexCenter, pixelToIndex, boardSize, SQRT3, getGeo } from './hex.js';
 import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS } from './data.js';
+import { computeTerritory } from './game.js';
+import {
+  hash, hexPath, mix, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, FIG_BOX,
+} from './art.js';
 
 export const HEX = 40;
-const DEPTH = HEX * 0.2;
-const MARGIN = HEX * 0.6;
-
-function hash(i) {
-  let x = (i + 1) * 374761393;
-  x = (x ^ (x >>> 13)) * 1274126177;
-  return ((x ^ (x >>> 16)) >>> 0) / 4294967296;
-}
-
-function hexPath(ctx, x, y, r) {
-  ctx.beginPath();
-  for (let k = 0; k < 6; k++) {
-    const a = (Math.PI / 180) * (60 * k - 30);
-    const px = x + r * Math.cos(a), py = y + r * Math.sin(a);
-    if (k === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-}
+const DEPTH = HEX * 0.3;
+const MARGIN = HEX * 1.4;
+const GREY = '#8d8a85';
+const FIG = 1.3; // Figurengröße relativ zum Feld
 
 const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
@@ -67,14 +56,14 @@ export class Renderer {
     this.dirty = true;
   }
 
-  setState(state, fit = true) {
+  setState(state, fit = true, focusIdx) {
     const sizeChanged = !this.state || this.state.cols !== state.cols || this.state.rows !== state.rows;
     this.state = state;
     this.cacheDirty = true;
     this.dirty = true;
     this.unitPos.clear();
     this.hidden.clear();
-    if (fit || sizeChanged) this.fit();
+    if (fit || sizeChanged) this.fit(focusIdx);
   }
 
   invalidate(map = false) {
@@ -92,11 +81,21 @@ export class Renderer {
     return Math.min(availW / b.w, availH / (b.h + DEPTH));
   }
 
-  fit() {
+  // Ganze Karte zeigen – bei großen Karten aber mindestens gut bedienbare Feldgröße, zentriert auf focusIdx
+  fit(focusIdx) {
     if (!this.state) return;
-    this.cam.z = this.fitZoom();
-    this.minZ = this.cam.z * 0.9;
-    this.maxZ = Math.max(this.cam.z * 3, 1.6);
+    const fz = this.fitZoom();
+    const comfort = Math.min(0.75, Math.max(0.55, this.w / 640));
+    const z = Math.max(fz, Math.min(comfort, fz * 10));
+    this.cam.z = z;
+    this.minZ = Math.min(fz * 0.95, z);
+    this.maxZ = Math.max(z * 3, 2);
+    if (focusIdx != null && focusIdx >= 0) {
+      const c = this.center(focusIdx);
+      const off = ((this.viewPad.top + this.h - this.viewPad.bottom) / 2 - this.h / 2) / z;
+      this.cam.x = c.x;
+      this.cam.y = c.y - off;
+    }
     this.clampCam();
     this.dirty = true;
   }
@@ -288,24 +287,18 @@ export class Renderer {
 
   // ---------- Zeichnen ----------
   territory() {
-    const s = this.state, geo = getGeo(s.cols, s.rows);
-    const own = new Int8Array(geo.n).fill(-2);
-    const lvl = new Int8Array(geo.n).fill(-1);
-    for (const c of s.cities) {
-      for (const j of geo.within(c.idx, 1)) {
-        const w = j === c.idx ? 10 : c.level;
-        if (w > lvl[j]) { lvl[j] = w; own[j] = c.owner; }
-      }
-    }
+    const s = this.state;
+    const t = computeTerritory(s);
+    const own = new Int8Array(t.length).fill(-2);
+    for (let i = 0; i < t.length; i++) if (t[i] >= 0) own[i] = s.cities[t[i]].owner;
     return own;
   }
 
   buildCache() {
-    const s = this.state;
     const b = this.board();
-    let scale = Math.min(3, this.cam.z * this.dpr * 1.25);
+    let scale = Math.min(3, this.cam.z * this.dpr * 1.15);
     const W = b.w + MARGIN * 2, H = b.h + MARGIN * 2 + DEPTH;
-    const maxArea = 7e6;
+    const maxArea = 9e6;
     if (W * H * scale * scale > maxArea) scale = Math.sqrt(maxArea / (W * H));
     const cv = this.cache?.canvas || document.createElement('canvas');
     cv.width = Math.ceil(W * scale);
@@ -322,407 +315,160 @@ export class Renderer {
   drawTerrain(ctx) {
     const s = this.state, geo = getGeo(s.cols, s.rows);
     const T = s.terrain;
-    // Wasser
+    const own = this.territory();
+    const cityAt = new Map(s.cities.map((c) => [c.idx, c]));
+    // Wasser liegt tiefer
     for (let i = 0; i < geo.n; i++) {
       if (T[i] !== 'water') continue;
       const c = this.center(i);
-      const v = hash(i) * 6;
-      ctx.fillStyle = `hsl(207, 52%, ${38 + v}%)`;
-      hexPath(ctx, c.x, c.y, HEX + 0.6);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-      ctx.lineWidth = 1.6;
-      ctx.lineCap = 'round';
-      const wx = c.x + (hash(i + 7) - 0.5) * HEX * 0.6, wy = c.y + (hash(i + 3) - 0.5) * HEX * 0.6;
-      ctx.beginPath();
-      ctx.moveTo(wx - HEX * 0.2, wy);
-      ctx.quadraticCurveTo(wx - HEX * 0.1, wy - HEX * 0.08, wx, wy);
-      ctx.quadraticCurveTo(wx + HEX * 0.1, wy + HEX * 0.08, wx + HEX * 0.2, wy);
-      ctx.stroke();
+      drawTileTop(ctx, 'water', c.x, c.y + DEPTH * 0.5, HEX + 0.5, i);
     }
-    const own = this.territory();
-    // Land, Zeile für Zeile (für die 2,5D-Seitenflächen)
-    for (let i = 0; i < geo.n; i++) {
-      const t = T[i];
-      if (t === 'water') continue;
-      const c = this.center(i);
-      const v = (hash(i) - 0.5) * 6;
-      const base = {
-        plain: [95, 46, 54 + v],
-        forest: [105, 38, 44 + v],
-        hill: [68, 36, 55 + v],
-        mountain: [30, 9, 52 + v],
-      }[t];
-      ctx.fillStyle = `hsl(${base[0]}, ${base[1]}%, ${base[2] - 22}%)`;
-      hexPath(ctx, c.x, c.y + DEPTH, HEX);
-      ctx.fill();
-      ctx.fillStyle = `hsl(${base[0]}, ${base[1]}%, ${base[2]}%)`;
-      hexPath(ctx, c.x, c.y, HEX);
-      ctx.fill();
-      if (own[i] >= 0) {
-        ctx.fillStyle = PLAYER_COLORS[own[i]].main;
-        ctx.globalAlpha = 0.2;
-        hexPath(ctx, c.x, c.y, HEX);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-      ctx.strokeStyle = 'rgba(0,0,0,0.14)';
-      ctx.lineWidth = 1;
-      hexPath(ctx, c.x, c.y, HEX);
-      ctx.stroke();
-      this.drawDecoration(ctx, t, c.x, c.y, i);
-    }
-    // Reichsgrenzen
     ctx.lineCap = 'round';
-    for (let i = 0; i < geo.n; i++) {
-      const o = own[i];
-      if (o < 0) continue;
-      const c = this.center(i);
-      for (let k = 0; k < 6; k++) {
-        const ang = (Math.PI / 3) * k;
-        const nx = c.x + Math.cos(ang) * HEX * SQRT3, ny = c.y + Math.sin(ang) * HEX * SQRT3;
-        const j = pixelToIndex(nx, ny, HEX, s.cols, s.rows);
-        if (j >= 0 && own[j] === o) continue;
-        const a1 = (Math.PI / 180) * (60 * k - 30), a2 = (Math.PI / 180) * (60 * k + 30);
-        const r = HEX - 2.5;
-        ctx.strokeStyle = PLAYER_COLORS[o].main;
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(c.x + r * Math.cos(a1), c.y + r * Math.sin(a1));
-        ctx.lineTo(c.x + r * Math.cos(a2), c.y + r * Math.sin(a2));
-        ctx.stroke();
-      }
-    }
-    for (const city of s.cities) {
-      const c = this.center(city.idx);
-      this.drawCity(ctx, city, c.x, c.y);
-    }
-  }
-
-  drawDecoration(ctx, t, x, y, i) {
-    if (t === 'forest') {
-      const spots = [[-0.32, 0.12], [0.3, 0.16], [0, -0.22], [0.02, 0.42]];
-      for (let k = 0; k < spots.length; k++) {
-        const [dx, dy] = spots[k];
-        const sc = 0.85 + hash(i * 7 + k) * 0.3;
-        this.drawTree(ctx, x + dx * HEX, y + dy * HEX, HEX * 0.24 * sc);
-      }
-    } else if (t === 'hill') {
-      for (const [dx, dy, r] of [[-0.25, 0.12, 0.34], [0.22, -0.06, 0.4]]) {
-        const cx = x + dx * HEX, cy = y + dy * HEX, rr = r * HEX;
-        ctx.fillStyle = 'hsl(64, 32%, 44%)';
-        ctx.beginPath();
-        ctx.ellipse(cx, cy + rr * 0.25, rr, rr * 0.75, 0, Math.PI, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = 'hsla(60, 50%, 75%, 0.45)';
-        ctx.beginPath();
-        ctx.ellipse(cx - rr * 0.25, cy, rr * 0.5, rr * 0.38, 0, Math.PI, 0);
-        ctx.closePath();
-        ctx.fill();
-      }
-    } else if (t === 'mountain') {
-      const peak = (px, py, w, h) => {
-        ctx.fillStyle = '#7b7f87';
-        ctx.beginPath();
-        ctx.moveTo(px - w, py);
-        ctx.lineTo(px, py - h);
-        ctx.lineTo(px + w, py);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = '#5a5e66';
-        ctx.beginPath();
-        ctx.moveTo(px, py - h);
-        ctx.lineTo(px + w, py);
-        ctx.lineTo(px + w * 0.15, py);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = '#f1f5f9';
-        ctx.beginPath();
-        ctx.moveTo(px - w * 0.36, py - h * 0.64);
-        ctx.lineTo(px, py - h);
-        ctx.lineTo(px + w * 0.36, py - h * 0.64);
-        ctx.lineTo(px + w * 0.1, py - h * 0.72);
-        ctx.lineTo(px - w * 0.08, py - h * 0.6);
-        ctx.closePath();
-        ctx.fill();
-      };
-      peak(x + HEX * 0.28, y + HEX * 0.38, HEX * 0.38, HEX * 0.6);
-      peak(x - HEX * 0.08, y + HEX * 0.42, HEX * 0.55, HEX * 0.95);
-    } else if (t === 'plain') {
-      if (hash(i * 3) > 0.55) {
-        ctx.strokeStyle = 'hsla(100, 45%, 35%, 0.5)';
-        ctx.lineWidth = 1.5;
-        for (let k = 0; k < 3; k++) {
-          const gx = x + (hash(i * 5 + k) - 0.5) * HEX * 1.1, gy = y + (hash(i * 11 + k) - 0.5) * HEX * 1.0;
-          ctx.beginPath();
-          ctx.moveTo(gx - 3, gy - 4);
-          ctx.lineTo(gx, gy + 2);
-          ctx.lineTo(gx + 3, gy - 4);
-          ctx.stroke();
+    for (let r = 0; r < s.rows; r++) {
+      const row = [];
+      for (let col = 0; col < s.cols; col++) row.push(r * s.cols + col);
+      for (const i of row) {
+        const t = T[i];
+        if (t === 'water') continue;
+        const c = this.center(i);
+        drawTileSide(ctx, t, c.x, c.y, HEX, DEPTH);
+        drawTileTop(ctx, t, c.x, c.y, HEX, i);
+        if (own[i] >= 0) {
+          ctx.fillStyle = PLAYER_COLORS[own[i]].main;
+          ctx.globalAlpha = 0.16;
+          hexPath(ctx, c.x, c.y, HEX);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        // Grenzen
+        if (own[i] >= -1) {
+          for (let k = 0; k < 6; k++) {
+            const ang = (Math.PI / 3) * k;
+            const j = pixelToIndex(c.x + Math.cos(ang) * HEX * SQRT3, c.y + Math.sin(ang) * HEX * SQRT3, HEX, s.cols, s.rows);
+            if (j >= 0 && own[j] === own[i]) continue;
+            const a1 = (Math.PI / 180) * (60 * k - 30), a2 = (Math.PI / 180) * (60 * k + 30);
+            const rr = HEX - 3.5;
+            ctx.beginPath();
+            ctx.moveTo(c.x + rr * Math.cos(a1), c.y + rr * Math.sin(a1));
+            ctx.lineTo(c.x + rr * Math.cos(a2), c.y + rr * Math.sin(a2));
+            if (own[i] >= 0) {
+              ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+              ctx.lineWidth = 6.5;
+              ctx.stroke();
+              ctx.strokeStyle = PLAYER_COLORS[own[i]].main;
+              ctx.lineWidth = 4;
+              ctx.stroke();
+            } else {
+              ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+              ctx.lineWidth = 1.6;
+              ctx.setLineDash([4, 5]);
+              ctx.stroke();
+              ctx.setLineDash([]);
+            }
+          }
         }
       }
-    }
-  }
-
-  drawTree(ctx, x, y, s) {
-    ctx.fillStyle = '#5b3a1e';
-    ctx.fillRect(x - s * 0.12, y - s * 0.1, s * 0.24, s * 0.45);
-    ctx.fillStyle = 'hsl(135, 42%, 26%)';
-    ctx.beginPath();
-    ctx.moveTo(x - s * 0.7, y);
-    ctx.lineTo(x, y - s * 1.5);
-    ctx.lineTo(x + s * 0.7, y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = 'hsl(130, 40%, 36%)';
-    ctx.beginPath();
-    ctx.moveTo(x - s * 0.7, y);
-    ctx.lineTo(x, y - s * 1.5);
-    ctx.lineTo(x - s * 0.05, y);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  drawCity(ctx, city, x, y) {
-    const col = colorOf(city.owner);
-    ctx.fillStyle = 'rgba(245, 230, 200, 0.85)';
-    ctx.beginPath();
-    ctx.ellipse(x, y + HEX * 0.12, HEX * 0.72, HEX * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(120, 90, 50, 0.4)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    const house = (hx, hy, s) => {
-      ctx.fillStyle = '#fbf3e4';
-      ctx.strokeStyle = 'rgba(60,40,20,0.6)';
-      ctx.lineWidth = 1.2;
-      ctx.fillRect(hx - s * 0.5, hy - s * 0.4, s, s * 0.7);
-      ctx.strokeRect(hx - s * 0.5, hy - s * 0.4, s, s * 0.7);
-      ctx.fillStyle = col.main;
-      ctx.beginPath();
-      ctx.moveTo(hx - s * 0.65, hy - s * 0.38);
-      ctx.lineTo(hx, hy - s * 0.95);
-      ctx.lineTo(hx + s * 0.65, hy - s * 0.38);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(60,40,20,0.7)';
-      ctx.fillRect(hx - s * 0.1, hy - s * 0.05, s * 0.2, s * 0.35);
-    };
-    const S = HEX * 0.34;
-    if (city.capital) {
-      // Burg
-      const w = HEX * 0.62, h = HEX * 0.5, bx = x, by = y + HEX * 0.25;
-      ctx.fillStyle = '#e7dccb';
-      ctx.strokeStyle = 'rgba(60,40,20,0.7)';
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.rect(bx - w / 2, by - h, w, h);
-      ctx.fill();
-      ctx.stroke();
-      const m = 5, mw = w / (m * 2 - 1);
-      for (let k = 0; k < m; k++) {
-        ctx.fillRect(bx - w / 2 + k * 2 * mw, by - h - mw, mw, mw);
-        ctx.strokeRect(bx - w / 2 + k * 2 * mw, by - h - mw, mw, mw);
+      // Küstenlinien
+      for (const i of row) {
+        if (T[i] !== 'water') continue;
+        const c = this.center(i);
+        for (let k = 0; k < 6; k++) {
+          const ang = (Math.PI / 3) * k;
+          const j = pixelToIndex(c.x + Math.cos(ang) * HEX * SQRT3, c.y + DEPTH * 0.5 + Math.sin(ang) * HEX * SQRT3, HEX, s.cols, s.rows);
+          if (j >= 0 && T[j] !== 'water' && k < 3) drawShore(ctx, c.x, c.y + DEPTH * 0.5, HEX, k);
+        }
       }
-      ctx.fillStyle = 'rgba(60,40,20,0.75)';
-      ctx.beginPath();
-      ctx.arc(bx, by - h * 0.25, w * 0.14, Math.PI, 0);
-      ctx.lineTo(bx + w * 0.14, by);
-      ctx.lineTo(bx - w * 0.14, by);
-      ctx.fill();
-      // Fahne
-      ctx.strokeStyle = '#3f3f46';
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.moveTo(bx, by - h - mw);
-      ctx.lineTo(bx, by - h - HEX * 0.55);
-      ctx.stroke();
-      ctx.fillStyle = col.main;
-      ctx.beginPath();
-      ctx.moveTo(bx, by - h - HEX * 0.55);
-      ctx.lineTo(bx + HEX * 0.32, by - h - HEX * 0.45);
-      ctx.lineTo(bx, by - h - HEX * 0.35);
-      ctx.closePath();
-      ctx.fill();
-      if (city.level >= 2) house(x - HEX * 0.5, y + HEX * 0.38, S * 0.8);
-      if (city.level >= 3) house(x + HEX * 0.5, y + HEX * 0.38, S * 0.8);
-    } else {
-      const spots = {
-        1: [[0, 0.2]],
-        2: [[-0.22, 0.26], [0.22, 0.14]],
-        3: [[-0.28, 0.32], [0.28, 0.28], [0, 0.04]],
-      }[city.level];
-      spots.sort((a, b) => a[1] - b[1]);
-      for (const [dx, dy] of spots) house(x + dx * HEX, y + dy * HEX, S);
-    }
-    if (city.level > 1) {
-      // Stufenanzeige
-      for (let k = 0; k < city.level; k++) {
-        ctx.fillStyle = '#fde68a';
-        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-        ctx.beginPath();
-        ctx.arc(x - (city.level - 1) * 4 + k * 8, y + HEX * 0.6, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+      for (const i of row) {
+        const c = this.center(i);
+        const city = cityAt.get(i);
+        if (city) drawCity(ctx, city, c.x, c.y, HEX, colorOf(city.owner));
+        else if (T[i] === 'forest') drawForest(ctx, c.x, c.y, HEX, i);
+        else if (T[i] === 'hill') drawHill(ctx, c.x, c.y, HEX, i);
+        else if (T[i] === 'mountain') drawMountain(ctx, c.x, c.y, HEX, i);
       }
     }
   }
 
-  drawUnit(ctx, u, x, y, scale = 1, exhausted = false, flash = 0) {
-    const col = PLAYER_COLORS[u.owner] || NEUTRAL_COLOR;
-    const R = HEX * 0.42 * scale;
-    const cy = y - HEX * 0.12;
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.beginPath();
-    ctx.ellipse(x, y + HEX * 0.3, R * 0.9, R * 0.35, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.save();
-    if (exhausted) ctx.globalAlpha *= 0.62;
-    const g = ctx.createLinearGradient(x, cy - R, x, cy + R);
-    g.addColorStop(0, col.light);
-    g.addColorStop(0.35, col.main);
-    g.addColorStop(1, col.dark);
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(x, cy, R, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.lineWidth = 2.2 * scale;
-    ctx.strokeStyle = exhausted ? '#52525b' : '#fff';
-    ctx.stroke();
+  // Figuren werden einmal pro Typ/Farbe/Zoomstufe in einen Puffer gezeichnet
+  sprite(type, owner, exhausted) {
+    const k = Math.max(0.5, Math.round(this.cam.z * this.dpr * 4) / 4) * (HEX / 40) * FIG;
+    if (this.spriteScale !== k) {
+      this.sprites = new Map();
+      this.spriteScale = k;
+    }
+    const key = type + owner + (exhausted ? 'x' : '');
+    let sp = this.sprites.get(key);
+    if (sp) return sp;
+    const base = PLAYER_COLORS[owner] || NEUTRAL_COLOR;
+    const col = exhausted
+      ? { main: mix(base.main, GREY, 0.55), dark: mix(base.dark, '#4a4844', 0.55), light: mix(base.light, '#c9c6c0', 0.55) }
+      : base;
+    const B = FIG_BOX;
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil((B.left + B.right) * k);
+    cv.height = Math.ceil((B.top + B.bottom) * k);
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(k, 0, 0, k, B.left * k, B.top * k);
+    drawFigure(ctx, type, col);
+    if (exhausted) {
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.fillStyle = 'rgba(70,70,70,0.35)';
+      ctx.fillRect(-B.left, -B.top, B.left + B.right, B.top + B.bottom);
+    }
+    sp = { cv, k };
+    this.sprites.set(key, sp);
+    return sp;
+  }
+
+  drawUnit(ctx, u, x, y, scale = 1, exhausted = false, flash = 0, ready = false, now = 0) {
+    const s = (HEX / 40) * FIG;
+    y += 4;
+    if (ready) {
+      const p = 0.5 + 0.5 * Math.sin(now / 260);
+      ctx.strokeStyle = `rgba(255,236,120,${0.55 + p * 0.45})`;
+      ctx.lineWidth = 3 + p * 1.5;
+      ctx.beginPath();
+      ctx.ellipse(x, y + 7 * s, 19 * s, 7.5 * s, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     if (flash > 0) {
-      ctx.fillStyle = `rgba(255,60,60,${flash * 0.7})`;
-      ctx.beginPath();
-      ctx.arc(x, cy, R, 0, Math.PI * 2);
-      ctx.fill();
+      const g = ctx.createRadialGradient(x, y - 10 * s, 2, x, y - 10 * s, 26 * s);
+      g.addColorStop(0, `rgba(255,70,50,${flash * 0.8})`);
+      g.addColorStop(1, 'rgba(255,70,50,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - 30 * s, y - 40 * s, 60 * s, 60 * s);
     }
-    this.drawIcon(ctx, u.type, x, cy, R * 0.58, col);
-    ctx.restore();
-    // Lebensbalken
+    const sp = this.sprite(u.type, u.owner, exhausted);
+    const B = FIG_BOX;
+    const w = (B.left + B.right) * s * scale, h = (B.top + B.bottom) * s * scale;
+    ctx.drawImage(sp.cv, x - B.left * s * scale, y - B.top * s * scale + (1 - scale) * 6 * s, w, h);
+    // Lebensbalken unter dem Sockel
     const max = UNITS[u.type].hp;
     const ratio = Math.max(0, u.hp / max);
-    const bw = HEX * 0.72 * scale, bh = 5 * scale, by = cy + R + 3;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(x - bw / 2 - 1, by - 1, bw + 2, bh + 2);
+    const bw = 24 * s * scale, bh = 4 * s, bx = x - bw / 2, by = y + 13.5 * s;
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(bx - 1.5, by - 1.5, bw + 3, bh + 3);
     ctx.fillStyle = ratio > 0.6 ? '#4ade80' : ratio > 0.3 ? '#facc15' : '#f87171';
-    ctx.fillRect(x - bw / 2, by, bw * ratio, bh);
+    ctx.fillRect(bx, by, bw * ratio, bh);
     if (u.hp < max) {
-      ctx.font = `700 ${HEX * 0.26}px system-ui, sans-serif`;
-      ctx.textAlign = 'center';
+      ctx.font = `800 ${11 * s}px system-ui, sans-serif`;
+      ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.lineWidth = 3;
-      ctx.strokeStyle = 'rgba(0,0,0,0.75)';
-      ctx.strokeText(u.hp, x + R * 0.85, cy - R * 0.8);
+      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.strokeText(u.hp, bx + bw + 3, by + bh / 2);
       ctx.fillStyle = '#fff';
-      ctx.fillText(u.hp, x + R * 0.85, cy - R * 0.8);
+      ctx.fillText(u.hp, bx + bw + 3, by + bh / 2);
     }
   }
 
-  drawIcon(ctx, type, x, y, s, col) {
+  // Vorschaubild einer Figur für Menüs/Panels
+  drawPreview(ctx, type, owner, cx, cy, size) {
+    const k = size / 60;
     ctx.save();
-    ctx.translate(x, y);
-    ctx.strokeStyle = '#fff';
-    ctx.fillStyle = '#fff';
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    switch (type) {
-      case 'warrior':
-        ctx.lineWidth = s * 0.26;
-        ctx.beginPath();
-        ctx.moveTo(-0.45 * s, 0.45 * s);
-        ctx.lineTo(0.8 * s, -0.8 * s);
-        ctx.stroke();
-        ctx.lineWidth = s * 0.22;
-        ctx.beginPath();
-        ctx.moveTo(-0.72 * s, 0.02 * s);
-        ctx.lineTo(-0.02 * s, 0.72 * s);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(-0.72 * s, 0.72 * s, s * 0.17, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-      case 'archer':
-        ctx.lineWidth = s * 0.2;
-        ctx.beginPath();
-        ctx.arc(-0.55 * s, 0, s * 1.05, -1.05, 1.05);
-        ctx.stroke();
-        ctx.lineWidth = s * 0.08;
-        ctx.beginPath();
-        ctx.moveTo(-0.03 * s, -0.91 * s);
-        ctx.lineTo(-0.03 * s, 0.91 * s);
-        ctx.stroke();
-        ctx.lineWidth = s * 0.14;
-        ctx.beginPath();
-        ctx.moveTo(-0.6 * s, 0);
-        ctx.lineTo(0.75 * s, 0);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(0.95 * s, 0);
-        ctx.lineTo(0.6 * s, -0.24 * s);
-        ctx.lineTo(0.6 * s, 0.24 * s);
-        ctx.closePath();
-        ctx.fill();
-        break;
-      case 'rider':
-        ctx.lineWidth = s * 0.34;
-        ctx.beginPath();
-        ctx.arc(0, -0.05 * s, s * 0.62, Math.PI * 0.78, Math.PI * 2.22);
-        ctx.stroke();
-        ctx.fillStyle = col.dark;
-        for (const a of [0.95, 1.25, 1.5, 1.75, 2.05]) {
-          ctx.beginPath();
-          ctx.arc(Math.cos(a * Math.PI) * s * 0.62, -0.05 * s + Math.sin(a * Math.PI) * s * 0.62, s * 0.06, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        break;
-      case 'defender':
-        ctx.beginPath();
-        ctx.moveTo(0, -0.95 * s);
-        ctx.quadraticCurveTo(0.45 * s, -0.7 * s, 0.85 * s, -0.72 * s);
-        ctx.quadraticCurveTo(0.85 * s, 0.45 * s, 0, 0.98 * s);
-        ctx.quadraticCurveTo(-0.85 * s, 0.45 * s, -0.85 * s, -0.72 * s);
-        ctx.quadraticCurveTo(-0.45 * s, -0.7 * s, 0, -0.95 * s);
-        ctx.fill();
-        ctx.fillStyle = col.main;
-        ctx.fillRect(-0.12 * s, -0.6 * s, 0.24 * s, 1.25 * s);
-        ctx.fillRect(-0.55 * s, -0.22 * s, 1.1 * s, 0.24 * s);
-        break;
-      case 'knight':
-        ctx.beginPath();
-        ctx.arc(0, -0.05 * s, s * 0.72, Math.PI, 0);
-        ctx.lineTo(0.72 * s, 0.75 * s);
-        ctx.lineTo(-0.72 * s, 0.75 * s);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = col.dark;
-        ctx.fillRect(-0.5 * s, -0.02 * s, 1.0 * s, 0.16 * s);
-        ctx.fillRect(-0.06 * s, 0.14 * s, 0.12 * s, 0.45 * s);
-        ctx.fillStyle = '#fde047';
-        ctx.beginPath();
-        ctx.ellipse(0, -0.85 * s, 0.18 * s, 0.32 * s, 0, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-      case 'catapult':
-        ctx.lineWidth = s * 0.18;
-        ctx.beginPath();
-        ctx.moveTo(-0.85 * s, 0.5 * s);
-        ctx.lineTo(0.85 * s, 0.5 * s);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(-0.45 * s, 0.45 * s);
-        ctx.lineTo(0.45 * s, -0.55 * s);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(0.55 * s, -0.68 * s, s * 0.26, 0, Math.PI * 2);
-        ctx.fill();
-        for (const wx of [-0.5, 0.5]) {
-          ctx.beginPath();
-          ctx.arc(wx * s, 0.72 * s, s * 0.2, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        break;
-    }
+    ctx.translate(cx, cy + size * 0.22);
+    ctx.scale(k, k);
+    drawFigure(ctx, type, PLAYER_COLORS[owner] || NEUTRAL_COLOR);
     ctx.restore();
   }
 
@@ -736,8 +482,10 @@ export class Renderer {
       }
       this.dirty = true;
     }
-    if (this.overlay.targets?.size || this.overlay.pulse) this.dirty = true;
+    const pulsing = this.overlay.targets?.size || this.overlay.ready?.size;
+    if (!this.dirty && pulsing && now - (this.lastDraw || 0) > 40) this.dirty = true; // Pulsieren mit ~25 fps
     if (!this.dirty) return;
+    this.lastDraw = now;
     this.dirty = false;
     this.draw(now);
     this.anims = this.anims.filter((a) => a.p < 1);
@@ -747,15 +495,16 @@ export class Renderer {
     const ctx = this.ctx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     const g = ctx.createLinearGradient(0, 0, 0, this.h);
-    g.addColorStop(0, '#173a5c');
-    g.addColorStop(1, '#0d2238');
+    g.addColorStop(0, '#12385e');
+    g.addColorStop(1, '#0a1d33');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, this.w, this.h);
     if (!this.state) return;
     if (this.cache && !this.gesturing) {
-      const want = Math.min(3, this.cam.z * this.dpr * 1.25);
+      const want = Math.min(3, this.cam.z * this.dpr * 1.15);
       const r = want / this.cache.scale;
-      if ((r > 1.4 && this.cache.scale < 2.9) || r < 0.6) this.cacheDirty = true;
+      const maxed = this.cache.W * this.cache.H * this.cache.scale * this.cache.scale > 8.5e6;
+      if ((r > 1.4 && this.cache.scale < 2.9 && !maxed) || r < 0.6) this.cacheDirty = true;
     }
     if (this.cacheDirty || !this.cache) this.buildCache();
     const z = this.cam.z * this.dpr;
@@ -768,41 +517,46 @@ export class Renderer {
     const pulse = 0.5 + 0.5 * Math.sin(now / 220);
     if (o.cityIdx != null) {
       const c = this.center(o.cityIdx);
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffe14d';
+      ctx.lineWidth = 5;
       hexPath(ctx, c.x, c.y, HEX - 3);
       ctx.stroke();
     }
     if (o.moves) {
       for (const i of o.moves) {
         const c = this.center(i);
-        ctx.fillStyle = 'rgba(255,255,255,0.28)';
+        ctx.fillStyle = 'rgba(255,255,255,0.32)';
         hexPath(ctx, c.x, c.y, HEX - 3);
         ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
         ctx.beginPath();
-        ctx.arc(c.x, c.y, HEX * 0.1, 0, Math.PI * 2);
+        ctx.arc(c.x, c.y, HEX * 0.11, 0, Math.PI * 2);
         ctx.fill();
       }
     }
     if (o.selected != null) {
       const c = this.center(o.selected);
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 5;
       hexPath(ctx, c.x, c.y, HEX - 3);
       ctx.stroke();
     }
     if (o.targets) {
-      for (const i of o.targets) {
-        const c = this.center(i);
-        ctx.strokeStyle = `rgba(239,68,68,${0.6 + pulse * 0.4})`;
+      for (const t of o.targets.values()) {
+        const c = this.center(t.idx);
+        ctx.fillStyle = `rgba(239,48,48,${0.18 + pulse * 0.12})`;
+        hexPath(ctx, c.x, c.y, HEX - 3);
+        ctx.fill();
+        ctx.strokeStyle = `rgba(255,60,60,${0.7 + pulse * 0.3})`;
         ctx.lineWidth = 4 + pulse * 2;
-        hexPath(ctx, c.x, c.y, HEX - 4);
         ctx.stroke();
       }
     }
 
-    // Einheiten
+    // Einheiten (von oben nach unten, damit vordere Figuren davor stehen)
     const s = this.state;
     const sorted = s.units.slice().sort((a, b) => a.idx - b.idx);
     for (const u of sorted) {
@@ -810,35 +564,51 @@ export class Renderer {
       const pos = this.unitPos.get(u.id);
       const c = pos || this.center(u.idx);
       const exhausted = !!o.exhausted?.has(u.id);
-      this.drawUnit(ctx, u, c.x, c.y, pos?.s ?? 1, exhausted, pos?.flash || 0);
+      const ready = !pos && !!o.ready?.has(u.id) && u.idx !== o.selected;
+      this.drawUnit(ctx, u, c.x, c.y, pos?.s ?? 1, exhausted, pos?.flash || 0, ready, now);
     }
 
-    // Kampfvorschau
-    if (o.forecast) {
-      const f = o.forecast;
-      this.bubble(ctx, f.targetIdx, f.kill ? '✖ besiegt' : `−${f.dmg}`, f.kill ? '#16a34a' : '#dc2626');
-      if (f.counter > 0) this.bubble(ctx, f.fromIdx, `−${f.counter}`, '#dc2626');
-    }
+    // Kampfvorschau über jedem Ziel
+    if (o.targets) for (const t of o.targets.values()) this.forecastBubble(ctx, t);
 
     for (const a of this.anims) if (a.draw && a.p >= 0) a.draw(ctx, a.p);
   }
 
-  bubble(ctx, idx, text, color) {
-    const c = this.center(idx);
-    const fs = HEX * 0.38;
+  forecastBubble(ctx, t) {
+    const c = this.center(t.idx);
+    const fs = Math.max(HEX * 0.36, 13 / this.cam.z);
     ctx.font = `800 ${fs}px system-ui, sans-serif`;
-    const w = ctx.measureText(text).width + 14;
-    const x = c.x, y = c.y - HEX * 0.95;
-    ctx.fillStyle = color;
+    const main = t.kill ? '✖' : `−${t.dmg}`;
+    const sub = !t.kill && t.counter > 0 ? ` ↩${t.counter}` : '';
+    const wMain = ctx.measureText(main).width;
+    ctx.font = `700 ${fs * 0.72}px system-ui, sans-serif`;
+    const wSub = sub ? ctx.measureText(sub).width : 0;
+    const pad = fs * 0.4;
+    const w = wMain + wSub + pad * 2, h = fs * 1.35;
+    const x = c.x - w / 2, y = c.y - HEX * 1.45 - h / 2;
+    ctx.fillStyle = t.kill ? '#16a34a' : '#dc2626';
     ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(x - w / 2, y - fs * 0.75, w, fs * 1.5, 8) : ctx.rect(x - w / 2, y - fs * 0.75, w, fs * 1.5);
+    ctx.roundRect ? ctx.roundRect(x, y, w, h, h / 2) : ctx.rect(x, y, w, h);
     ctx.fill();
     ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = Math.max(1.5, 2 / this.cam.z);
     ctx.stroke();
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'center';
+    // Spitze
+    ctx.beginPath();
+    ctx.moveTo(c.x - fs * 0.3, y + h);
+    ctx.lineTo(c.x, y + h + fs * 0.35);
+    ctx.lineTo(c.x + fs * 0.3, y + h);
+    ctx.fillStyle = t.kill ? '#16a34a' : '#dc2626';
+    ctx.fill();
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, x, y + 1);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#fff';
+    ctx.font = `800 ${fs}px system-ui, sans-serif`;
+    ctx.fillText(main, x + pad, y + h / 2 + 1);
+    if (sub) {
+      ctx.font = `700 ${fs * 0.72}px system-ui, sans-serif`;
+      ctx.fillStyle = '#fed7aa';
+      ctx.fillText(sub, x + pad + wMain, y + h / 2 + 1);
+    }
   }
 }

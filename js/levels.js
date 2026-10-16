@@ -4,27 +4,27 @@ import { MAP_SIZES } from './data.js';
 const WORLDS = [
   {
     name: 'Grünland', biomes: ['plains', 'mixed'],
-    sizes: 'S S S S S S M M M M', ai: ['1', '1', '1', '1', '2', '1', '2', '2', '1,1', '2,2'],
+    sizes: 'S S S M M M M L L L', ai: ['1', '1', '1', '1', '2', '1', '2', '2', '1,1', '2,2'],
   },
   {
     name: 'Tiefe Wälder', biomes: ['forest', 'forest', 'mixed'],
-    sizes: 'S M M M M M M L L L', ai: ['2', '2', '3', '2,2', '3', '3', '2,3', '3', '3,3', '2,2,3'],
+    sizes: 'M L L L L XL XL XL XL XL', ai: ['2', '2', '3', '2,2', '3', '3', '2,3', '3', '3,3', '2,2,3'],
   },
   {
     name: 'Gebirgspässe', biomes: ['mountains', 'mountains', 'mixed'],
-    sizes: 'M M M L L L M L L L', ai: ['3', '3', '3,3', '3', '4', '3,3', '4', '3,3,3', '4,3', '4'],
+    sizes: 'L XL XL XL XL XXL XXL XXL XXL XXL', ai: ['3', '3', '3,3', '3', '4', '3,3', '4', '3,3,3', '4,3', '4'],
   },
   {
     name: 'Inselreich', biomes: ['islands', 'islands', 'mixed'],
-    sizes: 'M M L L L L XL L XL XL', ai: ['3', '4', '3,3', '4', '4,3', '3,3,3', '4,4', '4', '4,4,3', '5'],
+    sizes: 'XL XXL XXL XXL XXL XXL XXXL XXXL XXXL XXXL', ai: ['3', '4', '3,3', '4', '4,3', '3,3,3', '4,4', '4', '4,4,3', '5'],
   },
   {
     name: 'Kronland', biomes: ['mixed', 'forest', 'mountains', 'plains', 'islands'],
-    sizes: 'L L L XL L XL XL XL XL XL', ai: ['4', '4,4', '5', '4,4,4', '5,4', '5', '5,5', '4,4,5', '5,5,4', '5,5,5'],
+    sizes: 'XXL XXL XXXL XXXL XXXL XXXL XXXL XXXL XXXL XXXL', ai: ['4', '4,4', '5', '4,4,4', '5,4', '5', '5,5', '4,4,5', '5,5,4', '5,5,5'],
   },
 ];
 
-const PAR_BASE = { S: 14, M: 20, L: 26, XL: 32 };
+const PAR_BASE = { S: 14, M: 20, L: 26, XL: 32, XXL: 38, XXXL: 44 };
 
 let cache = null;
 export function getLevels() {

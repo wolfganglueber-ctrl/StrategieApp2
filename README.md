@@ -6,11 +6,12 @@ offline-fähig und zum Homescreen hinzufügbar.
 ## Spielprinzip
 
 - Erobere alle Städte deiner Gegner. Einheiten ziehen und kämpfen auf einer Hex-Karte.
-- Städte bringen Gold und versorgen Einheiten; Ausbau erhöht Einkommen, Versorgung und (Stufe 3) die Verteidigung.
-- Kämpfe sind deterministisch – die Schadensvorschau zeigt vorher genau, was passiert.
-- Gelände zählt: Wald/Hügel geben Deckung, Hügel erhöhen die Reichweite von Fernkämpfern, Kontrollzonen stoppen Bewegung.
-- **Kampagne:** 50 Level in 5 Welten mit steigender Schwierigkeit und Sternebewertung.
-- **Freies Spiel:** Zufallskarten mit Größe, Landschaft, 1–3 Gegnern und 5 KI-Stufen. Der Karten-Code macht Karten teilbar.
+- **Rohstoffe wie bei Siedler:** Jede Stadt besitzt das Gebiet um sich. Wiesen und Seen liefern Nahrung,
+  Wälder Holz, Hügel und Gebirge Erz. Einheiten und Stadtausbau kosten diese Rohstoffe.
+- Gelände hat keine Kampf- oder Bewegungsregeln – nur Gebirge und Seen sind unpassierbar. Eigene Einheiten können durchquert werden.
+- Kämpfe sind deterministisch: Wer eine Einheit auswählt, sieht über jedem Ziel den Schaden (und den Gegenschlag). Ein Tipp greift an.
+- **Kampagne:** 50 Level in 5 Welten, die Karten wachsen von 8×10 bis 22×29 Felder.
+- **Freies Spiel:** Zufallskarten in 6 Größen, 5 Landschaften, 1–3 Gegner und 5 KI-Stufen. Der Karten-Code macht Karten teilbar.
 
 ## Starten
 
@@ -52,7 +53,8 @@ npm run build        # erzeugt dist/hexkrone.html (alles in einer Datei)
 | `js/ai.js` | Computergegner |
 | `js/mapgen.js` | Prozeduraler Kartengenerator mit fairer Startverteilung |
 | `js/levels.js` | Kampagnen-Level |
-| `js/render.js` | Canvas-Grafik und Animationen |
+| `js/render.js` | Canvas-Grafik, Kamera und Animationen |
+| `js/art.js` | Zeichnungen von Gelände, Städten und Figuren |
 | `js/main.js` | Menüs, Bedienung, Spielablauf |
 
 ### Später: App Stores

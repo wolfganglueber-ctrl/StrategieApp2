@@ -21,13 +21,13 @@
   <div id="hud" class="hidden">
     <div class="topbar">
       <button class="icon-btn" id="btnMenu" aria-label="Menü">☰</button>
-      <div class="turninfo">
-        <span class="dot" id="turnDot"></span>
-        <span id="turnText">Runde 1</span>
-      </div>
-      <div class="stats">
-        <span class="pill"><i class="coin"></i><b id="goldText">0</b><small id="incomeText">+0</small></span>
-        <span class="pill" title="Einheiten / Versorgung"><i class="sword">⚔</i><b id="unitText">0/0</b></span>
+      <div class="hud-mid">
+        <div class="turninfo">
+          <span class="dot" id="turnDot"></span>
+          <span id="turnText">Runde 1</span>
+          <span class="pill units" title="Einheiten / Versorgung">⚔ <b id="unitText">0/0</b></span>
+        </div>
+        <div class="resbar" id="resBar"></div>
       </div>
     </div>
     <div id="banner" class="banner hidden"></div>

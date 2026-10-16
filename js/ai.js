@@ -1,8 +1,8 @@
 // Computergegner. Bewertet für jede Einheit alle Züge (Bewegung + Angriff) und wählt den besten.
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
-import { UNITS, UNIT_ORDER, CITY_MAX_LEVEL, upgradeCost } from './data.js';
+import { UNITS, UNIT_ORDER, CITY_MAX_LEVEL, upgradeCost, canAfford } from './data.js';
 import {
-  geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, incomeOf, unitCap,
+  geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -18,7 +18,7 @@ const memory = { key: '', done: new Set() };
 
 function unitValue(u) {
   const T = UNITS[u.type];
-  return T.cost * (0.4 + 0.6 * (u.hp / T.hp)) + 1;
+  return T.value * (0.4 + 0.6 * (u.hp / T.hp)) + 1;
 }
 
 function buildContext(state, pid, P) {
@@ -39,7 +39,7 @@ function buildContext(state, pid, P) {
   if (P.risk > 0) {
     for (const e of enemies) {
       const fake = { ...e, moved: false, attacked: false };
-      const moves = getMoves(state, fake, occ, zocFor(state, e.owner, geo));
+      const moves = getMoves(state, fake, occ);
       const froms = [e.idx, ...moves.keys()];
       const seen = new Set();
       for (const f of froms) {
@@ -78,16 +78,6 @@ function buildContext(state, pid, P) {
   return { geo, occ, enemies, mine, distCity, distEnemy, threat, cityDanger, ownCities, targetCities, armyValue, myArmy, enemyArmy, aggr };
 }
 
-function zocFor(state, owner, geo) {
-  // ZOC aus Sicht von "owner": Felder neben Einheiten anderer Spieler
-  const z = new Uint8Array(geo.n);
-  for (const u of state.units) {
-    if (u.owner === owner) continue;
-    for (const j of geo.nb[u.idx]) z[j] = 1;
-  }
-  return z;
-}
-
 function expectedDamage(state, ctx, u, idx, hp) {
   const list = ctx.threat[idx];
   if (!list) return 0;
@@ -122,7 +112,7 @@ function positionScore(state, ctx, P, u, idx, hp, pid) {
     const risk = P.risk / ctx.aggr;
     const exp = expectedDamage(state, ctx, u, idx, hp);
     if (exp >= hp) s -= risk * unitValue({ type: u.type, hp }) * 1.1;
-    else s -= risk * (exp / T.hp) * T.cost * 0.6;
+    else s -= risk * (exp / T.hp) * T.value * 0.6;
   }
   // Fernkämpfer bleiben gern auf Distanz
   if (T.range > 1 && de === 1) s -= 1.5 * (P.smart ? 1 : 0);
@@ -134,13 +124,13 @@ function positionScore(state, ctx, P, u, idx, hp, pid) {
 function attackScore(state, ctx, P, u, t, from) {
   const r = computeCombat(state, u, t, from);
   const DT = UNITS[t.type], UT = UNITS[u.type];
-  let gain = (Math.min(r.dmg, t.hp) / DT.hp) * DT.cost * 1.2;
-  if (r.kill) gain += DT.cost + 3;
+  let gain = (Math.min(r.dmg, t.hp) / DT.hp) * DT.value * 1.2;
+  if (r.kill) gain += DT.value + 3;
   const tc = cityOn(state, t.idx);
   if (tc && tc.owner === u.owner) gain += r.kill ? 8 : 3; // Besetzer aus eigener Stadt werfen
   if (tc && tc.capital && tc.owner === u.owner) gain += r.kill ? 6 : 2;
-  let loss = (Math.min(r.counter, u.hp) / UT.hp) * UT.cost;
-  if (r.die) loss += UT.cost + 2;
+  let loss = (Math.min(r.counter, u.hp) / UT.hp) * UT.value;
+  if (r.die) loss += UT.value + 2;
   return { score: gain - loss * P.lossW, r };
 }
 
@@ -183,8 +173,8 @@ function actionsFor(u, from, t) {
   return acts;
 }
 
-function chooseRecruit(state, ctx, P, pid, city, gold, rng) {
-  const affordable = UNIT_ORDER.filter((k) => UNITS[k].cost <= gold);
+function chooseRecruit(state, ctx, P, pid, city, res, rng) {
+  const affordable = UNIT_ORDER.filter((k) => canAfford(res, UNITS[k].cost));
   if (!affordable.length) return null;
   if (!P.smart) {
     const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, catapult: 0.5 };
@@ -199,10 +189,9 @@ function chooseRecruit(state, ctx, P, pid, city, gold, rng) {
     archer: 2.5 + (danger > 0 ? 1.5 : 0),
     rider: neutralLeft > 0 ? 3.5 : 1.2,
     defender: danger > 4 ? 3 : 0.6,
-    knight: gold >= 7 ? 4 : 0,
-    catapult: gold >= 7 ? 1.5 + enemyDef * 0.8 : 0,
+    knight: 4,
+    catapult: 1.5 + enemyDef * 0.8,
   };
-  // Vielfalt: bereits häufige Typen abwerten
   for (const k of Object.keys(w)) w[k] /= 1 + mineCount(k) * 0.35;
   return weightedPick(affordable, (k) => w[k], rng);
 }
@@ -221,7 +210,7 @@ function weightedPick(list, wf, rng) {
 
 function economyAction(state, ctx, P, pid, rng) {
   const player = state.players[pid];
-  const gold = player.gold;
+  const res = player.res;
   const freeCities = ctx.ownCities.filter((c) => !ctx.occ[c.idx]);
   const myArmy = ctx.armyValue(ctx.mine);
   let maxEnemyArmy = 0;
@@ -233,20 +222,18 @@ function economyAction(state, ctx, P, pid, rng) {
   const capped = ctx.mine.length >= unitCap(state, pid);
   const wantArmy = !capped && (ctx.mine.length < ctx.ownCities.length + 1 || myArmy < maxEnemyArmy * 0.9 || totalDanger > 6);
 
-  // Ausbau
-  if (P.upgrade > 0 && !wantArmy && rng() < P.upgrade) {
+  // Ausbau (kostet Holz und Erz)
+  const resSum = res.food + res.wood + res.ore;
+  if (P.upgrade > 0 && (!wantArmy || capped || !freeCities.length || resSum > 20) && rng() < P.upgrade) {
     const ups = ctx.ownCities
-      .filter((c) => c.level < CITY_MAX_LEVEL && upgradeCost(c) <= gold && (ctx.cityDanger.get(c.idx) || 0) === 0)
+      .filter((c) => c.level < CITY_MAX_LEVEL && canAfford(res, upgradeCost(c)) && (ctx.cityDanger.get(c.idx) || 0) === 0)
       .sort((a, b) => (b.capital - a.capital) || (a.level - b.level));
     if (ups.length) return { type: 'upgrade', idx: ups[0].idx };
   }
   if (!freeCities.length || capped) return null;
-  // Gefährdete Städte zuerst, sonst die nahe an Zielen
   freeCities.sort((a, b) => (ctx.cityDanger.get(b.idx) || 0) - (ctx.cityDanger.get(a.idx) || 0) || ctx.distCity[a.idx] - ctx.distCity[b.idx]);
-  // Kluge KI spart gelegentlich für Ritter/Katapult, wenn keine Gefahr besteht
-  if (P.smart && !wantArmy && gold < 7 && gold + incomeOf(state, pid) >= 7 && rng() < 0.5) return null;
   const city = freeCities[0];
-  const type = chooseRecruit(state, ctx, P, pid, city, gold, rng);
+  const type = chooseRecruit(state, ctx, P, pid, city, res, rng);
   if (!type) return null;
   return { type: 'recruit', idx: city.idx, unitType: type };
 }

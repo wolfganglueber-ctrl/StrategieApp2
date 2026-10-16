@@ -3,12 +3,12 @@ import { Renderer } from './render.js';
 import { attachInput } from './input.js';
 import {
   createGame, applyAction, cloneState, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
-  incomeOf, unitCap, unitCount, playerHasActions, unitById, defenseMult,
+  incomeOf, unitCap, unitCount, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION,
 } from './game.js';
 import { planAction } from './ai.js';
 import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
-  upgradeCost, cityIncome, cityDefense,
+  upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
 import { store } from './storage.js';
@@ -21,7 +21,7 @@ const canvas = $('board');
 const R = new Renderer(canvas);
 let S = null;
 let settings = store.settings();
-let sel = { unitId: null, cityIdx: null, pendingTarget: null, infoIdx: null };
+let sel = { unitId: null, cityIdx: null, infoIdx: null };
 let busy = false;
 let undoStack = [];
 
@@ -37,7 +37,7 @@ function showScreen(id, push = true) {
   if (id === 'scrMenu') {
     screenHistory = [];
     showMenuBackdrop();
-    $('btnContinue').classList.toggle('hidden', !store.savedGame());
+    $('btnContinue').classList.toggle('hidden', store.savedGame()?.v !== STATE_VERSION);
   }
 }
 
@@ -112,8 +112,10 @@ function enterGame() {
   backdropShown = false;
   undoStack = [];
   clearSel();
-  R.viewPad = { top: 70, bottom: 200 };
-  R.setState(S);
+  R.viewPad = { top: 100, bottom: 160 };
+  const human = S.players.find((p) => p.human);
+  const cap = S.cities.find((c) => c.owner === human?.id && c.capital) || S.cities.find((c) => c.owner === human?.id);
+  R.setState(S, true, cap?.idx);
   updateHud();
   saveGame();
   if (!S.players[S.current].human) runAI();
@@ -126,7 +128,7 @@ function saveGame() {
 
 // ---------------------------------------------------------------- Auswahl & Overlay
 function clearSel() {
-  sel = { unitId: null, cityIdx: null, pendingTarget: null, infoIdx: null };
+  sel = { unitId: null, cityIdx: null, infoIdx: null };
 }
 
 function humanTurn() {
@@ -140,11 +142,12 @@ function unitTargets(u, occ) {
 function refresh() {
   if (!S) return;
   const occ = buildOcc(S);
-  const o = { exhausted: new Set() };
-  if (humanTurn()) {
+  const o = { exhausted: new Set(), ready: new Set() };
+  if (humanTurn() && !busy) {
     for (const u of S.units) {
       if (u.owner !== S.current) continue;
       if (!canMove(u) && unitTargets(u, occ).length === 0) o.exhausted.add(u.id);
+      else o.ready.add(u.id);
     }
   }
   const u = sel.unitId != null ? unitById(S, sel.unitId) : null;
@@ -153,12 +156,11 @@ function refresh() {
     if (humanTurn() && u.owner === S.current) {
       if (canMove(u)) o.moves = new Set(getMoves(S, u, occ).keys());
       const t = unitTargets(u, occ);
-      if (t.length) o.targets = new Set(t.map((x) => x.idx));
-      if (sel.pendingTarget != null) {
-        const tgt = unitById(S, sel.pendingTarget);
-        if (tgt) {
-          const r = computeCombat(S, u, tgt);
-          o.forecast = { targetIdx: tgt.idx, fromIdx: u.idx, dmg: r.dmg, counter: r.counter, kill: r.kill };
+      if (t.length) {
+        o.targets = new Map();
+        for (const x of t) {
+          const r = computeCombat(S, u, x);
+          o.targets.set(x.idx, { idx: x.idx, dmg: r.dmg, counter: r.counter, kill: r.kill, die: r.die });
         }
       }
     }
@@ -180,12 +182,7 @@ function onTap(sx, sy) {
   const u = occ[i];
   const selU = sel.unitId != null ? unitById(S, sel.unitId) : null;
   if (selU && selU.owner === S.current) {
-    if (u && u.owner !== S.current && unitTargets(selU, occ).includes(u)) {
-      if (sel.pendingTarget === u.id) { doAttack(selU, u); return; }
-      sel.pendingTarget = u.id;
-      refresh();
-      return;
-    }
+    if (u && u.owner !== S.current && unitTargets(selU, occ).includes(u)) { doAttack(selU, u); return; }
     if (!u && canMove(selU) && getMoves(S, selU, occ).has(i)) { doMove(selU, i); return; }
   }
   if (u && u.owner === S.current) {
@@ -239,7 +236,6 @@ async function act(action, { undoable = true, after } = {}) {
 }
 
 function doMove(u, to) {
-  sel.pendingTarget = null;
   act({ type: 'move', unitId: u.id, to }, {
     after: () => {
       const nu = unitById(S, u.id);
@@ -286,8 +282,8 @@ function nextUnit() {
 async function onEndTurn() {
   if (busy || !humanTurn()) return;
   if (settings.confirmEnd && playerHasActions(S, S.current)) {
-    const ok = await confirmDialog('Zug beenden?', 'Einige Einheiten können noch handeln.', 'Beenden', 'Weiterspielen');
-    if (!ok) return;
+    const ok = await confirmDialog('Zug beenden?', 'Einige Einheiten können noch handeln.', 'Beenden', 'Zur nächsten Einheit');
+    if (!ok) { nextUnit(); return; }
   }
   undoStack = [];
   clearSel();
@@ -351,7 +347,7 @@ async function playEvent(ev, f, isAI) {
     }
     case 'attack': {
       const { att, def } = ev;
-      const ranged = UNITS[att.type].range > 1 && R.center(att.idx) && ev.advance == null && distOf(att.idx, def.idx) > 1;
+      const ranged = UNITS[att.type].range > 1;
       if (isAI && f > 0) await sleep(R.ensureVisible(def.idx, 220 * f));
       const L = 380 * f;
       if (L > 0) {
@@ -410,20 +406,39 @@ async function playEvent(ev, f, isAI) {
   }
 }
 
-function distOf(a, b) {
-  const ca = R.center(a), cb = R.center(b);
-  return Math.round(Math.hypot(ca.x - cb.x, ca.y - cb.y) / (40 * Math.sqrt(3)));
+// ---------------------------------------------------------------- HUD & Panel
+const ICONS = {
+  food: '<svg viewBox="0 0 16 16"><path d="M8 15.5V4" stroke="#a16207" stroke-width="1.4" fill="none"/><ellipse cx="8" cy="3.6" rx="1.7" ry="2.8" fill="#fcd34d"/><ellipse cx="5.4" cy="7.4" rx="1.4" ry="2.6" transform="rotate(-32 5.4 7.4)" fill="#facc15"/><ellipse cx="10.6" cy="7.4" rx="1.4" ry="2.6" transform="rotate(32 10.6 7.4)" fill="#facc15"/><ellipse cx="5.6" cy="11.2" rx="1.3" ry="2.4" transform="rotate(-32 5.6 11.2)" fill="#eab308"/><ellipse cx="10.4" cy="11.2" rx="1.3" ry="2.4" transform="rotate(32 10.4 11.2)" fill="#eab308"/></svg>',
+  wood: '<svg viewBox="0 0 16 16"><rect x="0.8" y="4.5" width="12.5" height="7.5" rx="3.7" fill="#9a5b2a"/><path d="M2.5 7h7M3.5 9.6h6" stroke="#6b3a15" stroke-width="0.9"/><ellipse cx="12.4" cy="8.25" rx="2.8" ry="3.7" fill="#e8b47c" stroke="#7a451c" stroke-width="0.9"/><ellipse cx="12.4" cy="8.25" rx="1.2" ry="1.7" fill="none" stroke="#b9773d" stroke-width="0.7"/></svg>',
+  ore: '<svg viewBox="0 0 16 16"><path d="M1.5 13 3.8 6.2 8 2.8 12.8 5.6 14.6 13Z" fill="#9aa1ab"/><path d="M8 2.8 12.8 5.6 14.6 13H8.8Z" fill="#6b727c"/><path d="M5 9.5 6.4 8 7.6 9.4 6.2 10.9Z" fill="#7dd3fc"/><path d="M10 7.5 11 6.6 11.8 7.8 10.8 8.6Z" fill="#7dd3fc"/></svg>',
+  atk: '<svg viewBox="0 0 16 16"><path d="M3 13 12.5 3.5" stroke="#e5e7eb" stroke-width="2.2" stroke-linecap="round"/><path d="M2 9.5 6.5 14" stroke="#d4a017" stroke-width="2" stroke-linecap="round"/></svg>',
+  def: '<svg viewBox="0 0 16 16"><path d="M8 1.5 13.5 3.5V8c0 3.2-2.4 5.4-5.5 6.5C4.9 13.4 2.5 11.2 2.5 8V3.5Z" fill="#93c5fd" stroke="#1e3a8a" stroke-width="1"/></svg>',
+  move: '<svg viewBox="0 0 16 16"><path d="M3 9h7l-2.5-3M10 9l-2.5 3" stroke="#e5e7eb" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 4v10" stroke="#e5e7eb" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  range: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#fca5a5" stroke-width="1.5"/><circle cx="8" cy="8" r="2.6" fill="none" stroke="#fca5a5" stroke-width="1.5"/><circle cx="8" cy="8" r="0.9" fill="#fca5a5"/></svg>',
+};
+const icon = (k) => el('i', { class: 'ico', html: ICONS[k] });
+
+function costEl(cost, have) {
+  const box = el('span', { class: 'cost' });
+  for (const k of RES) {
+    if (!cost[k]) continue;
+    box.append(el('span', { class: have && (have[k] || 0) < cost[k] ? 'short' : '' }, icon(k), cost[k]));
+  }
+  return box;
 }
 
-// ---------------------------------------------------------------- HUD & Panel
 function updateHud() {
   if (!S) return;
   const human = S.players.find((p) => p.human) || S.players[0];
   const cur = S.players[S.current];
   $('turnDot').style.background = PLAYER_COLORS[cur.id].main;
   $('turnText').textContent = `Runde ${S.turn} · ${cur.human ? 'Dein Zug' : cur.name}`;
-  $('goldText').textContent = human.gold;
-  $('incomeText').textContent = `+${incomeOf(S, human.id)}`;
+  const inc = incomeOf(S, human.id);
+  const bar = $('resBar');
+  bar.innerHTML = '';
+  for (const k of RES) {
+    bar.append(el('span', { class: 'pill', title: RES_INFO[k].name }, icon(k), el('b', {}, human.res[k]), el('small', {}, `+${inc[k]}`)));
+  }
   $('unitText').textContent = `${unitCount(S, human.id)}/${unitCap(S, human.id)}`;
   const my = humanTurn();
   $('btnEnd').disabled = !my || busy;
@@ -432,26 +447,15 @@ function updateHud() {
   $('btnEnd').classList.toggle('pulse', my && !busy && !playerHasActions(S, S.current));
 }
 
-function iconCanvas(type, owner, px = 34) {
+function iconCanvas(type, owner, px = 44) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const c = document.createElement('canvas');
-  c.width = c.height = px * dpr;
+  c.width = c.height = Math.round(px * dpr);
   c.style.width = c.style.height = px + 'px';
+  c.className = 'fig';
   const ctx = c.getContext('2d');
   ctx.scale(dpr, dpr);
-  const col = PLAYER_COLORS[owner] || NEUTRAL_COLOR;
-  const g = ctx.createLinearGradient(0, 0, 0, px);
-  g.addColorStop(0, col.light);
-  g.addColorStop(0.35, col.main);
-  g.addColorStop(1, col.dark);
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(px / 2, px / 2, px / 2 - 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  R.drawIcon(ctx, type, px / 2, px / 2, px * 0.25, col);
+  R.drawPreview(ctx, type, owner, px / 2, px * 0.62, px);
   return c;
 }
 
@@ -469,88 +473,80 @@ function el(tag, attrs = {}, ...children) {
 
 const fmt = (n) => String(n).replace('.', ',');
 
-function unitChips(u) {
-  const T = UNITS[u.type];
-  return el('div', { class: 'chips' },
-    el('span', { class: 'chip' }, '❤ ', el('b', {}, `${u.hp}/${T.hp}`)),
-    el('span', { class: 'chip' }, 'Angriff ', el('b', {}, fmt(T.atk))),
-    el('span', { class: 'chip' }, 'Verteid. ', el('b', {}, fmt(T.def))),
-    el('span', { class: 'chip' }, 'Bewegung ', el('b', {}, T.move)),
-    el('span', { class: 'chip' }, 'Reichweite ', el('b', {}, T.range)),
-  );
+function hpBar(u) {
+  const max = UNITS[u.type].hp;
+  const r = u.hp / max;
+  const color = r > 0.6 ? '#4ade80' : r > 0.3 ? '#facc15' : '#f87171';
+  return el('div', { class: 'hp' },
+    el('div', { class: 'hp-track' }, el('div', { class: 'hp-fill', style: `width:${Math.max(0, r * 100)}%;background:${color}` })),
+    el('span', {}, `${u.hp}/${max}`));
 }
 
-function terrainLabel(i) {
+function statRow(type) {
+  const T = UNITS[type];
+  return el('div', { class: 'stats-row' },
+    el('span', { title: 'Angriff' }, icon('atk'), fmt(T.atk)),
+    el('span', { title: 'Verteidigung' }, icon('def'), fmt(T.def)),
+    el('span', { title: 'Bewegung' }, icon('move'), T.move),
+    el('span', { title: 'Reichweite' }, icon('range'), T.range));
+}
+
+function unitCard(u, subtitle) {
+  return el('div', { class: 'unit-card' },
+    iconCanvas(u.type, u.owner),
+    el('div', { class: 'uc-main' },
+      el('div', { class: 'uc-top' }, el('span', { class: 'title' }, UNITS[u.type].name), hpBar(u)),
+      el('div', { class: 'uc-bottom' }, el('span', { class: 'muted' }, subtitle), statRow(u.type))));
+}
+
+function tileInfo(i) {
   const c = cityOn(S, i);
-  if (c) return `${c.capital ? 'Hauptstadt' : 'Dorf'} (Verteidigung ×${fmt(cityDefense(c))})`;
-  const t = TERRAIN[S.terrain[i]];
-  return t.def && t.def > 1 ? `${t.name} (Verteidigung ×${fmt(t.def)})` : t.name;
+  if (c) return `${c.capital ? 'Hauptstadt' : 'Dorf'} · Verteidigung ×${fmt(cityDefense(c))}`;
+  return TERRAIN[S.terrain[i]].name;
 }
 
 function renderPanel() {
   const panel = $('panel');
   panel.innerHTML = '';
-  if (!S) return;
-  if (!humanTurn()) return;
+  if (!S || !humanTurn()) return;
   const occ = buildOcc(S);
   const u = sel.unitId != null ? unitById(S, sel.unitId) : null;
   if (u) {
-    const T = UNITS[u.type];
-    let status;
     const targets = unitTargets(u, occ);
-    if (canMove(u)) status = targets.length ? 'Kann ziehen oder angreifen' : 'Kann ziehen';
-    else if (targets.length) status = 'Kann noch angreifen';
+    let status;
+    if (canMove(u)) status = targets.length ? 'Ziehen oder Ziel antippen' : 'Helles Feld = ziehen';
+    else if (targets.length) status = 'Rotes Ziel = angreifen';
     else status = 'Fertig für diese Runde';
-    panel.append(el('div', { class: 'row' },
-      iconCanvas(u.type, u.owner),
-      el('div', {}, el('div', { class: 'title' }, T.name), el('div', { class: 'muted' }, `${status} · ${terrainLabel(u.idx)}`)),
-    ));
-    const tgt = sel.pendingTarget != null ? unitById(S, sel.pendingTarget) : null;
-    if (tgt) {
-      const r = computeCombat(S, u, tgt);
-      const txt = r.kill
-        ? `${UNITS[tgt.type].name} wird besiegt!`
-        : `${UNITS[tgt.type].name}: −${r.dmg} ❤` + (r.counter ? ` · Gegenschlag −${r.counter} ❤${r.die ? ' (deine Einheit fällt!)' : ''}` : ' · kein Gegenschlag');
-      panel.append(el('div', { class: 'upgrade-row' },
-        el('div', { class: 'muted' }, txt),
-        el('button', { class: 'btn primary', onclick: () => doAttack(u, tgt) }, 'Angreifen'),
-      ));
-    } else {
-      panel.append(unitChips(u));
-      if (targets.length && !canMove(u)) panel.append(el('div', { class: 'muted', style: 'margin-top:6px' }, 'Tippe ein rot markiertes Ziel an (zweimal = Angriff).'));
-    }
+    panel.append(unitCard(u, status));
     return;
   }
   if (sel.cityIdx != null) {
-    const c = cityOn(S, sel.cityIdx);
+    const ci = S.cityAt[sel.cityIdx];
+    const c = S.cities[ci];
     const p = S.players[S.current];
     const occupied = !!occ[c.idx];
     const capped = unitCount(S, p.id) >= unitCap(S, p.id);
-    panel.append(el('div', { class: 'row' },
-      el('div', {},
-        el('div', { class: 'title' }, `${c.capital ? 'Hauptstadt' : 'Dorf'} · Stufe ${c.level}`),
-        el('div', { class: 'muted' }, `+${cityIncome(c)} Gold/Runde · versorgt ${cityIncome(c)} Einheiten`),
-      ),
-    ));
+    const y = cityYield(S, ci);
+    panel.append(el('div', { class: 'city-head' },
+      el('span', { class: 'title' }, `${c.capital ? 'Hauptstadt' : 'Dorf'} · Stufe ${c.level}`),
+      el('span', { class: 'yield' }, ...RES.map((k) => el('span', {}, icon(k), `+${y[k]}`)))));
     const grid = el('div', { class: 'recruit-grid' });
     for (const k of UNIT_ORDER) {
       const T = UNITS[k];
-      const dis = occupied || capped || p.gold < T.cost;
+      const dis = occupied || capped || !canAfford(p.res, T.cost);
       grid.append(el('button', { class: 'recruit', disabled: dis, onclick: () => doRecruit(c.idx, k), title: T.desc },
-        iconCanvas(k, p.id, 28),
+        iconCanvas(k, p.id, 34),
         el('div', { class: 'name' }, T.name),
-        el('div', { class: 'cost' }, el('i', { class: 'coin' }), T.cost),
-      ));
+        costEl(T.cost, p.res)));
     }
     panel.append(grid);
-    if (occupied) panel.append(el('div', { class: 'muted', style: 'margin-top:6px' }, 'Das Feld ist besetzt – zum Rekrutieren muss es frei sein.'));
-    else if (capped) panel.append(el('div', { class: 'muted', style: 'margin-top:6px' }, 'Versorgung erschöpft – erobere oder baue Städte aus.'));
+    if (occupied) panel.append(el('div', { class: 'note' }, 'Feld besetzt – zum Rekrutieren muss die Stadt frei sein.'));
+    else if (capped) panel.append(el('div', { class: 'note' }, 'Versorgung erschöpft – erobere oder baue Städte aus.'));
     if (c.level < CITY_MAX_LEVEL) {
       const cost = upgradeCost(c);
       panel.append(el('div', { class: 'upgrade-row' },
-        el('div', { class: 'muted' }, `Ausbau auf Stufe ${c.level + 1}: +1 Gold, +1 Versorgung${c.level + 1 >= 3 ? ', Verteidigung ×2' : ''}`),
-        el('button', { class: 'btn', disabled: p.gold < cost, onclick: () => doUpgrade(c.idx) }, el('i', { class: 'coin' }), ` ${cost}`),
-      ));
+        el('span', { class: 'muted' }, `Ausbau → Stufe ${c.level + 1}: +1 auf alle Rohstoffe, +1 Versorgung${c.level + 1 >= 3 ? ', Mauern' : ''}`),
+        el('button', { class: 'btn small', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost))));
     }
     return;
   }
@@ -559,23 +555,26 @@ function renderPanel() {
     const o = occ[i];
     const c = cityOn(S, i);
     if (o) {
-      const T = UNITS[o.type];
-      panel.append(el('div', { class: 'row' },
-        iconCanvas(o.type, o.owner),
-        el('div', {}, el('div', { class: 'title' }, `${T.name} (${S.players[o.owner].name})`), el('div', { class: 'muted' }, terrainLabel(i))),
-      ));
-      panel.append(unitChips(o));
+      panel.append(unitCard(o, `${S.players[o.owner].name} · ${tileInfo(i)}`));
+    } else if (c) {
+      const owner = c.owner >= 0 ? S.players[c.owner].name : 'Neutral';
+      const y = cityYield(S, S.cityAt[i]);
+      panel.append(el('div', { class: 'city-head' },
+        el('span', { class: 'title' }, `${c.capital ? 'Hauptstadt' : 'Dorf'} (${owner})`),
+        el('span', { class: 'yield' }, ...RES.map((k) => el('span', {}, icon(k), `+${y[k]}`)))));
+      panel.append(el('div', { class: 'note' }, 'Stelle eine Einheit darauf. Übersteht sie die gegnerische Runde, gehört die Stadt samt Gebiet dir.'));
     } else {
-      const owner = c ? (c.owner >= 0 ? S.players[c.owner].name : 'Neutral') : null;
-      panel.append(el('div', { class: 'title' }, terrainLabel(i)));
       const t = TERRAIN[S.terrain[i]];
-      panel.append(el('div', { class: 'muted' }, c
-        ? `Besitzer: ${owner} · +${cityIncome(c)} Gold. Stelle eine Einheit darauf – übersteht sie die gegnerische Runde, gehört die Stadt dir.`
-        : t.info || 'Offenes Gelände.'));
+      const terr = computeTerritory(S)[i];
+      const ownerTxt = terr >= 0 && S.cities[terr].owner === S.current ? 'liefert dir jede Runde' : 'liefert im Gebiet einer eigenen Stadt';
+      panel.append(el('div', { class: 'city-head' },
+        el('span', { class: 'title' }, t.name),
+        el('span', { class: 'yield' }, icon(t.res), `${ownerTxt} 1 ${RES_INFO[t.res].name}`)));
+      if (!t.pass) panel.append(el('div', { class: 'note' }, 'Unpassierbar.'));
     }
     return;
   }
-  panel.append(el('div', { class: 'muted' }, 'Tippe eine Einheit oder eine eigene Stadt an.'));
+  panel.append(el('div', { class: 'muted hint-line' }, 'Tippe eine Einheit oder eine eigene Stadt an.'));
 }
 
 // ---------------------------------------------------------------- Banner, Toast, Dialoge
@@ -625,8 +624,8 @@ function showIntro() {
   openModal(
     el('h2', {}, 'Willkommen!'),
     el('p', {}, 'Ziel: Erobere alle Städte deiner Gegner.'),
-    el('p', {}, 'Tippe eine Einheit an und dann ein helles Feld, um zu ziehen. Rote Felder kannst du angreifen – einmal tippen zeigt die Vorschau, zweimal greift an.'),
-    el('p', {}, 'Stelle eine Einheit auf ein Dorf. Überlebt sie bis zu deinem nächsten Zug, gehört es dir. Städte bringen Gold, damit rekrutierst du neue Einheiten.'),
+    el('p', {}, 'Tippe eine Einheit an und dann ein helles Feld, um zu ziehen. Rote Felder zeigen angreifbare Gegner samt Schaden – ein Tipp greift an.'),
+    el('p', {}, 'Stelle eine Einheit auf ein Dorf. Steht sie zu Beginn deines nächsten Zuges noch dort, gehört es dir – samt Gebiet: Wiesen liefern Nahrung, Wälder Holz, Hügel und Berge Erz. Damit rekrutierst du in deinen Städten neue Einheiten.'),
     el('button', { class: 'btn primary big', onclick: closeModal }, "Los geht's"),
   );
 }
@@ -769,29 +768,33 @@ $('btnStartSkirmish').addEventListener('click', () => {
 
 // ---------------------------------------------------------------- Anleitung
 function renderHelp() {
+  const costTxt = (c) => RES.filter((k) => c[k]).map((k) => `${c[k]} ${RES_INFO[k].name}`).join(', ');
   const rows = UNIT_ORDER.map((k) => {
     const T = UNITS[k];
-    return `<tr><td>${T.name}</td><td>${T.cost}</td><td>${T.hp}</td><td>${fmt(T.atk)}</td><td>${fmt(T.def)}</td><td>${T.move}</td><td>${T.range}</td></tr>`;
+    return `<tr><td>${T.name}</td><td>${T.hp}</td><td>${fmt(T.atk)}</td><td>${fmt(T.def)}</td><td>${T.move}</td><td>${T.range}</td></tr><tr class="sub"><td colspan="6">${costTxt(T.cost)}</td></tr>`;
   }).join('');
   $('helpContent').innerHTML = `
     <h3>Ziel</h3>
     <p>Erobere alle Städte deiner Gegner. Wer keine Stadt mehr hat, scheidet aus.</p>
+    <h3>Rohstoffe</h3>
+    <p>Jede Stadt besitzt das Gebiet um sich herum (farbig umrandet). Jedes Feld darin liefert dir jede Runde einen Rohstoff:
+    <b>Wiese</b> und <b>See</b> → Nahrung, <b>Wald</b> → Holz, <b>Hügel</b> und <b>Gebirge</b> → Erz.
+    Das Stadtzentrum liefert zusätzlich von allem etwas. Städte mit vielen Wäldern und Hügeln im Gebiet sind deshalb besonders wertvoll.</p>
     <h3>Ablauf einer Runde</h3>
-    <p>Jede Einheit darf pro Runde einmal ziehen und einmal angreifen (erst ziehen, dann angreifen). Nach einem Angriff ist die Einheit fertig.
-    Neue Einheiten erscheinen in einer freien eigenen Stadt und handeln ab der nächsten Runde.</p>
+    <p>Jede Einheit darf pro Runde einmal ziehen und einmal angreifen (erst ziehen, dann angreifen). Durch eigene Einheiten kannst du hindurchziehen.
+    Neue Einheiten erscheinen in einer freien eigenen Stadt und handeln ab der nächsten Runde. Einheiten, die noch etwas tun können, haben einen leuchtenden Ring.</p>
+    <h3>Angreifen</h3>
+    <p>Wählst du eine Einheit, zeigen rote Felder alle Ziele. Die Blase über dem Ziel nennt den Schaden (↩ = Gegenschlag, ✖ = Ziel wird besiegt). Ein Tipp auf das Ziel greift an.
+    Nahkämpfer rücken nach einem Sieg auf das Feld vor.</p>
     <h3>Städte</h3>
-    <p>Stellt sich eine Einheit auf eine fremde Stadt und steht dort zu Beginn deines nächsten Zuges noch, wird die Stadt erobert.
-    Jede Stadt bringt Gold und versorgt Einheiten. Durch Ausbau steigen Einkommen und Versorgung; auf Stufe 3 bekommt die Stadt starke Mauern.</p>
-    <h3>Kampf</h3>
-    <p>Der Schaden hängt von Angriff, Verteidigung, Lebenspunkten und Gelände ab – und ist immer vorhersehbar: Tippe ein Ziel einmal an, um die Vorschau zu sehen.
-    Überlebt der Verteidiger und ist der Angreifer in seiner Reichweite, schlägt er zurück. Nahkämpfer rücken nach einem Sieg auf das Feld vor.</p>
+    <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert. Ausbau (Holz + Erz) bringt mehr Rohstoffe und Versorgung;
+    auf Stufe 3 bekommt die Stadt Mauern. Die Versorgung begrenzt, wie viele Einheiten du haben kannst.</p>
     <h3>Gelände</h3>
-    <p><b>Wald</b> und <b>Hügel</b> beenden die Bewegung und geben Verteidigung ×1,5. Fernkämpfer auf Hügeln haben +1 Reichweite.
-    <b>Gebirge</b> und <b>Wasser</b> sind unpassierbar. Felder neben Gegnern stoppen die Bewegung (Kontrollzone).</p>
+    <p>Alle Felder sind gleich gut begehbar – nur <b>Gebirge</b> und <b>Seen</b> sind unpassierbar. Verteidigungsbonus gibt es nur in Städten.</p>
     <h3>Heilung</h3>
-    <p>Einheiten, die eine Runde nichts tun, heilen 2 Lebenspunkte – im eigenen Gebiet 4.</p>
+    <p>Einheiten, die eine Runde nichts tun, heilen 2 Lebenspunkte – in der Nähe eigener Städte 4.</p>
     <h3>Einheiten</h3>
-    <table><tr><th>Einheit</th><th>Gold</th><th>❤</th><th>Angr.</th><th>Vert.</th><th>Bew.</th><th>Reichw.</th></tr>${rows}</table>
+    <table><tr><th>Einheit</th><th>❤</th><th>Angr.</th><th>Vert.</th><th>Bew.</th><th>Reichw.</th></tr>${rows}</table>
     <p>Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
     <h3>Schwierigkeit</h3>
     <p>${DIFFICULTIES.map((d) => `<b>${d.level} ${d.name}</b>: ${d.desc}`).join('<br>')}</p>`;
@@ -810,7 +813,7 @@ $('btnHelp').addEventListener('click', () => { renderHelp(); showScreen('scrHelp
 $('btnSettings').addEventListener('click', () => openSettings(() => { if (!$('scrLevels').classList.contains('hidden')) renderLevels(); }));
 $('btnContinue').addEventListener('click', () => {
   const g = store.savedGame();
-  if (!g) return;
+  if (!g || g.v !== STATE_VERSION) { store.clearGame(); $('btnContinue').classList.add('hidden'); return; }
   S = g;
   enterGame();
 });

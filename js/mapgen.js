@@ -174,5 +174,24 @@ export function generateMap({ seed, cols, rows, players, biome = 'mixed', villag
   }
   if (!best) throw new Error('Karte konnte nicht erzeugt werden');
   for (const c of best.cities) best.terrain[c.idx] = 'plain';
+  // Jede Hauptstadt bekommt einen fairen Rohstoff-Mix in ihrem Gebiet
+  const isCity = new Set(best.cities.map((c) => c.idx));
+  const rng = new Rng(seed ^ 0x5bd1e995);
+  for (const c of best.cities.filter((x) => x.capital)) {
+    const nb = geo.nb[c.idx].filter((j) => !isCity.has(j));
+    const count = (t) => nb.filter((j) => best.terrain[j] === t).length;
+    const want = [['forest', 1], ['hill', 1], ['plain', 2]];
+    for (const [t, n] of want) {
+      let have = count(t) + (t === 'hill' ? count('mountain') : 0);
+      const pool = rng.shuffle(nb.filter((j) => best.terrain[j] === 'plain' || best.terrain[j] === 'water'));
+      for (const j of pool) {
+        if (have >= n) break;
+        if (best.terrain[j] === t) continue;
+        if (t !== 'plain' && best.terrain[j] === 'plain' && count('plain') <= 2) continue;
+        best.terrain[j] = t;
+        have++;
+      }
+    }
+  }
   return { cols, rows, terrain: best.terrain, cities: best.cities };
 }
