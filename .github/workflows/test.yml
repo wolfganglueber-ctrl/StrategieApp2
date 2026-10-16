@@ -1,0 +1,17 @@
+# Prüft bei jedem Push die Spielregeln und die KI (npm test).
+# Veröffentlicht wird über Cloudflare Pages (siehe README), damit das Repo privat bleiben kann.
+name: Tests
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node tools/test.mjs

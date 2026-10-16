@@ -28,18 +28,19 @@ Auf dem Handy im selben WLAN: `http://<IP-des-Rechners>:8080`.
 npm run build        # erzeugt dist/hexkrone.html (alles in einer Datei)
 ```
 
-### Online stellen (GitHub Pages)
+### Online stellen (Cloudflare Pages, kostenlos, Repo bleibt privat)
 
-Der Workflow `.github/workflows/pages.yml` testet und veröffentlicht das Spiel bei jedem Push.
-Einmalig unter *Settings → Pages → Source* „GitHub Actions“ auswählen. Danach ist das Spiel unter
-`https://<benutzer>.github.io/<repo>/` erreichbar und kann per Link geteilt werden.
-Im Handy-Browser „Zum Startbildschirm hinzufügen“ wählen, dann startet es wie eine App.
+1. Auf https://dash.cloudflare.com kostenlos registrieren.
+2. *Workers & Pages → Erstellen → Pages → Mit Git verbinden* und GitHub-Zugriff nur für dieses Repo erlauben.
+3. Branch wählen, Framework „Keine“, Build-Befehl leer lassen, Ausgabeverzeichnis `/`.
+4. Speichern und bereitstellen: Das Spiel ist dann unter `https://<projekt>.pages.dev` erreichbar und
+   wird bei jedem Push automatisch aktualisiert. Im Handy-Browser „Zum Startbildschirm hinzufügen“.
 
 ## Entwicklung
 
 | Befehl | Zweck |
 | --- | --- |
-| `npm test` | Erzeugt alle Level und spielt 60 KI-Partien auf Regelfehler durch |
+| `npm test` | Erzeugt alle Level und spielt 60 KI-Partien auf Regelfehler durch (läuft auch automatisch auf GitHub) |
 | `npm run sim -- 20 4 3 M` | 20 Partien KI-Stufe 4 gegen 3 auf mittlerer Karte (Balancing) |
 
 ### Aufbau
