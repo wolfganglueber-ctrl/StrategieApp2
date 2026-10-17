@@ -186,10 +186,34 @@ function groupMoves(occ) {
 }
 
 // Angreifer für ein Ziel: erst Fernkämpfer, dann Nahkämpfer
+// Gruppenangriff: Mitglieder rücken bei Bedarf heran (abschaltbar)
+let groupApproach = true;
+
+// Feld, von dem aus u das Ziel angreifen kann (bevorzugt das eigene), sonst null
+function attackSpot(u, target, occ) {
+  if (!canAttack(u)) return null;
+  const geo = getGeoOf();
+  const rng = statsOf(S, u).range;
+  if (geo.dist(u.idx, target.idx) <= rng) return u.idx;
+  if (!groupApproach || !canMove(u) || UNITS[u.type].noMoveAttack) return null;
+  let best = null;
+  for (const d of getMoves(S, u, occ).keys()) {
+    const dd = geo.dist(d, target.idx);
+    if (dd > rng) continue;
+    // Fernkämpfer bleiben auf Abstand, sonst kürzester Weg
+    const score = (rng > 1 ? -dd * 3 : 0) + geo.dist(u.idx, d);
+    if (!best || score < best.score) best = { d, score };
+  }
+  return best ? best.d : null;
+}
+
+// Angreifer für ein Ziel: erst Fernkämpfer, dann wer schon steht, dann wer heranrücken muss
 function groupAttackers(target, occ) {
   return groupUnits()
-    .filter((u) => unitTargets(u, occ).includes(target))
-    .sort((a, b) => statsOf(S, b).range - statsOf(S, a).range);
+    .map((u) => ({ u, spot: attackSpot(u, target, occ) }))
+    .filter((x) => x.spot != null)
+    .sort((a, b) => statsOf(S, b.u).range - statsOf(S, a.u).range || (a.spot !== a.u.idx) - (b.spot !== b.u.idx))
+    .map((x) => x.u);
 }
 
 async function doGroupMove(target) {
@@ -229,14 +253,25 @@ async function doGroupAttack(target) {
   undoStack = [];
   busy = true;
   vibrate(30);
+  // Alle nacheinander, bis jeder dran war oder das Ziel fällt
   for (const u of attackers) {
     const t = unitById(S, target.id);
-    if (!t || !unitById(S, u.id) || !canAttack(u)) continue;
+    if (!t) break;
+    if (!unitById(S, u.id)) continue;
+    const spot = attackSpot(u, t, buildOcc(S));
+    if (spot == null) continue;
+    if (spot !== u.idx) {
+      const mv = applyAction(S, { type: 'move', unitId: u.id, to: spot });
+      if (!mv) continue;
+      refresh();
+      await play(mv, 1, false);
+    }
     const ev = applyAction(S, { type: 'attack', unitId: u.id, targetId: t.id });
     if (!ev) continue;
     refresh();
     await play(ev, 1, false);
   }
+  if (!unitById(S, target.id)) toast('Ziel besiegt.');
   busy = false;
   refresh();
   if (S.over) gameOver();
@@ -314,7 +349,7 @@ function refresh() {
       const att = groupAttackers(x, occ);
       if (!att.length) continue;
       // Vorschau: Schaden des ersten Angreifers (Fernkämpfer zuerst)
-      const r = computeCombat(S, att[0], x);
+      const r = computeCombat(S, att[0], x, attackSpot(att[0], x, occ));
       targets.set(x.idx, { idx: x.idx, dmg: r.dmg, counter: r.counter, kill: r.kill, die: r.die, n: att.length });
     }
     if (targets.size) o.targets = targets;
@@ -417,7 +452,7 @@ function unitNotes(u) {
   const notes = [UNITS[u.type].desc];
   if (u.shaken) notes.push('⭐ Erschüttert: halbe Verteidigung, kein Gegenschlag.');
   if (inAura(S, u)) notes.push('🛡 Schutzaura: 25 % weniger Schaden, Flächenschaden halbiert.');
-  if (UNITS[u.type].healer) notes.push(`Heilt ${healAmount(S, u)} Leben.`);
+  if (UNITS[u.type].healer) notes.push(`Heilt ${healAmount(S, u)} Leben bis 3 Felder weit.`);
   if (!UNITS[u.type].structure) {
     const r = u.rank || 1;
     notes.push(r < MAX_RANK ? `Erfahrung ${u.xp || 0}/${RANK_XP[r + 1]} bis ${RANK_NAMES[r + 1]}.` : 'Höchster Rang.');
@@ -1214,9 +1249,12 @@ function renderPanel() {
       el('span', { class: 'title' }, `👥 Gruppe · ${members.length} Einheit${members.length === 1 ? '' : 'en'}`),
       el('span', { class: 'group-btns' },
         el('button', { class: 'btn small', onclick: addNearbyToGroup }, '+ Umgebung'),
+        el('button', { class: 'btn small' + (groupApproach ? ' active' : ''), title: 'Mitglieder rücken zum Angriff heran', onclick: () => { groupApproach = !groupApproach; refresh(); } }, groupApproach ? '⚔ Heranrücken an' : '⚔ Nur aus Stand'),
         el('button', { class: 'btn small', onclick: () => { clearSel(); refresh(); } }, 'Auflösen'))));
     panel.append(row);
-    panel.append(el('div', { class: 'note' }, 'Zielfeld antippen = alle ziehen · Gegner antippen = Gruppenangriff (Fernkämpfer zuerst) · eigene Einheit antippen = hinzufügen/entfernen'));
+    panel.append(el('div', { class: 'note' }, groupApproach
+      ? 'Gegner antippen = alle greifen nacheinander an, rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt · Zielfeld = alle ziehen · eigene Einheit = hinzufügen/entfernen'
+      : 'Gegner antippen = alle, die ihn von ihrem Feld aus erreichen, greifen an · Zielfeld = alle ziehen · eigene Einheit = hinzufügen/entfernen'));
     return;
   }
   const hu = hoverUnit != null ? unitById(S, hoverUnit) : null;
@@ -1575,13 +1613,13 @@ function renderHelp() {
     <p>Einheiten sammeln Erfahrung: +1 pro Angriff, +1 pro Sieg, +1 wenn sie einen Angriff überleben. Ränge: ${RANK_NAMES.slice(1).join(' → ')}. Jeder Rang gibt +15 % Leben und +10 % Angriff und Verteidigung, Reiter und Ritter ab Veteran +1 Bewegung, alle Helden +1 Bewegung.
     Steht eine Einheit zu Zugbeginn in einer eigenen Stadt mit Kaserne, kannst du sie gegen Rohstoffe <b>ausbilden</b> (Rang +1). Bei Veteran und Held wählst du eine Fähigkeit (goldener Schimmer am Sockel); gewählte Fähigkeiten erscheinen als kleines Abzeichen neben der Figur: ${Object.values(PERKS).map((p) => `${p.icon} ${p.name} (${p.desc})`).join(', ')}.</p>
     <h3>Zauberer 🔮</h3>
-    <p>Eigene Einheiten neben einem Zauberer (blaues Schild-Symbol) bekommen 25 % weniger Schaden, Flächenschaden halbiert. Statt anzugreifen heilt der Zauberer eine benachbarte Einheit (grün markiert antippen). Höchstens ein Zauberer pro Stadt.</p>
+    <p>Eigene Einheiten neben einem Zauberer (blaues Schild-Symbol) bekommen 25 % weniger Schaden, Flächenschaden halbiert. Statt anzugreifen heilt der Zauberer eine eigene Einheit bis 3 Felder entfernt (grün markiert antippen). Höchstens ein Zauberer pro Stadt.</p>
     <h3>Katapult und Flanke</h3>
     <p>Katapulte treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +10 % (höchstens +30 %): Einkesseln lohnt sich.</p>
     <h3>Schwarzer Troll</h3>
     <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel, braucht 3 Versorgung und eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
     <h3>Drache 🐉</h3>
-    <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), sein Feueratem trifft auch Gegner neben dem Ziel, und er heilt jede Runde 3 Leben. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (Stadt ab Stufe 4, nur eine im Reich), 3 Versorgung, und es gibt nur einen Drachen pro Reich.</p>
+    <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), sein Feueratem trifft auch Gegner neben dem Ziel, und er heilt jede Runde 6 Leben. Er ist ein Endgegner: etwa fünfmal so stark wie früher, aber zehnmal so teuer – bei Rang 3 und 5 wählst du jeweils aus drei Fähigkeiten. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (Stadt ab Stufe 4, nur eine im Reich), 3 Versorgung, und es gibt nur einen Drachen pro Reich.</p>
     <h3>Geräusche 🔊</h3>
     <p>Kampf, Bewegung und Ereignisse sind zu hören, im Hintergrund je nach Kartenausschnitt Meeresrauschen, plätschernde Seen, Wind über den Bergen, Vögel im Wald und das Treiben der Städte. Alles wird im Gerät erzeugt und funktioniert offline. Lautstärke und Umgebung stellst du im Menü unter Einstellungen ein.</p>
     <h3>Wache halten 💤</h3>

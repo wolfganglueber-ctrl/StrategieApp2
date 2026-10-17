@@ -596,7 +596,7 @@ export function inAura(state, u, idx = u.idx) {
   return false;
 }
 
-// Heilen: Zauberer heilt eine benachbarte eigene Einheit (statt anzugreifen)
+// Heilen: Zauberer heilt eine eigene Einheit bis 3 Felder entfernt (statt anzugreifen)
 export function healAmount(state, u) {
   return HEAL.base + (hasTech(state, u.owner, 'blessing') ? HEAL.blessing : 0) + (hasPerk(u, 'greatheal') ? 3 : 0);
 }
@@ -606,7 +606,7 @@ export function needsHeal(state, healer, t) {
 export function getHealTargets(state, u, fromIdx = u.idx) {
   if (!UNITS[u.type].healer) return [];
   const geo = geoOf(state);
-  return state.units.filter((t) => t.owner === u.owner && t !== u && !isStructure(t) && geo.dist(fromIdx, t.idx) === 1 && needsHeal(state, u, t));
+  return state.units.filter((t) => t.owner === u.owner && t !== u && !isStructure(t) && geo.dist(fromIdx, t.idx) <= HEAL.range && needsHeal(state, u, t));
 }
 
 // Flächenschaden (Katapult): gegnerische Einheiten neben dem Ziel bekommen einen Teil des Schadens

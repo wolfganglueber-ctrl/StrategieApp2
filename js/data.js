@@ -24,9 +24,9 @@ export const UNITS = {
   defender: { name: 'Wächter', cost: { food: 3, ore: 5 }, hp: 15, atk: 1, def: 3, move: 1, range: 1, desc: 'Starke Verteidigung, schwacher Angriff.' },
   knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 3, def: 1, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
   tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 2, def: 3, move: 0, range: 2, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
-  mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5 }, hp: 10, atk: 1, def: 1, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben bekommen 25 % weniger Schaden, Flächenschaden halbiert. Heilt statt anzugreifen. Höchstens einer pro Stadt.' },
+  mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5 }, hp: 10, atk: 1, def: 1, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben bekommen 25 % weniger Schaden, Flächenschaden halbiert. Heilt statt anzugreifen, bis 3 Felder weit. Höchstens einer pro Stadt.' },
   troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 7, def: 5, move: 2, range: 1, supply: 3, regen: 3, perRealm: 5, needs: 'lair', desc: 'Ein Titan: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben. Braucht 3 Versorgung und eine Trollhöhle, höchstens 5 pro Reich.' },
-  dragon: { name: 'Drache', cost: { food: 50, wood: 30, ore: 70 }, hp: 95, atk: 8, def: 6, move: 4, range: 1, supply: 3, regen: 3, perRealm: 1, flying: true, splash: 0.3, arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten, Feueratem trifft auch Gegner neben dem Ziel, heilt jede Runde 3 Leben. Sehr mächtig, aber Schützen und Türme treffen ihn härter (+60 %). Einer pro Reich.' },
+  dragon: { name: 'Drache', cost: { food: 500, wood: 300, ore: 700 }, hp: 300, atk: 12, def: 10, move: 5, range: 1, supply: 3, regen: 6, perRealm: 1, flying: true, splash: 0.4, arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten, Feueratem trifft auch Gegner neben dem Ziel, heilt jede Runde 6 Leben. Ein Endgegner – extrem mächtig und extrem teuer; Schützen und Türme treffen ihn härter (+60 %). Bei Rang 3 und 5 je drei Fähigkeiten zur Wahl. Einer pro Reich.' },
   barrier: { name: 'Steinwall', cost: { wood: 3, ore: 7 }, hp: 30, atk: 0, def: 6, move: 0, range: 0, structure: true, desc: 'Sehr stabiles Wallstück, blockiert den Weg. Im Stadtgebiet setzen; benachbarte Wallstücke verbinden sich zu einer Mauer und lenken den Gegner.' },
   catapult: { name: 'Katapult', cost: { wood: 8, ore: 6 }, hp: 10, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, splash: 0.5, needs: 'workshop', desc: 'Reichweite 3, nicht nach Bewegung. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Braucht eine Werkstatt.' },
 };
@@ -66,7 +66,7 @@ export const PERKS = {
   siege: { name: 'Belagerer', icon: '🏰', desc: '+30 % Angriff gegen Einheiten in Städten und gegen Türme' },
   tough: { name: 'Zäh', icon: '💪', desc: '+25 % Leben und heilt jede Runde 2' },
   swift: { name: 'Flink', icon: '💨', desc: '+1 Bewegung' },
-  hunter: { name: 'Jäger', icon: '🎯', desc: '+40 % Angriff gegen Reiter, Ritter und Trolle' },
+  hunter: { name: 'Jäger', icon: '🎯', desc: '+40 % Angriff gegen Reiter, Ritter, Trolle und Drachen' },
   fire: { name: 'Brandgeschosse', icon: '🔥', desc: 'Flächenschaden +25 Prozentpunkte (Katapult 75 %, Drache 55 %)' },
   greatheal: { name: 'Großheiler', icon: '💚', desc: 'Heilt 3 Leben mehr' },
   wideaura: { name: 'Weite Aura', icon: '🌀', desc: 'Schutzaura reicht 1 Feld weiter' },
@@ -81,7 +81,7 @@ export const PERK_CHOICES = {
   catapult: [['fire', 'siege'], ['tough', 'swift']],
   mage: [['greatheal', 'wideaura'], ['tough', 'swift']],
   troll: [['rampage', 'tough'], ['siege', 'charge']],
-  dragon: [['fire', 'tough'], ['swift', 'siege']],
+  dragon: [['fire', 'tough', 'swift'], ['siege', 'charge', 'hunter']],
 };
 export const PERK_RANKS = [3, 5];
 export const FLANK_BONUS = 0.1;
@@ -90,7 +90,7 @@ export const CAVALRY = ['rider', 'knight'];
 
 // Zauberer: Schutzaura und Heilen
 export const AURA = { radius: 1, radius2: 2, reduce: 0.25, splash: 0.5 };
-export const HEAL = { base: 4, blessing: 2 };
+export const HEAL = { base: 4, blessing: 2, range: 3 };
 
 // Türme: Ausbaustufen 1–3
 export const TOWER_LEVELS = [null,

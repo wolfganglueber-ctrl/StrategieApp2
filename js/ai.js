@@ -346,6 +346,7 @@ function economyAction(state, ctx, P, pid, rng) {
       const home = ctx.ownCities.find((c) => hasBuilding(c, b));
       if (!home || ctx.mine.filter((u) => u.type === type).length >= want) continue;
       if (!canRecruit(state, pid, cityIdx(home), type)) return { type: 'recruit', idx: home.idx, unitType: type };
+      if (type === 'dragon') continue; // viel zu teuer zum gezielten Sparen
       saveTroll = true;
       break;
     }
