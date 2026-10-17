@@ -388,22 +388,22 @@ function economyAction(state, ctx, P, pid, rng) {
       if (towersOfCity(state, ci, ctx.territory) < TOWERS_PER_CITY && rng() < 0.5) {
         let best = null;
         for (const j of ctx.geo.within(c.idx, 1)) {
-          if (canBuildTower(state, pid, j, ctx.territory)) continue;
+          if (canBuildTower(state, pid, j, ctx.territory, 'tower', ci)) continue;
           const d = ctx.distEnemy[j] < 0 ? 99 : ctx.distEnemy[j];
           if (!best || d < best.d) best = { j, d };
         }
-        if (best) return { type: 'tower', idx: best.j };
+        if (best) return { type: 'tower', idx: best.j, city: c.idx };
       }
       // Steinwälle am Rand des Gebiets, dort wo der Gegner herkommt
       if (P.upgrade >= 1 && towersOfCity(state, ci, ctx.territory, 'barrier') < 4 && rng() < 0.25) {
         let best = null;
         for (const j of ctx.geo.within(c.idx, 2)) {
-          if (ctx.geo.dist(j, c.idx) < 2 || canBuildTower(state, pid, j, ctx.territory, 'barrier')) continue;
+          if (ctx.geo.dist(j, c.idx) < 2 || canBuildTower(state, pid, j, ctx.territory, 'barrier', ci)) continue;
           const d = ctx.distEnemy[j] < 0 ? 99 : ctx.distEnemy[j];
           if (d < 2) continue;
           if (!best || d < best.d) best = { j, d };
         }
-        if (best && best.d <= 4) return { type: 'tower', unitType: 'barrier', idx: best.j };
+        if (best && best.d <= 4) return { type: 'tower', unitType: 'barrier', idx: best.j, city: c.idx };
       }
     }
   }

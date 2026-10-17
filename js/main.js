@@ -323,7 +323,7 @@ function refresh() {
   if (sel.placeTower != null) {
     const terr = computeTerritory(S);
     o.moves = new Set();
-    for (let i = 0; i < terr.length; i++) if (terr[i] === sel.placeTower && !canBuildTower(S, S.current, i, terr, sel.placeType)) o.moves.add(i);
+    for (const i of getGeoOf().within(S.cities[sel.placeTower].idx, 2)) if (!canBuildTower(S, S.current, i, terr, sel.placeType, sel.placeTower)) o.moves.add(i);
   }
   if (sel.infoIdx != null) o.selected = sel.infoIdx;
   R.overlay = o;
@@ -340,7 +340,7 @@ function onTap(sx, sy) {
   if (i < 0) { clearSel(); refresh(); return; }
   if (sel.placeTower != null) {
     const type = sel.placeType;
-    const ok = !canBuildTower(S, S.current, i, undefined, type) && computeTerritory(S)[i] === sel.placeTower;
+    const ok = !canBuildTower(S, S.current, i, undefined, type, sel.placeTower);
     const city = S.cities[sel.placeTower].idx;
     clearSel();
     if (ok) {
@@ -348,7 +348,7 @@ function onTap(sx, sy) {
       const again = type === 'barrier' ? sel.placeTower : null;
       sel.cityIdx = city;
       cityTab = 'build';
-      act({ type: 'tower', unitType: type, idx: i }, {
+      act({ type: 'tower', unitType: type, idx: i, city }, {
         after: () => {
           const ci = S.cityAt[city];
           if (again != null && towersOfCity(S, ci, undefined, 'barrier') < STRUCTURE_LIMIT.barrier && canAfford(S.players[S.current].res, UNITS.barrier.cost)) {
@@ -445,6 +445,8 @@ function unitAtScreen(x, y) {
 
 function onHover(x, y) {
   if (!S || $('hud').classList.contains('hidden') || sel.cityIdx != null || sel.placeTower != null) return;
+  // Solange eine Einheit gewählt ist, bleibt ihr Panel stehen (sonst wechselt es beim Weg zu den Knöpfen)
+  if (sel.unitId != null || sel.group) { if (hoverUnit != null) setHover(null); return; }
   setHover(unitAtScreen(x, y));
 }
 
@@ -899,7 +901,6 @@ async function playEvent(ev, f, isAI, pan = true) {
       R.floatText(ev.idx, `${PERKS[ev.perk].icon} ${PERKS[ev.perk].name}`, '#fde68a', 1100 * Math.max(f, 0.6));
       break;
     case 'wake':
-      if (S.players[S.current].human) R.floatText(ev.idx, '❗', '#fde047', 1000);
       break;
     case 'eliminated':
       toast(`${S.players[ev.pid].name} wurde besiegt!`);
@@ -1554,7 +1555,7 @@ function renderHelp() {
     <h3>Türme</h3>
     <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt). Türme bewegen sich nicht, greifen aber Gegner in Reichweite an und lassen sich in 3 Stufen ausbauen: tippe den Turm an.</p>
     <h3>Steinwälle 🧱</h3>
-    <p>Im Reiter „Gebäude“ einer Stadt setzt du Steinwälle auf freie Felder im Stadtgebiet (bis zu 6 pro Stadt). Sie sind sehr stabil (30 Leben, Verteidigung 6), greifen nicht an, versperren aber den Weg: Gegner müssen sie umgehen oder mühsam einreißen – ideal, um Angreifer in die Reichweite deiner Türme und Schützen zu lenken. Nebeneinander gesetzte Wallstücke verbinden sich zu einer Mauer. Katapulte und Belagerer sind gegen sie besonders wirksam.</p>
+    <p>Im Reiter „Gebäude“ einer Stadt setzt du Steinwälle auf freie Felder bis 2 Felder um die Stadt (bis zu 6 pro Stadt). Sie sind sehr stabil (30 Leben, Verteidigung 6), greifen nicht an, versperren aber den Weg: Gegner müssen sie umgehen oder mühsam einreißen – ideal, um Angreifer in die Reichweite deiner Türme und Schützen zu lenken. Nebeneinander gesetzte Wallstücke verbinden sich zu einer Mauer. Katapulte und Belagerer sind gegen sie besonders wirksam.</p>
     <h3>Forschung 🔬</h3>
     <p>Oben rechts öffnest du den Entwicklungsbaum. Jede Forschung gilt für dein ganzes Reich: ${TECH_ORDER.map((t) => `${TECHS[t].icon} ${TECHS[t].name} (${TECHS[t].desc})`).join(', ')}.</p>
     <h3>Kartennebel</h3>
@@ -1572,7 +1573,7 @@ function renderHelp() {
     <p>Auch voll entwickelt ziehen Fußtruppen höchstens 4 Felder, Katapulte 3, Reiter und Ritter 6 – auch wenn sie über eigene Einheiten springen.</p>
     <h3>Ränge und Fähigkeiten ★</h3>
     <p>Einheiten sammeln Erfahrung: +1 pro Angriff, +1 pro Sieg, +1 wenn sie einen Angriff überleben. Ränge: ${RANK_NAMES.slice(1).join(' → ')}. Jeder Rang gibt +15 % Leben und +10 % Angriff und Verteidigung, Reiter und Ritter ab Veteran +1 Bewegung, alle Helden +1 Bewegung.
-    Steht eine Einheit zu Zugbeginn in einer eigenen Stadt mit Kaserne, kannst du sie gegen Rohstoffe <b>ausbilden</b> (Rang +1). Bei Veteran und Held wählst du eine Fähigkeit (gelbes „!“): ${Object.values(PERKS).map((p) => `${p.icon} ${p.name} (${p.desc})`).join(', ')}.</p>
+    Steht eine Einheit zu Zugbeginn in einer eigenen Stadt mit Kaserne, kannst du sie gegen Rohstoffe <b>ausbilden</b> (Rang +1). Bei Veteran und Held wählst du eine Fähigkeit (goldener Schimmer am Sockel); gewählte Fähigkeiten erscheinen als kleines Abzeichen neben der Figur: ${Object.values(PERKS).map((p) => `${p.icon} ${p.name} (${p.desc})`).join(', ')}.</p>
     <h3>Zauberer 🔮</h3>
     <p>Eigene Einheiten neben einem Zauberer (blaues Schild-Symbol) bekommen 25 % weniger Schaden, Flächenschaden halbiert. Statt anzugreifen heilt der Zauberer eine benachbarte Einheit (grün markiert antippen). Höchstens ein Zauberer pro Stadt.</p>
     <h3>Katapult und Flanke</h3>
@@ -1580,7 +1581,7 @@ function renderHelp() {
     <h3>Schwarzer Troll</h3>
     <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel, braucht 3 Versorgung und eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
     <h3>Drache 🐉</h3>
-    <p>Der mächtigste Titan: Er fliegt über Berge, Seen und Einheiten hinweg (landet aber nur auf freien Feldern), sein Feueratem trifft auch Gegner neben dem Ziel. Schwachstelle: Schützen und Türme treffen ihn doppelt so hart. Er braucht eine Drachenhöhle (Stadt ab Stufe 4, nur eine im Reich), 3 Versorgung, und es gibt nur einen Drachen pro Reich.</p>
+    <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), sein Feueratem trifft auch Gegner neben dem Ziel, und er heilt jede Runde 3 Leben. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (Stadt ab Stufe 4, nur eine im Reich), 3 Versorgung, und es gibt nur einen Drachen pro Reich.</p>
     <h3>Geräusche 🔊</h3>
     <p>Kampf, Bewegung und Ereignisse sind zu hören, im Hintergrund je nach Kartenausschnitt Meeresrauschen, plätschernde Seen, Wind über den Bergen, Vögel im Wald und das Treiben der Städte. Alles wird im Gerät erzeugt und funktioniert offline. Lautstärke und Umgebung stellst du im Menü unter Einstellungen ein.</p>
     <h3>Wache halten 💤</h3>

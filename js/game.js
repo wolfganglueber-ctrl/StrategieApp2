@@ -130,7 +130,7 @@ export function attackMult(state, att, def, fromIdx = att.idx) {
   if (hasPerk(att, 'siege') && (cityOn(state, def.idx) || isStructure(def))) m += 0.3;
   if (hasPerk(att, 'hunter') && (CAVALRY.includes(def.type) || def.type === 'troll' || def.type === 'dragon')) m += 0.4;
   // Drachen sind anfällig gegen Pfeile
-  if (UNITS[def.type].arrowWeak && (att.type === 'archer' || att.type === 'tower')) m += 1;
+  if (UNITS[def.type].arrowWeak && (att.type === 'archer' || att.type === 'tower')) m += 0.6;
   if (!isStructure(att)) m += FLANK_BONUS * flankers(state, att, def);
   return m;
 }
@@ -211,14 +211,18 @@ export function updateExplored(state) {
   }
 }
 
+// Bauwerke einer Stadt: alle dieses Typs im Umkreis von 2 Feldern
 export function towersOfCity(state, ci, territory = computeTerritory(state), type = 'tower') {
-  return state.units.filter((u) => u.type === type && territory[u.idx] === ci).length;
+  const c = state.cities[ci], geo = geoOf(state);
+  return state.units.filter((u) => u.type === type && u.owner === c.owner && geo.dist(u.idx, c.idx) <= cityRadius(c)).length;
 }
 
 // Turm oder Steinwall auf ein Feld im eigenen Stadtgebiet setzen
-export function canBuildTower(state, pid, idx, territory = computeTerritory(state), type = 'tower') {
-  const ci = territory[idx];
-  if (ci < 0 || state.cities[ci].owner !== pid) return 'territory';
+export function canBuildTower(state, pid, idx, territory = computeTerritory(state), type = 'tower', ci = territory[idx]) {
+  // Erlaubt im ganzen Umkreis der Stadt (2 Felder), solange das Feld nicht zu einem fremden Reich gehört
+  const c = state.cities[ci];
+  if (!c || c.owner !== pid || geoOf(state).dist(c.idx, idx) > cityRadius(c)) return 'territory';
+  if (territory[idx] >= 0 && state.cities[territory[idx]].owner !== pid) return 'territory';
   if (state.cityAt[idx] >= 0 || !TERRAIN[state.terrain[idx]].pass) return 'tile';
   if (state.units.some((u) => u.idx === idx)) return 'occupied';
   if (towersOfCity(state, ci, territory, type) >= STRUCTURE_LIMIT[type]) return 'limit';
@@ -321,7 +325,7 @@ export function getMoves(state, u, occ = buildOcc(state), moveOverride) {
   return res;
 }
 
-// Fliegende Einheiten überqueren alles (Berge, Wasser, Einheiten), landen aber nur auf freien, begehbaren Feldern
+// Fliegende Einheiten überqueren Berge, Wasser und eigene Einheiten, aber keine Gegner; sie landen nur auf freien, begehbaren Feldern
 function flyMoves(state, u, occ, maxSteps) {
   const geo = geoOf(state);
   const res = new Map();
@@ -331,7 +335,7 @@ function flyMoves(state, u, occ, maxSteps) {
     const next = [];
     for (const i of layer) {
       for (const j of geo.nb[i]) {
-        if (parent.has(j)) continue;
+        if (parent.has(j) || (occ[j] && occ[j].owner !== u.owner)) continue;
         parent.set(j, i);
         next.push(j);
         if (!occ[j] && TERRAIN[state.terrain[j]].pass) res.set(j, i);
@@ -778,7 +782,9 @@ export function applyAction(state, a) {
     }
     case 'tower': {
       const type = a.unitType === 'barrier' ? 'barrier' : 'tower';
-      if (canBuildTower(state, pid, a.idx, undefined, type)) return null;
+      const territory = computeTerritory(state);
+      const ci = a.city != null ? state.cityAt[a.city] : territory[a.idx];
+      if (ci == null || ci < 0 || canBuildTower(state, pid, a.idx, territory, type, ci)) return null;
       for (const k of RES) player.res[k] -= UNITS[type].cost[k] || 0;
       const u = spawnUnit(state, type, pid, a.idx, false);
       ev.push({ k: 'recruit', id: u.id, idx: a.idx });

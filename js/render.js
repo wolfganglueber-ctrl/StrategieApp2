@@ -1,7 +1,7 @@
 // Canvas-Renderer: Gelände wird einmal in eine Offscreen-Leinwand gezeichnet,
 // pro Frame kommen nur Markierungen, Einheiten und Effekte dazu.
 import { hexCenter, pixelToIndex, boardSize, SQRT3, getGeo } from './hex.js';
-import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS } from './data.js';
+import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS, PERKS } from './data.js';
 import { computeTerritory, statsOf, inAura } from './game.js';
 import {
   hash, hexPath, mix, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, drawWallLink, FIG_BOX,
@@ -571,29 +571,44 @@ export class Renderer {
         ctx.stroke();
       }
     }
-    // Fähigkeit wählbar / Wache
-    if (u.pick || u.sentry) {
+    // Fähigkeit wählbar: goldener Schimmer am Sockel
+    if (u.pick) {
+      const p = 0.5 + 0.5 * Math.sin(now / 300);
+      ctx.strokeStyle = `rgba(253,224,71,${0.35 + p * 0.4})`;
+      ctx.lineWidth = 2 + p * 2;
+      ctx.beginPath();
+      ctx.ellipse(x, y + 7 * s, 22 * s, 9 * s, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    // Wache
+    if (u.sentry) {
       const px = x + 14 * s * scale, py = y - 40 * s * scale;
       ctx.font = `800 ${12 * s}px system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      if (u.pick) {
-        ctx.fillStyle = '#fde047';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+      ctx.strokeText('z', px, py);
+      ctx.fillStyle = '#e0f2fe';
+      ctx.fillText('z', px, py);
+    }
+    // Gewählte Fähigkeiten als Abzeichen links neben der Figur
+    if (u.perks?.length) {
+      ctx.font = `${8.5 * s}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      u.perks.forEach((p, k) => {
+        const px = x - 19 * s * scale, py = y - 6 * s - k * 12 * s;
+        ctx.fillStyle = 'rgba(20,24,32,0.85)';
         ctx.beginPath();
-        ctx.arc(px, py, 6.5 * s, 0, Math.PI * 2);
+        ctx.arc(px, py, 5.6 * s, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(60,40,0,0.9)';
+        ctx.strokeStyle = '#e9c45a';
         ctx.lineWidth = 1.2;
         ctx.stroke();
-        ctx.fillStyle = '#3b2a00';
-        ctx.fillText('!', px, py + 0.5 * s);
-      } else {
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = 'rgba(0,0,0,0.75)';
-        ctx.strokeText('z', px, py);
-        ctx.fillStyle = '#e0f2fe';
-        ctx.fillText('z', px, py);
-      }
+        ctx.fillStyle = '#fff';
+        ctx.fillText(PERKS[p]?.icon || '★', px, py + 0.5 * s);
+      });
     }
     if (u.hp < max) {
       ctx.font = `800 ${11 * s}px system-ui, sans-serif`;
@@ -627,7 +642,7 @@ export class Renderer {
       }
       this.dirty = true;
     }
-    const pulsing = this.overlay.targets?.size || this.overlay.ready?.size || this.state?.units.some((u) => u.shaken);
+    const pulsing = this.overlay.targets?.size || this.overlay.ready?.size || this.state?.units.some((u) => u.shaken || u.pick);
     if (!this.dirty && pulsing && now - (this.lastDraw || 0) > 40) this.dirty = true; // Pulsieren mit ~25 fps
     if (!this.dirty) return;
     this.lastDraw = now;

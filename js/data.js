@@ -26,15 +26,18 @@ export const UNITS = {
   tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 2, def: 3, move: 0, range: 2, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
   mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5 }, hp: 10, atk: 1, def: 1, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben bekommen 25 % weniger Schaden, Flächenschaden halbiert. Heilt statt anzugreifen. Höchstens einer pro Stadt.' },
   troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 7, def: 5, move: 2, range: 1, supply: 3, regen: 3, perRealm: 5, needs: 'lair', desc: 'Ein Titan: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben. Braucht 3 Versorgung und eine Trollhöhle, höchstens 5 pro Reich.' },
-  dragon: { name: 'Drache', cost: { food: 50, wood: 30, ore: 70 }, hp: 60, atk: 8, def: 4, move: 4, range: 1, supply: 3, perRealm: 1, flying: true, splash: 0.3, arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und Einheiten hinweg, Feueratem trifft auch Gegner neben dem Ziel. Sehr mächtig, aber Schützen und Türme treffen ihn doppelt. Einer pro Reich.' },
+  dragon: { name: 'Drache', cost: { food: 50, wood: 30, ore: 70 }, hp: 95, atk: 8, def: 6, move: 4, range: 1, supply: 3, regen: 3, perRealm: 1, flying: true, splash: 0.3, arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten, Feueratem trifft auch Gegner neben dem Ziel, heilt jede Runde 3 Leben. Sehr mächtig, aber Schützen und Türme treffen ihn härter (+60 %). Einer pro Reich.' },
   barrier: { name: 'Steinwall', cost: { wood: 3, ore: 7 }, hp: 30, atk: 0, def: 6, move: 0, range: 0, structure: true, desc: 'Sehr stabiles Wallstück, blockiert den Weg. Im Stadtgebiet setzen; benachbarte Wallstücke verbinden sich zu einer Mauer und lenken den Gegner.' },
   catapult: { name: 'Katapult', cost: { wood: 8, ore: 6 }, hp: 10, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, splash: 0.5, needs: 'workshop', desc: 'Reichweite 3, nicht nach Bewegung. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Braucht eine Werkstatt.' },
 };
-// Wert einer Einheit für die KI (Rohstoffsumme / 2)
+// Wert einer Einheit für die KI (Rohstoffsumme / 2), danach Kaufpreise verdoppeln:
+// Einheiten sollen im Verhältnis zum Ertrag teuer sein (halb so viele wie früher)
+export const UNIT_PRICE = 2;
 for (const k of Object.keys(UNITS)) {
   let t = 0;
   for (const v of Object.values(UNITS[k].cost)) t += v;
   UNITS[k].value = t / 2;
+  if (!UNITS[k].structure) for (const r of Object.keys(UNITS[k].cost)) UNITS[k].cost[r] *= UNIT_PRICE;
 }
 export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult', 'mage', 'troll', 'dragon'];
 // Höchste Zugweite bei voller Entwicklung (gilt auch für Sprünge über eigene Einheiten)
@@ -53,7 +56,7 @@ export const MAX_RANK = 5;
 // Ausbilden kostet pro Rang einen Teil der Einheitenkosten
 export function trainCost(type, rank) {
   const c = {};
-  for (const [k, v] of Object.entries(UNITS[type].cost)) c[k] = Math.ceil(v * 0.35 * rank);
+  for (const [k, v] of Object.entries(UNITS[type].cost)) c[k] = Math.ceil(v * 0.2 * rank);
   return c;
 }
 // Fähigkeiten: bei Rang 3 und 5 eine von zweien wählen

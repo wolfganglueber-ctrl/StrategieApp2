@@ -3,7 +3,7 @@
 import { createGame, applyAction } from '../js/game.js';
 import { planAction } from '../js/ai.js';
 import { mulberry32 } from '../js/rng.js';
-import { MAP_SIZES } from '../js/data.js';
+import { MAP_SIZES, UNITS } from '../js/data.js';
 
 const games = +(process.argv[2] || 10);
 const lvl = +(process.argv[3] || 4);
@@ -20,7 +20,7 @@ for (let g = 0; g < games; g++) {
     const ev = applyAction(s, a);
     if (!ev) throw new Error('Ungültig ' + JSON.stringify(a));
     if (a.type === 'recruit') add('rek:' + a.unitType);
-    if (a.type === 'end') { add('_proben'); add('_einheiten', s.units.filter((u) => u.owner === s.current && u.type !== 'tower').length); }
+    if (a.type === 'end') { add('_proben'); add('_einheiten', s.units.filter((u) => u.owner === s.current && !UNITS[u.type].structure).length); }
     for (const e of ev) {
       if (e.k === 'heal' && e.by) add('heilen');
       if (e.splash?.length) { add('flächentreffer'); add('flächenopfer', e.splash.length); }
