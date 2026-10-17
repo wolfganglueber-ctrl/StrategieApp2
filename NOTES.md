@@ -1,7 +1,7 @@
 # Stand
 Spiel-Link: https://claude.ai/artifact/DSHgsarxYi3z7aj65QHMEA (wird bei /fertig aktualisiert)
 
-Version 0.16 (Branch `ccr-8aa711c1-0bv1jz`), spielbar im Browser/als PWA.
+Version 0.17 (Branch `ccr-8aa711c1-0bv1jz`), spielbar im Browser/als PWA.
 - Jede Stadt hat 2 Felder Gebiet; Dörfer mit Abstand ≥ 4 (Episch ~111 statt 193 Städte), Gebiete bilden zusammenhängende Reiche. Wald kostet 2 Bewegung (erster Schritt immer möglich).
 - Einheiten kosten das Doppelte (UNIT_PRICE in data.js; KI-Wert bleibt auf alter Basis), Ausbilden 20 % je Rang.
 - Steinwälle (6 Holz, 14 Erz): bis 6 pro Stadt im Umkreis von 2 Feldern (nicht auf fremdem Gebiet), 50 Leben, blockieren den Weg, verbinden sich optisch zur Mauer; KI setzt sie bei bedrohten Städten.
@@ -17,6 +17,7 @@ Version 0.16 (Branch `ccr-8aa711c1-0bv1jz`), spielbar im Browser/als PWA.
 - Kampagne mit 50 Leveln in 5 Welten, Freies Spiel, Speicherstand (Version 5), Rückgängig.
 - Verbände: bis 3 gleiche Einheiten (Krieger, Schütze, Reiter, Wächter, Ritter, Katapult) per „🔗 Verband bilden“ + Rückfrage zusammenlegen (verbraucht den Zug beider), Leben addiert, Schaden × Mitglieder, Flächenwaffen +25 % je weiterem Mitglied, „✂ Aufteilen“; Anzeige: mehrere Figuren + „×n“. KI legt nur weit hinter der Front zusammen.
 - Türme schießen am Zugende automatisch, wenn sie noch nicht gefeuert haben.
+- Eroberung: Türme und Steinwälle im Gebiet der Stadt wechseln zum Eroberer. Abreißen: Gebäude (🗑 im Stadtmenü) und eigene Türme/Wälle, mit Rückfrage, halbe Kosten zurück.
 - Stadtmenü: Kaufen/Bauen/Ausbauen sofort ohne Warten auf Animation (quickAct), Scroll-Position von Panel und Gebäudeliste bleibt erhalten.
 - Zugstatus: gelber Ring = ganzer Zug offen, orange gestrichelt = gezogen, Angriff noch möglich, fertige Einheiten stark ausgegraut.
 - Bedienung: Fähigkeiten als Abzeichen an der Figur, wählbare Fähigkeit = goldener Schimmer (keine Ausrufezeichen mehr), kein Einheiten-Tooltip solange eine Einheit gewählt ist; Angriff mit einem Tipp und Schadensvorschau, Gruppen direkt aus dem Einheiten-Panel: „👥 Alle in der Nähe“ oder „👥 Alle <Typ>“ (nur gleiche Einheiten), danach gemeinsam ziehen/angreifen (Gruppe bleibt gewählt bis „Auflösen“ oder Tipp auf ein leeres Feld; alle greifen nacheinander ein Ziel an und rücken dafür heran, bis jeder dran war oder das Ziel fällt; Heranrücken abschaltbar), Einheiten-Info, 💡-Tipp-Knopf, Heilziele grün, Fähigkeitswahl im Panel.
@@ -26,10 +27,10 @@ Version 0.16 (Branch `ccr-8aa711c1-0bv1jz`), spielbar im Browser/als PWA.
 - Tests (`npm test`) laufen grün; `node tools/stats.mjs [spiele] [stufe] [größe]` zählt Einheiten und Fähigkeiten in KI-Partien.
 
 # Offene Aufgaben
-- Wolfgang testet Version 0.16 (schnelles Kaufen, Scroll-Position im Stadtmenü, Gruppenknöpfe „Alle in der Nähe“/„Alle <Typ>“, Verbände, automatisches Turmfeuer, Zugstatus-Ringe, Drache auf dem Turm, Gruppe bleibt gewählt, Gruppenangriff, Drache als Endgegner, Heilen auf 3 Felder, doppelte Einheitenpreise, stärkerer Drache, Städte mit 2 Feldern Gebiet, Steinwälle, Wald, neuer Troll und Türme, Drache, neue Figuren, dicke Mauer, natürlichere Geräusche, Markt-Pflicht, Burg-Grafik, Zauberer, Ränge, Troll, Flächenschaden, Zugweite, Geräusche) und gibt Rückmeldung, v. a. zur Lautstärke und zum Klang auf dem Handy.
+- Wolfgang testet Version 0.17 (Türme wechseln bei Eroberung, Abreißen, schnelles Kaufen, Scroll-Position im Stadtmenü, Gruppenknöpfe „Alle in der Nähe“/„Alle <Typ>“, Verbände, automatisches Turmfeuer, Zugstatus-Ringe, Drache auf dem Turm, Gruppe bleibt gewählt, Gruppenangriff, Drache als Endgegner, Heilen auf 3 Felder, doppelte Einheitenpreise, stärkerer Drache, Städte mit 2 Feldern Gebiet, Steinwälle, Wald, neuer Troll und Türme, Drache, neue Figuren, dicke Mauer, natürlichere Geräusche, Markt-Pflicht, Burg-Grafik, Zauberer, Ränge, Troll, Flächenschaden, Zugweite, Geräusche) und gibt Rückmeldung, v. a. zur Lautstärke und zum Klang auf dem Handy.
 - Balancing beobachten: Troll (70 Leben, Angriff 7, Verteidigung 5) ist in Städten mit Mauer kaum zu knacken; ggf. abschwächen.
 - KI nutzt Heilen noch selten (~2–4 Mal pro Partie); Gewichtung ggf. erhöhen.
 - Schadensvorschau zeigt den Flächenschaden des Katapults noch nicht auf den Nachbarfeldern.
 
 # Nächster Schritt
-Rückmeldung zu Version 0.16 einholen; danach ggf. Marschbefehl (automatisches Ziehen über mehrere Runden), danach Balancing (Troll, Heilen) und Flächenschaden in der Vorschau.
+Rückmeldung zu Version 0.17 einholen; danach ggf. Marschbefehl (automatisches Ziehen über mehrere Runden), danach Balancing (Troll, Heilen) und Flächenschaden in der Vorschau.

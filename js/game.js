@@ -530,6 +530,17 @@ export function startTurn(state) {
       const old = c.owner;
       c.owner = pid;
       ev.push({ k: 'capture', idx: c.idx, pid, from: old });
+      // Türme und Steinwälle im Gebiet der Stadt wechseln mit die Seite
+      if (old >= 0) {
+        const territory = computeTerritory(state), ci = state.cityAt[c.idx];
+        for (const s of state.units) {
+          if (s.owner === old && isStructure(s) && territory[s.idx] === ci) {
+            s.owner = pid;
+            s.attacked = true;
+            ev.push({ k: 'defect', id: s.id, idx: s.idx, pid });
+          }
+        }
+      }
       if (old >= 0 && cityCount(state, old) === 0) eliminate(state, old, ev);
     }
   }
@@ -815,6 +826,25 @@ export function applyAction(state, a) {
       player.tech.push(a.tech);
       for (const u of state.units) if (hpBefore.has(u.id)) u.hp += statsOf(state, u).hp - hpBefore.get(u.id);
       ev.push({ k: 'research', tech: a.tech, pid });
+      break;
+    }
+    case 'demolish': {
+      // Gebäude abreißen: Bauplatz wird frei, halbe Kosten zurück
+      const c = cityOn(state, a.idx);
+      const B = BUILDINGS[a.building];
+      if (!c || !B || c.owner !== pid || !hasBuilding(c, a.building)) return null;
+      c.buildings = c.buildings.filter((b) => b !== a.building);
+      for (const k of RES) player.res[k] += Math.floor((B.cost[k] || 0) / 2);
+      ev.push({ k: 'demolish', idx: a.idx, building: a.building });
+      break;
+    }
+    case 'raze': {
+      // Eigenen Turm oder Steinwall abreißen
+      const u = unitById(state, a.unitId);
+      if (!u || u.owner !== pid || !isStructure(u)) return null;
+      state.units = state.units.filter((x) => x !== u);
+      for (const k of RES) player.res[k] += Math.floor((UNITS[u.type].cost[k] || 0) / 2);
+      ev.push({ k: 'demolish', idx: u.idx, unit: u.type, snap: snapshotUnit(u) });
       break;
     }
     case 'merge': {

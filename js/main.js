@@ -565,6 +565,17 @@ function doHeal(u, t) {
   act({ type: 'heal', unitId: u.id, targetId: t.id }, { after: () => clearSel() });
 }
 
+async function doDemolish(idx, building) {
+  const B = BUILDINGS[building];
+  const ok = await confirmDialog(`${B.name} abreißen?`, `Der Bauplatz wird frei, du bekommst die Hälfte der Baukosten zurück.`, 'Abreißen', 'Behalten');
+  if (ok) quickAct({ type: 'demolish', idx, building });
+}
+
+async function doRaze(u) {
+  const ok = await confirmDialog(`${UNITS[u.type].name} abreißen?`, 'Du bekommst die Hälfte der Baukosten zurück.', 'Abreißen', 'Behalten');
+  if (ok) act({ type: 'raze', unitId: u.id }, { after: () => clearSel() });
+}
+
 async function doMerge(u, t) {
   const total = (u.count || 1) + (t.count || 1);
   const ok = await confirmDialog('Verband bilden?',
@@ -980,6 +991,15 @@ async function playEvent(ev, f, isAI, pan = true) {
       break;
     case 'wake':
       break;
+    case 'demolish':
+      R.invalidate(true, ev.idx);
+      if (ev.snap) R.ghost({ ...ev.snap }, 500 * Math.max(f, 0.6), 0);
+      R.floatText(ev.idx, `${ev.building ? BUILDINGS[ev.building].name : UNITS[ev.unit].name} abgerissen`, '#fca5a5', 1000 * Math.max(f, 0.6));
+      if (f > 0) sound.play('fall', { pan: panOf(ev.idx), vol: isAI ? 0.4 : 0.8 });
+      break;
+    case 'defect':
+      if (f > 0) R.ring(ev.idx, PLAYER_COLORS[ev.pid].main, 600 * f);
+      break;
     case 'merge':
       if (f > 0) R.ring(ev.idx, '#c084fc', 600 * f);
       R.floatText(ev.idx, `Verband ×${ev.count}`, '#e9d5ff', 1100 * Math.max(f, 0.6));
@@ -1262,7 +1282,8 @@ function renderCityPanel(panel, ci, occ) {
       list.append(el('div', { class: 'build-row' + (built ? ' built' : '') },
         el('span', { class: 'bicon' }, B.icon),
         el('div', { class: 'binfo' }, el('b', {}, B.name), el('span', { class: 'muted' }, B.desc)),
-        built ? el('span', { class: 'done' }, '✓')
+        built ? el('span', { class: 'built-actions' }, el('span', { class: 'done' }, '✓'),
+          el('button', { class: 'btn small raze', title: 'Abreißen (halbe Kosten zurück)', onclick: () => doDemolish(c.idx, b) }, '🗑'))
           : canBuild(S, p.id, c, b) === 'level' ? el('span', { class: 'lock' }, `🔒 ab Stufe ${B.minLevel}`)
           : canBuild(S, p.id, c, b) === 'realm' ? el('span', { class: 'lock' }, '🔒 schon im Reich')
           : el('button', { class: 'btn small', disabled: !!canBuild(S, p.id, c, b), onclick: () => doBuild(c.idx, b) }, costEl(B.cost, p.res))));
@@ -1383,6 +1404,11 @@ function renderPanelContent(panel) {
           el('span', { class: 'muted' }, `Ausbau auf Stufe ${u.level + 1}: ${nx.hp} Leben, Angriff ${fmt(nx.atk)}, Reichweite ${nx.range}`),
           el('button', { class: 'btn small primary', disabled: !canAfford(S.players[S.current].res, cost), onclick: () => act({ type: 'towerUp', unitId: u.id }) }, costEl(cost, S.players[S.current].res))));
       } else panel.append(el('div', { class: 'note' }, 'Höchste Turmstufe erreicht.'));
+    }
+    if (isStructure(u) && u.owner === S.current) {
+      panel.append(el('div', { class: 'upgrade-row' },
+        el('span', { class: 'muted' }, `${UNITS[u.type].name} abreißen – halbe Baukosten zurück.`),
+        el('button', { class: 'btn small raze', onclick: () => doRaze(u) }, '🗑 Abreißen')));
     }
     return;
   }
@@ -1673,10 +1699,12 @@ function renderHelp() {
     Nahkämpfer rücken nach einem Sieg auf das Feld vor.<br>
     <b>Erschüttert ⭐:</b> Wer von einem Fernkämpfer getroffen wird, hat bis zu seinem nächsten Zug nur halbe Verteidigung und schlägt nicht zurück.</p>
     <h3>Städte</h3>
-    <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden.
+    <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden; Türme und Steinwälle in ihrem Gebiet wechseln mit auf deine Seite.
     Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz und +1 auf alle Rohstoffe. Die Versorgung (Dorf 2, Siedlung 2, Stadt 3, Burgstadt 4, Metropole 5) begrenzt, wie viele Einheiten du haben kannst – lieber wenige, gut ausgebildete Einheiten als viele.</p>
     <h3>Gebäude</h3>
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
+    <h3>Abreißen 🗑</h3>
+    <p>Verbaut? Im Reiter „Gebäude“ hat jedes fertige Gebäude einen 🗑-Knopf: Nach einer Rückfrage wird es abgerissen, der Bauplatz ist wieder frei, und du bekommst die Hälfte der Baukosten zurück. Eigene Türme und Steinwälle reißt du ab, indem du sie antippst.</p>
     <h3>Türme</h3>
     <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt). Türme bewegen sich nicht, greifen aber Gegner in Reichweite an und lassen sich in 3 Stufen ausbauen: tippe den Turm an. Hat ein Turm in deinem Zug noch nicht geschossen, feuert er beim Zugende automatisch auf das lohnendste Ziel.</p>
     <h3>Steinwälle 🧱</h3>
