@@ -14,5 +14,14 @@ Version 0.5 (Branch `claude/strategy-game-app-c4z13v`), spielbar im Browser/als 
 - Tests (`npm test`) laufen grün.
 
 # Offene Aufgaben
+Konzept „weniger Einheiten, intensivere Schlachten“ (mit Wolfgang abgestimmt, Reichweiten bleiben wie sie sind):
+- [ ] Zugweite begrenzen: bei voller Entwicklung Fußtruppen max. 4 Felder, Katapult 3, Reiter/Ritter 6 (auch beim Springen über eigene Einheiten).
+- [ ] Katapult mit Flächenschaden (Nachbarfelder des Ziels 50 %, nur Gegner).
+- [ ] Zauberer: Schutzaura (−25 % Schaden, Flächenschaden halbiert) und Heilen als Aktion; Gebäude „Turm der Weisen“, max. 1 pro Stadt; Forschungen Erleuchtung (Aura Umkreis 2) und Segen.
+- [ ] Ränge 1–5 pro Einheit: Erfahrung aus Kämpfen und Ausbilden in Städten mit Kaserne; bei Rang 3 und 5 Fähigkeit wählen.
+- [ ] Versorgung senken (weniger, aber wertvollere Einheiten), Flankenbonus +10 % je Nachbar am Ziel, Befehl „Wache halten“.
+- [ ] Schwarzer Troll: Titan, sehr teuer, spät verfügbar (Trollhöhle), etwa 10× so stark, kann ebenfalls Ränge erreichen.
+- [ ] KI für alles anpassen, mit `npm run sim` ausbalancieren.
 
 # Nächster Schritt
+Konzeptpunkte oben der Reihe nach umsetzen.
