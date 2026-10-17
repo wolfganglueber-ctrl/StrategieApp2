@@ -25,6 +25,7 @@ export const UNITS = {
   knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 3, def: 1, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
   tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 2, def: 3, move: 0, range: 2, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
   mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5 }, hp: 10, atk: 1, def: 1, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben bekommen 25 % weniger Schaden, Flächenschaden halbiert. Heilt statt anzugreifen. Höchstens einer pro Stadt.' },
+  troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 7, def: 5, move: 2, range: 1, supply: 3, regen: 3, unique: true, needs: 'lair', desc: 'Ein Titan: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben. Braucht 3 Versorgung und eine Trollhöhle, nur einer pro Reich.' },
   catapult: { name: 'Katapult', cost: { wood: 8, ore: 6 }, hp: 10, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, splash: 0.5, needs: 'workshop', desc: 'Reichweite 3, nicht nach Bewegung. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Braucht eine Werkstatt.' },
 };
 // Wert einer Einheit für die KI (Rohstoffsumme / 2)
@@ -33,7 +34,7 @@ for (const k of Object.keys(UNITS)) {
   for (const v of Object.values(UNITS[k].cost)) t += v;
   UNITS[k].value = t / 2;
 }
-export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult', 'mage'];
+export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult', 'mage', 'troll'];
 // Höchste Zugweite bei voller Entwicklung (gilt auch für Sprünge über eigene Einheiten)
 export const MOVE_CAP = { catapult: 3, rider: 6, knight: 6 };
 export const MOVE_CAP_DEFAULT = 4;
@@ -42,6 +43,45 @@ export function moveCap(type) {
 }
 export const MELEE = ['warrior', 'rider', 'defender', 'knight'];
 export const FOOT = ['warrior', 'archer', 'defender', 'mage'];
+// Ränge 1–5: Erfahrung aus Kämpfen oder Ausbilden in einer Stadt mit Kaserne
+export const RANK_NAMES = ['', 'Rekrut', 'Soldat', 'Veteran', 'Elite', 'Held'];
+export const RANK_XP = [0, 0, 3, 7, 12, 18];
+export const RANK_BONUS = { hp: 0.15, atk: 0.1, def: 0.1 };
+export const MAX_RANK = 5;
+// Ausbilden kostet pro Rang einen Teil der Einheitenkosten
+export function trainCost(type, rank) {
+  const c = {};
+  for (const [k, v] of Object.entries(UNITS[type].cost)) c[k] = Math.ceil(v * 0.35 * rank);
+  return c;
+}
+// Fähigkeiten: bei Rang 3 und 5 eine von zweien wählen
+export const PERKS = {
+  charge: { name: 'Sturmangriff', icon: '🐗', desc: '+30 % Angriff, wenn die Einheit in diesem Zug gezogen ist' },
+  shieldwall: { name: 'Schildwall', icon: '🛡️', desc: '+30 % Verteidigung' },
+  siege: { name: 'Belagerer', icon: '🏰', desc: '+30 % Angriff gegen Einheiten in Städten und gegen Türme' },
+  tough: { name: 'Zäh', icon: '💪', desc: '+25 % Leben und heilt jede Runde 2' },
+  swift: { name: 'Flink', icon: '💨', desc: '+1 Bewegung' },
+  hunter: { name: 'Jäger', icon: '🎯', desc: '+40 % Angriff gegen Reiter, Ritter und Trolle' },
+  fire: { name: 'Brandgeschosse', icon: '🔥', desc: 'Flächenschaden 75 % statt 50 %' },
+  greatheal: { name: 'Großheiler', icon: '💚', desc: 'Heilt 3 Leben mehr' },
+  wideaura: { name: 'Weite Aura', icon: '🌀', desc: 'Schutzaura reicht 1 Feld weiter' },
+  rampage: { name: 'Wüten', icon: '💥', desc: 'Trifft auch Gegner neben dem Ziel mit 30 % Schaden' },
+};
+export const PERK_CHOICES = {
+  warrior: [['charge', 'shieldwall'], ['siege', 'tough']],
+  archer: [['hunter', 'siege'], ['swift', 'tough']],
+  rider: [['charge', 'hunter'], ['swift', 'tough']],
+  defender: [['shieldwall', 'hunter'], ['tough', 'siege']],
+  knight: [['charge', 'shieldwall'], ['siege', 'tough']],
+  catapult: [['fire', 'siege'], ['tough', 'swift']],
+  mage: [['greatheal', 'wideaura'], ['tough', 'swift']],
+  troll: [['rampage', 'tough'], ['siege', 'charge']],
+};
+export const PERK_RANKS = [3, 5];
+export const FLANK_BONUS = 0.1;
+export const FLANK_MAX = 3;
+export const CAVALRY = ['rider', 'knight'];
+
 // Zauberer: Schutzaura und Heilen
 export const AURA = { radius: 1, radius2: 2, reduce: 0.25, splash: 0.5 };
 export const HEAL = { base: 4, blessing: 2 };
@@ -89,21 +129,22 @@ export const BUILDINGS = {
   farm: { art: 'einen', name: 'Bauernhof', icon: '🌾', cost: { wood: 4 }, desc: '+3 Nahrung' },
   lumber: { art: 'einen', name: 'Holzfäller', icon: '🌲', cost: { food: 4 }, desc: '+1 Holz, +1 je Wald im Gebiet' },
   mine: { art: 'eine', name: 'Mine', icon: '⛏️', cost: { food: 4, wood: 4 }, desc: '+1 Erz, +2 je Hügel/Berg im Gebiet' },
-  barracks: { art: 'eine', name: 'Kaserne', icon: '🛡️', cost: { wood: 6, ore: 4 }, desc: 'Ritter möglich, neue Einheiten können sofort ziehen' },
+  barracks: { art: 'eine', name: 'Kaserne', icon: '🛡️', cost: { wood: 6, ore: 4 }, desc: 'Ritter möglich, neue Einheiten können sofort ziehen, Einheiten in der Stadt ausbilden (Rang +1)' },
   workshop: { art: 'eine', name: 'Werkstatt', icon: '⚙️', cost: { wood: 8, ore: 4 }, desc: 'Katapulte möglich' },
   wall: { art: 'eine', name: 'Mauer', icon: '🧱', cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt ×2,2' },
   sanctum: { art: 'einen', name: 'Turm der Weisen', icon: '🔮', cost: { wood: 6, ore: 6 }, desc: 'Zauberer möglich' },
+  lair: { art: 'eine', name: 'Trollhöhle', icon: '🦴', cost: { food: 10, wood: 12, ore: 16 }, minLevel: 4, desc: 'Schwarzer Troll möglich (Stadt ab Stufe 4)' },
   market: { art: 'einen', name: 'Markt', icon: '⚖️', cost: { food: 6, wood: 6 }, desc: 'Handel 2:1 statt 3:1' },
 };
-export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'sanctum', 'wall', 'market'];
+export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'sanctum', 'lair', 'wall', 'market'];
 
 // Stadtzentrum liefert von jedem Rohstoff so viel wie die Stufe
 export function cityCenterYield(city) {
   return city.level;
 }
-// Versorgung: wie viele Einheiten eine Stadt unterhält
+// Versorgung: wie viele Einheiten eine Stadt unterhält (bewusst knapp: wenige, aber wertvolle Einheiten)
 export function citySupply(city) {
-  return 1 + city.level;
+  return [0, 1, 2, 2, 3, 4][city.level];
 }
 export function cityRadius(city) {
   return city.level >= 4 ? 2 : 1;

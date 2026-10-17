@@ -20,6 +20,7 @@ for (let g = 0; g < games; g++) {
     const ev = applyAction(s, a);
     if (!ev) throw new Error('Ungültig ' + JSON.stringify(a));
     if (a.type === 'recruit') add('rek:' + a.unitType);
+    if (a.type === 'end') { add('_proben'); add('_einheiten', s.units.filter((u) => u.owner === s.current && u.type !== 'tower').length); }
     for (const e of ev) {
       if (e.k === 'heal' && e.by) add('heilen');
       if (e.splash?.length) { add('flächentreffer'); add('flächenopfer', e.splash.length); }
@@ -30,5 +31,6 @@ for (let g = 0; g < games; g++) {
   }
   turns += s.turn;
 }
-console.log(`Ø Runden ${(turns / games).toFixed(1)}`);
+console.log(`Ø Runden ${(turns / games).toFixed(1)} · Ø Einheiten je Spieler ${(count._einheiten / count._proben).toFixed(1)}`);
+delete count._einheiten; delete count._proben;
 console.log(Object.entries(count).sort().map(([k, v]) => `${k} ${(v / games).toFixed(1)}`).join('\n'));

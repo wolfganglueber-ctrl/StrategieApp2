@@ -3,11 +3,12 @@ import { getGeo } from './hex.js';
 import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_MARKET, TECHS, TOWER_LEVELS,
-  TOWER_UPGRADE, TOWERS_PER_CITY, MELEE, FOOT, moveCap, AURA, HEAL,
+  TOWER_UPGRADE, TOWERS_PER_CITY, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
+  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, trainCost,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 
 /*
  config: { seed, cols, rows, biome, players: [{ human: bool, ai: 1..5, name? }], levelId?, villageDensity? }
@@ -71,7 +72,7 @@ export function geoOf(state) {
 }
 
 function spawnUnit(state, type, owner, idx, ready) {
-  const u = { id: state.nextUnitId++, type, owner, idx, hp: 1, moved: !ready, attacked: !ready, acted: false };
+  const u = { id: state.nextUnitId++, type, owner, idx, hp: 1, moved: !ready, attacked: !ready, acted: false, rank: 1, xp: 0 };
   if (type === 'tower') u.level = 1;
   u.hp = statsOf(state, u).hp;
   state.units.push(u);
@@ -102,8 +103,81 @@ export function statsOf(state, u) {
       }
     }
   }
+  // Rang und Fähigkeiten
+  const r = (u.rank || 1) - 1;
+  if (r > 0) {
+    st.hp = Math.round(st.hp * (1 + RANK_BONUS.hp * r));
+    st.atk = Math.round(st.atk * (1 + RANK_BONUS.atk * r) * 10) / 10;
+    st.def = Math.round(st.def * (1 + RANK_BONUS.def * r) * 10) / 10;
+    if (r >= 2 && CAVALRY.includes(u.type)) st.move++;
+    if (r >= 4) st.move++;
+  }
+  if (hasPerk(u, 'tough')) st.hp = Math.round(st.hp * 1.25);
+  if (hasPerk(u, 'shieldwall')) st.def = Math.round(st.def * 1.3 * 10) / 10;
+  if (hasPerk(u, 'swift')) st.move++;
   st.move = Math.min(st.move, moveCap(u.type));
   return st;
+}
+
+export function hasPerk(u, p) {
+  return !!u.perks?.includes(p);
+}
+
+// Angriffsfaktor aus Fähigkeiten und Flankenbonus
+export function attackMult(state, att, def, fromIdx = att.idx) {
+  let m = 1;
+  if (hasPerk(att, 'charge') && (att.moved || fromIdx !== att.idx)) m += 0.3;
+  if (hasPerk(att, 'siege') && (cityOn(state, def.idx) || def.type === 'tower')) m += 0.3;
+  if (hasPerk(att, 'hunter') && (CAVALRY.includes(def.type) || def.type === 'troll')) m += 0.4;
+  if (!isStructure(att)) m += FLANK_BONUS * flankers(state, att, def);
+  return m;
+}
+
+// Andere eigene Einheiten direkt neben dem Ziel
+export function flankers(state, att, def) {
+  const geo = geoOf(state);
+  let n = 0;
+  for (const x of state.units) {
+    if (x.owner === att.owner && x !== att && !isStructure(x) && geo.dist(x.idx, def.idx) === 1) n++;
+  }
+  return Math.min(FLANK_MAX, n);
+}
+
+export function splashOf(u) {
+  const base = UNITS[u.type].splash || 0;
+  if (hasPerk(u, 'fire')) return 0.75;
+  if (hasPerk(u, 'rampage')) return Math.max(base, 0.3);
+  return base;
+}
+
+// Erfahrung sammeln; bei Rangaufstieg wachsen die Lebenspunkte mit
+export function gainXp(state, u, n, ev) {
+  if (isStructure(u) || !state.units.includes(u)) return;
+  u.xp = (u.xp || 0) + n;
+  while ((u.rank || 1) < MAX_RANK && u.xp >= RANK_XP[(u.rank || 1) + 1]) rankUp(state, u, ev);
+}
+
+function rankUp(state, u, ev) {
+  const before = statsOf(state, u).hp;
+  u.rank = (u.rank || 1) + 1;
+  u.hp += statsOf(state, u).hp - before;
+  if (PERK_RANKS.includes(u.rank) && PERK_CHOICES[u.type]) u.pick = u.rank;
+  ev.push({ k: 'rank', id: u.id, idx: u.idx, rank: u.rank });
+}
+
+export function perkOptions(u) {
+  if (!u.pick) return [];
+  return PERK_CHOICES[u.type]?.[PERK_RANKS.indexOf(u.pick)] || [];
+}
+
+// Ausbilden: Einheit steht in eigener Stadt mit Kaserne und hat in diesem Zug noch nichts getan
+export function canTrain(state, u) {
+  if (!u || isStructure(u) || (u.rank || 1) >= MAX_RANK) return 'max';
+  const c = cityOn(state, u.idx);
+  if (!c || c.owner !== u.owner || !hasBuilding(c, 'barracks')) return 'city';
+  if (u.acted || u.moved || u.attacked) return 'acted';
+  if (!canAfford(state.players[u.owner].res, trainCost(u.type, u.rank || 1))) return 'cost';
+  return null;
 }
 
 export function isStructure(u) {
@@ -258,10 +332,11 @@ export function getTargets(state, u, fromIdx, occ = buildOcc(state)) {
 
 export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp) {
   const A = statsOf(state, att), D = statsOf(state, def);
-  const aF = A.atk * (attHp / A.hp);
+  const atk = A.atk * attackMult(state, att, def, fromIdx);
+  const aF = atk * (attHp / A.hp);
   const dF = D.def * (def.hp / D.hp) * defenseMult(state, def.idx) * (def.shaken ? 0.5 : 1);
   const tot = aF + dF;
-  const dmg = Math.round((aF / tot) * A.atk * 4.5 * (inAura(state, def) ? 1 - AURA.reduce : 1));
+  const dmg = Math.round((aF / tot) * atk * 4.5 * (inAura(state, def) ? 1 - AURA.reduce : 1));
   const kill = dmg >= def.hp;
   let counter = 0;
   const geo = geoOf(state);
@@ -345,7 +420,8 @@ export function canRecruit(state, pid, ci, type) {
   const T = UNITS[type];
   if (!T || !c || c.owner !== pid) return 'invalid';
   if (T.needs && !hasBuilding(c, T.needs)) return 'needs';
-  if (unitCount(state, pid) >= unitCap(state, pid)) return 'cap';
+  if (T.unique && state.units.some((u) => u.owner === pid && u.type === type)) return 'unique';
+  if (unitCount(state, pid) + (T.supply || 1) > unitCap(state, pid)) return 'cap';
   if (T.healer && state.units.filter((u) => u.owner === pid && u.type === type).length >= cityCount(state, pid)) return 'limit';
   if (!canAfford(state.players[pid].res, T.cost)) return 'cost';
   if (!spawnSpots(state, ci).length) return 'space';
@@ -361,7 +437,7 @@ export function unitCap(state, pid) {
 
 export function unitCount(state, pid) {
   let n = 0;
-  for (const u of state.units) if (u.owner === pid && u.type !== 'tower') n++;
+  for (const u of state.units) if (u.owner === pid && u.type !== 'tower') n += UNITS[u.type].supply || 1;
   return n;
 }
 
@@ -408,15 +484,26 @@ export function startTurn(state) {
   for (const u of state.units) {
     if (u.owner !== pid) continue;
     const max = statsOf(state, u).hp;
-    if (!u.acted && u.hp < max) {
-      let inTerritory = false;
-      for (const j of geo.within(u.idx, 1)) {
-        const c = cityOn(state, j);
-        if (c && c.owner === pid) { inTerritory = true; break; }
+    // Trolle und zähe Einheiten heilen jede Runde, alle anderen nur nach einer Ruhepause
+    const always = (UNITS[u.type].regen || 0) + (hasPerk(u, 'tough') ? 2 : 0);
+    if ((!u.acted || always) && u.hp < max) {
+      let h = always;
+      if (!u.acted) {
+        let inTerritory = false;
+        for (const j of geo.within(u.idx, 1)) {
+          const c = cityOn(state, j);
+          if (c && c.owner === pid) { inTerritory = true; break; }
+        }
+        h += (inTerritory ? 4 : 2) + (hasTech(state, pid, 'medic') ? 2 : 0);
       }
-      const h = Math.min(max - u.hp, (inTerritory ? 4 : 2) + (hasTech(state, pid, 'medic') ? 2 : 0));
+      h = Math.min(max - u.hp, h);
       u.hp += h;
       ev.push({ k: 'heal', id: u.id, idx: u.idx, amount: h });
+    }
+    // Wache halten endet, sobald ein Gegner in der Nähe ist
+    if (u.sentry && state.units.some((e) => e.owner !== pid && geo.dist(e.idx, u.idx) <= 3)) {
+      u.sentry = false;
+      ev.push({ k: 'wake', id: u.id, idx: u.idx });
     }
     u.moved = false;
     u.attacked = false;
@@ -456,14 +543,14 @@ export function inAura(state, u, idx = u.idx) {
   const geo = geoOf(state);
   const r = auraRadius(state, u.owner);
   for (const m of state.units) {
-    if (m.owner === u.owner && m !== u && UNITS[m.type].healer && geo.dist(m.idx, idx) <= r) return true;
+    if (m.owner === u.owner && m !== u && UNITS[m.type].healer && geo.dist(m.idx, idx) <= r + (hasPerk(m, 'wideaura') ? 1 : 0)) return true;
   }
   return false;
 }
 
 // Heilen: Zauberer heilt eine benachbarte eigene Einheit (statt anzugreifen)
 export function healAmount(state, u) {
-  return HEAL.base + (hasTech(state, u.owner, 'blessing') ? HEAL.blessing : 0);
+  return HEAL.base + (hasTech(state, u.owner, 'blessing') ? HEAL.blessing : 0) + (hasPerk(u, 'greatheal') ? 3 : 0);
 }
 export function needsHeal(state, healer, t) {
   return t.hp < statsOf(state, t).hp || (t.shaken && hasTech(state, healer.owner, 'blessing'));
@@ -481,7 +568,7 @@ export function splashDamage(state, att, idx, dmg) {
   for (const j of geo.nb[idx]) {
     const o = state.units.find((x) => x.idx === j);
     if (!o || o.owner === att.owner) continue;
-    const d = Math.round(dmg * UNITS[att.type].splash * (inAura(state, o) ? AURA.splash : 1));
+    const d = Math.round(dmg * splashOf(att) * (inAura(state, o) ? AURA.splash : 1));
     if (d > 0) res.push({ unit: o, dmg: d });
   }
   return res;
@@ -519,6 +606,7 @@ export function applyAction(state, a) {
       u.idx = a.to;
       u.moved = true;
       u.acted = true;
+      u.sentry = false;
       ev.push({ k: 'move', id: u.id, path });
       break;
     }
@@ -556,8 +644,11 @@ export function applyAction(state, a) {
           state.stats.losses[pid]++;
         }
       }
-      if (UNITS[u.type].splash) e.splash = applySplash(state, u, defSnap.idx, r.dmg);
+      if (splashOf(u)) e.splash = applySplash(state, u, defSnap.idx, r.dmg);
       ev.push(e);
+      // Erfahrung: Angreifer +1 (+1 für einen Sieg), überlebender Verteidiger +1
+      if (!e.died) gainXp(state, u, 1 + (e.killed ? 1 : 0) + (e.splash || []).filter((h) => h.killed).length, ev);
+      if (!e.killed) gainXp(state, t, 1, ev);
       break;
     }
     case 'heal': {
@@ -571,7 +662,36 @@ export function applyAction(state, a) {
       u.moved = true;
       u.acted = true;
       ev.push({ k: 'heal', id: t.id, idx: t.idx, amount: h, by: u.id, from: u.idx });
+      gainXp(state, u, 1, ev);
       break;
+    }
+    case 'train': {
+      const u = unitById(state, a.unitId);
+      if (!u || u.owner !== pid || canTrain(state, u)) return null;
+      const cost = trainCost(u.type, u.rank || 1);
+      for (const k of RES) player.res[k] -= cost[k] || 0;
+      u.xp = Math.max(u.xp || 0, RANK_XP[(u.rank || 1) + 1]);
+      rankUp(state, u, ev);
+      u.moved = true;
+      u.attacked = true;
+      u.acted = true;
+      break;
+    }
+    case 'perk': {
+      const u = unitById(state, a.unitId);
+      if (!u || u.owner !== pid || !perkOptions(u).includes(a.perk)) return null;
+      const before = statsOf(state, u).hp;
+      u.perks = [...(u.perks || []), a.perk];
+      u.pick = 0;
+      u.hp += statsOf(state, u).hp - before;
+      ev.push({ k: 'perk', id: u.id, idx: u.idx, perk: a.perk });
+      break;
+    }
+    case 'sentry': {
+      const u = unitById(state, a.unitId);
+      if (!u || u.owner !== pid || isStructure(u)) return null;
+      u.sentry = !u.sentry;
+      ev.push({ k: 'sentry', id: u.id, on: u.sentry });
     }
     case 'recruit': {
       const ci = state.cityAt[a.idx];
@@ -588,7 +708,7 @@ export function applyAction(state, a) {
       const c = cityOn(state, a.idx);
       const B = BUILDINGS[a.building];
       if (!c || !B || c.owner !== pid || hasBuilding(c, a.building)) return null;
-      if (c.buildings.length >= citySlots(c) || !canAfford(player.res, B.cost)) return null;
+      if (c.buildings.length >= citySlots(c) || !canAfford(player.res, B.cost) || c.level < (B.minLevel || 0)) return null;
       for (const k of RES) player.res[k] -= B.cost[k] || 0;
       c.buildings.push(a.building);
       ev.push({ k: 'build', idx: a.idx, building: a.building });
@@ -654,5 +774,5 @@ export function applyAction(state, a) {
 
 export function playerHasActions(state, pid) {
   const occ = buildOcc(state);
-  return state.units.some((u) => u.owner === pid && (canMove(u) || (canAttack(u) && (getTargets(state, u, u.idx, occ).length > 0 || getHealTargets(state, u).length > 0))));
+  return state.units.some((u) => u.owner === pid && !u.sentry && (canMove(u) || (canAttack(u) && (getTargets(state, u, u.idx, occ).length > 0 || getHealTargets(state, u).length > 0))));
 }

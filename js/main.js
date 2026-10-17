@@ -5,6 +5,7 @@ import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
   incomeOf, unitCap, unitCount, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
+  perkOptions, canTrain, flankers,
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
@@ -12,6 +13,7 @@ import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY,
+  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, trainCost, moveCap,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
 import { store } from './storage.js';
@@ -277,7 +279,7 @@ function refresh() {
     for (const u of S.units) {
       if (u.owner !== S.current) continue;
       if (!canMove(u) && unitTargets(u, occ).length === 0 && !unitHeals(u).length) o.exhausted.add(u.id);
-      else o.ready.add(u.id);
+      else if (!u.sentry) o.ready.add(u.id);
     }
   }
   const u = sel.unitId != null ? unitById(S, sel.unitId) : null;
@@ -399,6 +401,12 @@ function unitNotes(u) {
   if (u.shaken) notes.push('⭐ Erschüttert: halbe Verteidigung, kein Gegenschlag.');
   if (inAura(S, u)) notes.push('🛡 Schutzaura: 25 % weniger Schaden, Flächenschaden halbiert.');
   if (UNITS[u.type].healer) notes.push(`Heilt ${healAmount(S, u)} Leben.`);
+  if (u.type !== 'tower') {
+    const r = u.rank || 1;
+    notes.push(r < MAX_RANK ? `Erfahrung ${u.xp || 0}/${RANK_XP[r + 1]} bis ${RANK_NAMES[r + 1]}.` : 'Höchster Rang.');
+  }
+  for (const p of u.perks || []) notes.push(`${PERKS[p].icon} ${PERKS[p].name}: ${PERKS[p].desc}.`);
+  if (u.sentry) notes.push('💤 Hält Wache.');
   return notes.join(' ');
 }
 
@@ -614,7 +622,7 @@ function undo() {
 function nextUnit() {
   if (busy || !humanTurn()) return;
   const occ = buildOcc(S);
-  const ready = S.units.filter((u) => u.owner === S.current && (canMove(u) || unitTargets(u, occ).length > 0 || unitHeals(u).length > 0));
+  const ready = S.units.filter((u) => u.owner === S.current && !u.sentry && (canMove(u) || unitTargets(u, occ).length > 0 || unitHeals(u).length > 0));
   if (!ready.length) { toast('Alle Einheiten haben gehandelt.'); return; }
   ready.sort((a, b) => a.idx - b.idx);
   const cur = ready.findIndex((u) => u.id === sel.unitId);
@@ -781,6 +789,18 @@ async function playEvent(ev, f, isAI, pan = true) {
       R.floatText(ev.idx, `+${ev.amount}`, '#86efac', 800 * Math.max(f, 0.6));
       if (ev.by != null) await pause(isAI ? 260 : 160);
       break;
+    case 'rank':
+      if (f > 0) R.ring(ev.idx, '#fde047', 600 * f);
+      R.floatText(ev.idx, `★ ${RANK_NAMES[ev.rank]}`, '#fde047', 1200 * Math.max(f, 0.6), 250 * f);
+      if (unitById(S, ev.id)?.owner === humanId() && PERK_RANKS.includes(ev.rank)) toast(`★ ${UNITS[unitById(S, ev.id).type].name} ist jetzt ${RANK_NAMES[ev.rank]} – wähle eine Fähigkeit!`);
+      await pause(isAI ? 200 : 100);
+      break;
+    case 'perk':
+      R.floatText(ev.idx, `${PERKS[ev.perk].icon} ${PERKS[ev.perk].name}`, '#fde68a', 1100 * Math.max(f, 0.6));
+      break;
+    case 'wake':
+      if (S.players[S.current].human) R.floatText(ev.idx, '❗', '#fde047', 1000);
+      break;
     case 'eliminated':
       toast(`${S.players[ev.pid].name} wurde besiegt!`);
       await pause(600);
@@ -885,8 +905,13 @@ function statRow(u) {
     el('span', { title: 'Reichweite' }, icon('range'), T.range));
 }
 
+function rankText(u) {
+  const r = u.rank || 1;
+  return `${'★'.repeat(r - 1)}${r > 1 ? ' ' : ''}${RANK_NAMES[r]}`;
+}
+
 function unitCard(u, subtitle) {
-  const name = u.type === 'tower' ? `Turm · Stufe ${u.level}` : UNITS[u.type].name;
+  const name = u.type === 'tower' ? `Turm · Stufe ${u.level}` : `${UNITS[u.type].name} · ${rankText(u)}`;
   return el('div', { class: 'unit-card' },
     iconCanvas(u.type, u.owner, 48, u.level),
     el('div', { class: 'uc-main' },
@@ -909,6 +934,7 @@ const RECRUIT_BLOCK = {
   needs: (T) => `braucht ${BUILDINGS[T.needs].name}`,
   cap: () => 'Versorgung voll',
   limit: () => 'höchstens einer pro Stadt',
+  unique: () => 'nur einer pro Reich',
   space: () => 'kein freies Feld',
   cost: () => null,
 };
@@ -1011,7 +1037,7 @@ function renderCityPanel(panel, ci, occ) {
       const T = UNITS[k];
       const why = canRecruit(S, p.id, ci, k);
       const label = why && RECRUIT_BLOCK[why] ? RECRUIT_BLOCK[why](T) : null;
-      if (why === 'cap' || why === 'space') note = label;
+      if (why === 'cap' || why === 'space' || why === 'limit' || why === 'unique') note = label;
       const preview = { type: k, owner: p.id, hp: 1 };
       grid.append(el('button', {
         class: 'recruit', disabled: !!why, onclick: () => doRecruit(c.idx, k),
@@ -1043,13 +1069,14 @@ function renderCityPanel(panel, ci, occ) {
         el('span', { class: 'bicon' }, B.icon),
         el('div', { class: 'binfo' }, el('b', {}, B.name), el('span', { class: 'muted' }, B.desc)),
         built ? el('span', { class: 'done' }, '✓')
+          : c.level < (B.minLevel || 0) ? el('span', { class: 'lock' }, `🔒 ab Stufe ${B.minLevel}`)
           : el('button', { class: 'btn small', disabled: full || !canAfford(p.res, B.cost), onclick: () => doBuild(c.idx, b) }, costEl(B.cost, p.res))));
     }
     panel.append(list);
     if (c.level < CITY_MAX_LEVEL) {
       const cost = upgradeCostOf(S, c);
       panel.append(el('div', { class: 'upgrade-row' },
-        el('span', { class: 'muted' }, `Ausbau zur ${CITY_NAMES[c.level + 1]}: +1 Bauplatz, +1 auf alle Rohstoffe, +1 Versorgung${c.level + 1 === 4 ? ', größeres Gebiet' : ''}`),
+        el('span', { class: 'muted' }, `Ausbau zur ${CITY_NAMES[c.level + 1]}: +1 Bauplatz, +1 auf alle Rohstoffe, mehr Versorgung${c.level + 1 === 4 ? ', größeres Gebiet' : ''}`),
         el('button', { class: 'btn small primary', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost, p.res))));
     } else {
       panel.append(el('div', { class: 'note' }, 'Höchste Ausbaustufe erreicht.'));
@@ -1100,9 +1127,22 @@ function renderPanel() {
     else status = u.type === 'tower' ? 'Kein Ziel in Reichweite' : 'Fertig für diese Runde';
     panel.append(unitCard(u, status));
     if (u.type !== 'tower' && u.owner === S.current) {
-      panel.append(el('div', { class: 'upgrade-row' },
-        el('span', { class: 'muted' }, 'Mehrere Einheiten zusammen bewegen?'),
-        el('button', { class: 'btn small', onclick: () => startGroup(u) }, '👥 Gruppe')));
+      const opts = perkOptions(u);
+      if (opts.length) {
+        panel.append(el('div', { class: 'note' }, `⭐ ${RANK_NAMES[u.rank]}! Wähle eine Fähigkeit:`));
+        panel.append(el('div', { class: 'perk-row' }, ...opts.map((p) => el('button', { class: 'btn small perk', onclick: () => act({ type: 'perk', unitId: u.id, perk: p }) },
+          el('b', {}, `${PERKS[p].icon} ${PERKS[p].name}`), el('span', { class: 'muted' }, PERKS[p].desc)))));
+      }
+      const why = canTrain(S, u);
+      const r = u.rank || 1;
+      const actions = el('div', { class: 'unit-actions' },
+        el('button', { class: 'btn small', onclick: () => startGroup(u) }, '👥 Gruppe'),
+        el('button', { class: 'btn small' + (u.sentry ? ' active' : ''), onclick: () => act({ type: 'sentry', unitId: u.id }, { after: () => { if (unitById(S, u.id)?.sentry) clearSel(); } }) }, u.sentry ? '💤 Wache beenden' : '💤 Wache halten'));
+      if (r < MAX_RANK && (why === null || why === 'cost' || why === 'acted')) {
+        actions.append(el('button', { class: 'btn small primary', title: `Ausbilden zum ${RANK_NAMES[r + 1]}`, disabled: !!why, onclick: () => act({ type: 'train', unitId: u.id }, { after: () => clearSel() }) },
+          `🎓 ${RANK_NAMES[r + 1]} `, costEl(trainCost(u.type, r), S.players[S.current].res)));
+      }
+      panel.append(actions);
     }
     if (u.type === 'tower' && u.owner === S.current) {
       if (u.level < 3) {
@@ -1395,7 +1435,7 @@ function renderHelp() {
     <b>Erschüttert ⭐:</b> Wer von einem Fernkämpfer getroffen wird, hat bis zu seinem nächsten Zug nur halbe Verteidigung und schlägt nicht zurück.</p>
     <h3>Städte</h3>
     <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden.
-    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz, +1 auf alle Rohstoffe und +1 Versorgung. Die Versorgung begrenzt, wie viele Einheiten du haben kannst.</p>
+    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz und +1 auf alle Rohstoffe. Die Versorgung (Dorf 1, Siedlung 2, Stadt 2, Burgstadt 3, Metropole 4) begrenzt, wie viele Einheiten du haben kannst – lieber wenige, gut ausgebildete Einheiten als viele.</p>
     <h3>Gebäude</h3>
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
     <h3>Türme</h3>
@@ -1409,10 +1449,23 @@ function renderHelp() {
     <h3>Gelände</h3>
     <p>Alle Felder sind gleich gut begehbar – nur <b>Gebirge</b> und <b>Seen</b> sind unpassierbar. Verteidigungsbonus gibt es nur in Städten.</p>
     <h3>Heilung</h3>
-    <p>Einheiten, die eine Runde nichts tun, heilen 2 Lebenspunkte – in der Nähe eigener Städte 4.</p>
+    <p>Einheiten, die eine Runde nichts tun, heilen 2 Lebenspunkte – in der Nähe eigener Städte 4. Zauberer heilen sofort.</p>
     <h3>Einheiten</h3>
     <table><tr><th>Einheit</th><th>❤</th><th>Angr.</th><th>Vert.</th><th>Bew.</th><th>Reichw.</th></tr>${rows}</table>
-    <p>Ritter brauchen eine Kaserne, Katapulte eine Werkstatt in der Stadt. Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
+    <p>Ritter brauchen eine Kaserne, Katapulte eine Werkstatt, Zauberer einen Turm der Weisen, der Schwarze Troll eine Trollhöhle. Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
+    <h3>Zugweite</h3>
+    <p>Auch voll entwickelt ziehen Fußtruppen höchstens 4 Felder, Katapulte 3, Reiter und Ritter 6 – auch wenn sie über eigene Einheiten springen.</p>
+    <h3>Ränge und Fähigkeiten ★</h3>
+    <p>Einheiten sammeln Erfahrung: +1 pro Angriff, +1 pro Sieg, +1 wenn sie einen Angriff überleben. Ränge: ${RANK_NAMES.slice(1).join(' → ')}. Jeder Rang gibt +15 % Leben und +10 % Angriff und Verteidigung, Reiter und Ritter ab Veteran +1 Bewegung, alle Helden +1 Bewegung.
+    Steht eine Einheit zu Zugbeginn in einer eigenen Stadt mit Kaserne, kannst du sie gegen Rohstoffe <b>ausbilden</b> (Rang +1). Bei Veteran und Held wählst du eine Fähigkeit (gelbes „!“): ${Object.values(PERKS).map((p) => `${p.icon} ${p.name} (${p.desc})`).join(', ')}.</p>
+    <h3>Zauberer 🔮</h3>
+    <p>Eigene Einheiten neben einem Zauberer (blaues Schild-Symbol) bekommen 25 % weniger Schaden, Flächenschaden halbiert. Statt anzugreifen heilt der Zauberer eine benachbarte Einheit (grün markiert antippen). Höchstens ein Zauberer pro Stadt.</p>
+    <h3>Katapult und Flanke</h3>
+    <p>Katapulte treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +10 % (höchstens +30 %): Einkesseln lohnt sich.</p>
+    <h3>Schwarzer Troll</h3>
+    <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel, braucht 3 Versorgung und eine Trollhöhle (Stadt ab Stufe 4). Nur einer pro Reich.</p>
+    <h3>Wache halten 💤</h3>
+    <p>Eine Einheit auf Wache wird nicht mehr als „bereit“ angezeigt und nicht von „Nächste Einheit“ ausgewählt, bis du sie wieder bewegst oder ein Gegner auf 3 Felder herankommt.</p>
     <h3>Schwierigkeit</h3>
     <p>${DIFFICULTIES.map((d) => `<b>${d.level} ${d.name}</b>: ${d.desc}`).join('<br>')}</p>`;
 }

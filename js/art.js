@@ -1031,6 +1031,108 @@ export function drawFigure(ctx, type, col, level = 1) {
       ctx.fill();
       break;
     }
+    case 'troll': {
+      const skin = '#2f343c', skinD = '#15181d', skinL = '#5a6270';
+      // Beine
+      ctx.fillStyle = skinD;
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(-9, -8, 7, 15, 3) : ctx.rect(-9, -8, 7, 15);
+      ctx.roundRect ? ctx.roundRect(2, -8, 7, 15, 3) : ctx.rect(2, -8, 7, 15);
+      ctx.fill();
+      // Keule hinten rechts
+      ctx.strokeStyle = '#4a3220';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(14, -14);
+      ctx.lineTo(22, -50);
+      ctx.stroke();
+      ctx.fillStyle = grad(ctx, 16, 28, '#7a5434', '#3b2414');
+      ctx.beginPath();
+      ctx.ellipse(23, -52, 6, 9, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      outline(ctx, 0.9);
+      ctx.fillStyle = '#d6d3cc';
+      for (const [kx, ky] of [[19, -55], [27, -50], [22, -45]]) {
+        ctx.beginPath();
+        ctx.moveTo(kx, ky - 2.5);
+        ctx.lineTo(kx + 2.5, ky);
+        ctx.lineTo(kx, ky + 2.5);
+        ctx.closePath();
+        ctx.fill();
+      }
+      // Massiger, gebeugter Körper
+      ctx.fillStyle = grad(ctx, -18, 18, skinL, skinD);
+      ctx.beginPath();
+      ctx.moveTo(-12, -6);
+      ctx.quadraticCurveTo(-21, -30, -11, -44);
+      ctx.quadraticCurveTo(0, -52, 12, -44);
+      ctx.quadraticCurveTo(21, -30, 12, -6);
+      ctx.closePath();
+      ctx.fill();
+      outline(ctx, 1.1);
+      // Lendenschurz in Spielerfarbe
+      ctx.fillStyle = grad(ctx, -12, 12, col.light, col.dark);
+      ctx.beginPath();
+      ctx.moveTo(-12, -12);
+      ctx.lineTo(12, -12);
+      ctx.lineTo(9, -2);
+      ctx.lineTo(3, -5);
+      ctx.lineTo(-2, 0);
+      ctx.lineTo(-8, -4);
+      ctx.closePath();
+      ctx.fill();
+      outline(ctx, 0.8);
+      // Arme
+      ctx.strokeStyle = skin;
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.moveTo(-12, -38);
+      ctx.quadraticCurveTo(-22, -24, -17, -10);
+      ctx.moveTo(12, -38);
+      ctx.quadraticCurveTo(18, -26, 15, -16);
+      ctx.stroke();
+      ctx.fillStyle = skinD;
+      ctx.beginPath();
+      ctx.arc(-17, -9, 4.2, 0, Math.PI * 2);
+      ctx.arc(15, -15, 4.2, 0, Math.PI * 2);
+      ctx.fill();
+      // Kopf tief zwischen den Schultern
+      ctx.fillStyle = grad(ctx, -8, 8, skinL, skin);
+      ctx.beginPath();
+      ctx.ellipse(0, -47, 8, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      outline(ctx, 1);
+      // Hörner
+      ctx.fillStyle = '#cfc8b8';
+      ctx.beginPath();
+      ctx.moveTo(-6, -52);
+      ctx.quadraticCurveTo(-13, -58, -11, -63);
+      ctx.quadraticCurveTo(-8, -57, -3, -54);
+      ctx.moveTo(6, -52);
+      ctx.quadraticCurveTo(13, -58, 11, -63);
+      ctx.quadraticCurveTo(8, -57, 3, -54);
+      ctx.fill();
+      // Glühende Augen und Hauer
+      ctx.fillStyle = '#ff3b2f';
+      ctx.shadowColor = '#ff3b2f';
+      ctx.shadowBlur = 4;
+      ctx.beginPath();
+      ctx.arc(-3, -48, 1.4, 0, Math.PI * 2);
+      ctx.arc(3, -48, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#f2efe6';
+      ctx.beginPath();
+      ctx.moveTo(-4, -43);
+      ctx.lineTo(-3, -47);
+      ctx.lineTo(-2, -43);
+      ctx.moveTo(2, -43);
+      ctx.lineTo(3, -47);
+      ctx.lineTo(4, -43);
+      ctx.fill();
+      break;
+    }
     case 'catapult': {
       const wood = '#8a5a2b', woodD = '#5c3b1b';
       // Räder hinten

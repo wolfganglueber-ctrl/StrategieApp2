@@ -2,10 +2,11 @@
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
 import {
   UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY,
+  trainCost, costTotal,
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
-  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount,
+  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, canTrain, unitCount,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -19,8 +20,12 @@ export const AI_PARAMS = {
 
 const memory = { key: '', done: new Set() };
 
+// Wert einer Einheit: Kosten, Rang und Gesundheit
+function baseValue(u) {
+  return UNITS[u.type].value * (1 + 0.25 * ((u.rank || 1) - 1));
+}
 function unitValue(u, maxHp) {
-  return UNITS[u.type].value * (0.4 + 0.6 * (u.hp / maxHp)) + 1;
+  return baseValue(u) * (0.4 + 0.6 * (u.hp / maxHp)) + 1;
 }
 
 function buildContext(state, pid, P) {
@@ -117,7 +122,7 @@ function expectedDamage(state, ctx, u, idx, hp) {
 
 function positionScore(state, ctx, P, u, idx, hp, pid) {
   const T = ctx.st(u);
-  const value = UNITS[u.type].value;
+  const value = baseValue(u);
   let s = 0;
   const dc = ctx.distCity[idx], de = ctx.distEnemy[idx];
   const near = Math.min(dc < 0 ? 99 : dc, de < 0 ? 99 : de + 1);
@@ -135,7 +140,7 @@ function positionScore(state, ctx, P, u, idx, hp, pid) {
   if (P.risk > 0) {
     const risk = P.risk / ctx.aggr;
     const exp = expectedDamage(state, ctx, u, idx, hp);
-    if (exp >= hp) s -= risk * unitValue({ type: u.type, hp }, T.hp) * 1.1;
+    if (exp >= hp) s -= risk * unitValue({ type: u.type, rank: u.rank, hp }, T.hp) * 1.1;
     else s -= risk * (exp / T.hp) * value * 0.6;
   }
   // Gegen Katapulte nicht zusammenballen (Flächenschaden)
@@ -161,7 +166,7 @@ function positionScore(state, ctx, P, u, idx, hp, pid) {
 function attackScore(state, ctx, P, u, t, from) {
   const r = computeCombat(state, u, t, from);
   const DT = ctx.st(t), UT = ctx.st(u);
-  const dv = UNITS[t.type].value, uv = UNITS[u.type].value;
+  const dv = baseValue(t), uv = baseValue(u);
   let gain = (Math.min(r.dmg, t.hp) / DT.hp) * dv * 1.2;
   // Fernkampf zuerst: erschütterte Ziele sind für Nahkämpfer leichte Beute
   if (UT.range > 1 && !r.kill && !t.shaken) gain += 1.5;
@@ -171,7 +176,7 @@ function attackScore(state, ctx, P, u, t, from) {
   if (tc && tc.capital && tc.owner === u.owner) gain += r.kill ? 6 : 2;
   if (UNITS[u.type].splash) {
     for (const h of splashDamage(state, u, t.idx, r.dmg)) {
-      const hv = UNITS[h.unit.type].value;
+      const hv = baseValue(h.unit);
       gain += (Math.min(h.dmg, h.unit.hp) / ctx.st(h.unit).hp) * hv * 1.2 + (h.dmg >= h.unit.hp ? hv + 3 : 0);
     }
   }
@@ -214,7 +219,7 @@ function evaluateUnit(state, ctx, P, u, pid, rng) {
       for (const t of getHealTargets(state, u, f)) {
         const max = ctx.st(t).hp;
         const h = Math.min(max - t.hp, healAmount(state, u));
-        const gain = (h / max) * UNITS[t.type].value * 1.4 + (t.shaken ? 1 : 0) + 0.3;
+        const gain = (h / max) * baseValue(t) * 1.4 + (t.shaken ? 1 : 0) + 0.3;
         const acts = f !== u.idx ? [{ type: 'move', unitId: u.id, to: f }] : [];
         acts.push({ type: 'heal', unitId: u.id, targetId: t.id });
         options.push({ score: gain + positionScore(state, ctx, P, u, f, u.hp, pid), actions: acts });
@@ -237,7 +242,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
   const options = UNIT_ORDER.filter((k) => !canRecruit(state, pid, ci, k));
   if (!options.length) return null;
   if (!P.smart) {
-    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, catapult: 0.5, mage: 0.5 };
+    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, catapult: 0.5, mage: 0.5, troll: 3 };
     return weightedPick(options, (k) => w[k], rng);
   }
   const danger = ctx.cityDanger.get(city.idx) || 0;
@@ -254,6 +259,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
     knight: 4,
     catapult: 1.5 + enemyDef * 0.8,
     mage: ctx.mine.length >= 4 ? 3 : 0.5,
+    troll: 50,
   };
   for (const k of Object.keys(w)) w[k] /= 1 + mineCount(k) * 0.35;
   return weightedPick(options, (k) => w[k], rng);
@@ -288,13 +294,14 @@ function chooseBuilding(state, ctx, pid, ci, inc) {
     mine: 1 + rocks * 2.4 + (inc.ore < inc.wood ? 1 : 0),
     barracks: c.capital || ctx.ownCities.length >= 3 ? 2.2 : 0.3,
     workshop: ctx.ownCities.length >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'barracks')) ? 1.4 : 0.2,
+    lair: c.level >= 4 && !ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.5 : 0,
     sanctum: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'sanctum')) ? 1.5 : 0.3,
     wall: (ctx.cityDanger.get(c.idx) || 0) > 3 ? 3 : 0.4,
     market: ctx.ownCities.some((x) => hasBuilding(x, 'market')) ? 0 : 1.2,
   };
   let best = null;
   for (const [b, v] of Object.entries(score)) {
-    if (hasBuilding(c, b) || v <= 0.5 || !canAfford(res, BUILDINGS[b].cost)) continue;
+    if (hasBuilding(c, b) || v <= 0.5 || !canAfford(res, BUILDINGS[b].cost) || c.level < (BUILDINGS[b].minLevel || 0)) continue;
     if (!best || v > best.v) best = { b, v };
   }
   return best && best.b;
@@ -319,17 +326,32 @@ function economyAction(state, ctx, P, pid, rng) {
     maxEnemyArmy = Math.max(maxEnemyArmy, ctx.armyValue(ctx.enemies.filter((e) => e.owner === p.id)));
   }
   const totalDanger = [...ctx.cityDanger.values()].reduce((a, b) => a + b, 0);
-  const capped = ctx.mine.length >= unitCap(state, pid);
+  const capped = unitCount(state, pid) >= unitCap(state, pid);
   const wantArmy = !capped && (ctx.mine.length < ctx.ownCities.length + 2 || myArmy < maxEnemyArmy * 0.9 || totalDanger > 6);
   const cityIdx = (c) => state.cityAt[c.idx];
 
+  // Fähigkeit wählen (alle Stufen, sonst blieben die Ränge ungenutzt)
+  for (const u of ctx.mine) {
+    const opts = perkOptions(u);
+    if (opts.length) return { type: 'perk', unitId: u.id, perk: opts[Math.floor(rng() * opts.length)] };
+  }
+  // Troll: wer eine Trollhöhle hat, spart darauf
+  const lair = ctx.ownCities.find((c) => hasBuilding(c, 'lair'));
+  const saveTroll = P.smart && lair && !ctx.mine.some((u) => u.type === 'troll') && totalDanger < 8 && ctx.mine.length >= ctx.ownCities.length;
+  if (saveTroll && !canRecruit(state, pid, cityIdx(lair), 'troll')) return { type: 'recruit', idx: lair.idx, unitType: 'troll' };
   if (P.smart) {
     const t = tradeAction(state, pid);
     if (t && rng() < 0.8) return t;
   }
+  // Ausbilden: wertvolle Einheiten, die in einer Stadt mit Kaserne stehen und noch nichts getan haben
+  if (P.upgrade > 0 && !saveTroll && rng() < P.upgrade) {
+    const resSum = res.food + res.wood + res.ore;
+    const cand = ctx.mine.filter((u) => !canTrain(state, u)).sort((a, b) => baseValue(b) - baseValue(a));
+    if (cand.length && resSum - costTotal(trainCost(cand[0].type, cand[0].rank || 1)) > (wantArmy ? 30 : 10)) return { type: 'train', unitId: cand[0].id };
+  }
 
   // Wirtschaft: Gebäude und Ausbau, wenn keine akute Gefahr
-  if (P.upgrade > 0 && (!wantArmy || capped || rng() < 0.3) && rng() < P.upgrade) {
+  if (P.upgrade > 0 && !saveTroll && (!wantArmy || capped || rng() < 0.3) && rng() < P.upgrade) {
     const inc = incomeOf(state, pid, ctx.territory);
     const safe = ctx.ownCities.filter((c) => (ctx.cityDanger.get(c.idx) || 0) < 4);
     for (const c of safe.sort((a, b) => (b.capital - a.capital) || (b.level - a.level))) {
@@ -361,7 +383,7 @@ function economyAction(state, ctx, P, pid, rng) {
     }
   }
   // Forschung, wenn Rohstoffe übrig sind
-  if (P.upgrade > 0 && rng() < P.upgrade) {
+  if (P.upgrade > 0 && !saveTroll && rng() < P.upgrade) {
     const resSum = res.food + res.wood + res.ore;
     const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'medic', 'enlight', 'blessing', 'guild'];
     if (resSum > (wantArmy ? 70 : 35)) {
@@ -370,7 +392,7 @@ function economyAction(state, ctx, P, pid, rng) {
       }
     }
   }
-  if (capped) return null;
+  if (capped || (saveTroll && !wantArmy)) return null;
   // Rekrutieren: gefährdete Städte zuerst, sonst nahe an Zielen
   const cities = ctx.ownCities
     .filter((c) => spawnSpots(state, cityIdx(c), ctx.occ, ctx.territory).length)

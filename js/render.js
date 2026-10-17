@@ -552,6 +552,49 @@ export class Renderer {
     ctx.fillRect(bx - 1.5, by - 1.5, bw + 3, bh + 3);
     ctx.fillStyle = ratio > 0.6 ? '#4ade80' : ratio > 0.3 ? '#facc15' : '#f87171';
     ctx.fillRect(bx, by, bw * ratio, bh);
+    // Rang: goldene Sterne über dem Lebensbalken
+    const rank = u.rank || 1;
+    if (rank > 1) {
+      const n = rank - 1, sr = 2.6 * s, gap = 6 * s;
+      for (let k = 0; k < n; k++) {
+        const px = x - ((n - 1) * gap) / 2 + k * gap, py = by - 4 * s;
+        ctx.fillStyle = '#fde047';
+        ctx.strokeStyle = 'rgba(60,40,0,0.95)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < 10; i++) {
+          const ang = -Math.PI / 2 + (i * Math.PI) / 5, r = i % 2 ? sr * 0.45 : sr;
+          ctx.lineTo(px + r * Math.cos(ang), py + r * Math.sin(ang));
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+    // Fähigkeit wählbar / Wache
+    if (u.pick || u.sentry) {
+      const px = x + 14 * s * scale, py = y - 40 * s * scale;
+      ctx.font = `800 ${12 * s}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      if (u.pick) {
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(px, py, 6.5 * s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(60,40,0,0.9)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.fillStyle = '#3b2a00';
+        ctx.fillText('!', px, py + 0.5 * s);
+      } else {
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+        ctx.strokeText('z', px, py);
+        ctx.fillStyle = '#e0f2fe';
+        ctx.fillText('z', px, py);
+      }
+    }
     if (u.hp < max) {
       ctx.font = `800 ${11 * s}px system-ui, sans-serif`;
       ctx.textAlign = 'left';
