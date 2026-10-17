@@ -96,7 +96,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .cost { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 12px; }
 .cost > span { display: inline-flex; align-items: center; gap: 1px; }
 .cost .ico { width: 20px; height: 20px; }
-.cost .short { color: #fca5a5; }
+.cost .short { color: #fff; background: #b91c1c; border-radius: 6px; padding: 0 4px 0 1px; text-shadow: none; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35); }
+/* Zu teuer: Knopf nur leicht abgedunkelt, damit die Kosten lesbar bleiben */
+.btn:disabled:has(.cost) { opacity: 0.85; filter: saturate(0.55) brightness(0.85); }
 .panel .title { font-weight: 750; font-size: 16px; }
 .panel .muted { color: var(--muted); font-size: 13px; }
 .panel .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -112,6 +114,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .recruit .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
 .recruit .cost { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; }
 .recruit:disabled { opacity: 0.35; }
+.recruit:disabled:has(.short) { opacity: 0.7; }
 .recruit:active { transform: scale(0.95); }
 .upgrade-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
 .actionbar { display: flex; gap: 8px; }
