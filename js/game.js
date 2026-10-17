@@ -452,7 +452,7 @@ export function cityYield(state, ci, territory = computeTerritory(state)) {
   const tech = (t) => c.owner >= 0 && hasTech(state, c.owner, t);
   if (hasBuilding(c, 'farm')) inc.food += 3 + (tech('plough') ? 2 : 0);
   if (hasBuilding(c, 'lumber')) inc.wood += 1 + forests + (tech('saw') ? 2 : 0);
-  if (hasBuilding(c, 'mine')) inc.ore += 1 + rocks * 2 + (tech('mining') ? 2 : 0);
+  if (hasBuilding(c, 'mine')) inc.ore += 2 + rocks * 2 + (tech('mining') ? 2 : 0);
   return inc;
 }
 
@@ -481,7 +481,12 @@ export function canBuild(state, pid, c, b) {
   return null;
 }
 
-// Handeln geht nur mit einem Markt; die Handelsgilde verbessert den Kurs auf 2:1. Ohne Markt: 0
+// Handeln geht nur mit einem Markt (2:1); die Handelsgilde verbessert den Kurs auf 3:2. Ohne Markt: 0
+// Preis für n Stück zum Kurs rate (bei 3:2 aufgerundet)
+export function tradeCost(rate, n) {
+  return Math.ceil(rate * n - 1e-9);
+}
+
 export function tradeRate(state, pid) {
   if (!state.cities.some((c) => c.owner === pid && hasBuilding(c, 'market'))) return 0;
   return hasTech(state, pid, 'guild') ? TRADE_RATE_GUILD : TRADE_RATE;
@@ -808,8 +813,8 @@ export function applyAction(state, a) {
     case 'trade': {
       const rate = tradeRate(state, pid);
       const n = Math.max(1, Math.floor(a.count || 1));
-      if (!rate || !RES.includes(a.give) || !RES.includes(a.get) || a.give === a.get || player.res[a.give] < rate * n) return null;
-      player.res[a.give] -= rate * n;
+      if (!rate || !RES.includes(a.give) || !RES.includes(a.get) || a.give === a.get || player.res[a.give] < tradeCost(rate, n)) return null;
+      player.res[a.give] -= tradeCost(rate, n);
       player.res[a.get] += n;
       ev.push({ k: 'trade', give: a.give, get: a.get, count: n });
       break;

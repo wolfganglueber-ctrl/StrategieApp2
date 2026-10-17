@@ -321,6 +321,11 @@ function tradeAction(state, pid) {
   const sorted = RES.slice().sort((a, b) => res[a] - res[b]);
   const low = sorted[0], high = sorted[2];
   if (res[low] < 4 && res[high] >= rate + 8) return { type: 'trade', give: high, get: low };
+  // Großer Überschuss: einen Teil auf einmal tauschen, statt Rohstoffe zu horten
+  if (res[high] > 80 && res[low] * 3 < res[high]) {
+    const count = Math.floor((res[high] - res[low]) / (2 * (rate + 1)));
+    if (count >= 2) return { type: 'trade', give: high, get: low, count };
+  }
   return null;
 }
 

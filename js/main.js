@@ -4,7 +4,7 @@ import { attachInput } from './input.js';
 import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
   incomeOf, unitCount, upkeepTotal, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
-  tradeRate, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
+  tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, canTrain, flankers, canBuild, mergeTargets, canSplit,
 } from './game.js';
 import { planAction } from './ai.js';
@@ -13,7 +13,7 @@ import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT,
-  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, trainCost, moveCap,
+  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, trainCost, moveCap, TRADE_RATE,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
 import { store } from './storage.js';
@@ -692,7 +692,7 @@ function openTrade(preGet) {
     const rate = tradeRate(S, p.id);
     if (!give || give === get) give = RES.filter((k) => k !== get).sort((a, b) => p.res[b] - p.res[a])[0];
     if (!get || get === give) get = RES.find((k) => k !== give);
-    const max = Math.floor(p.res[give] / rate);
+    const max = Math.floor(p.res[give] / rate + 1e-9);
     n = Math.max(0, Math.min(n, max));
     if (n === 0 && max > 0) n = 1;
     const row = (label, cur, onPick) => el('div', { class: 'trade-row' }, el('span', { class: 'muted' }, label),
@@ -707,9 +707,9 @@ function openTrade(preGet) {
       const pct = max ? Math.round((n / max) * 100) : 0;
       slider.style.setProperty('--pct', pct + '%');
       amount.innerHTML = '';
-      amount.append(el('b', {}, n * rate), icon(give), ' → ', el('b', {}, n), icon(get), el('span', { class: 'muted' }, ` (${pct} %)`));
+      amount.append(el('b', {}, tradeCost(rate, n)), icon(give), ' → ', el('b', {}, n), icon(get), el('span', { class: 'muted' }, ` (${pct} %)`));
       go.innerHTML = '';
-      go.append(n ? `Tauschen: ${n * rate} ` : 'Menge wählen', ...(n ? [icon(give), ` → ${n} `, icon(get)] : []));
+      go.append(n ? `Tauschen: ${tradeCost(rate, n)} ` : 'Menge wählen', ...(n ? [icon(give), ` → ${n} `, icon(get)] : []));
       go.disabled = n === 0;
     };
     slider.addEventListener('input', () => { n = +slider.value; update(); });
@@ -718,7 +718,7 @@ function openTrade(preGet) {
       applyAction(S, { type: 'trade', give, get, count: n });
       undoStack = [];
       refresh();
-      toast(`Getauscht: ${n * rate} ${RES_INFO[give].name} → ${n} ${RES_INFO[get].name}`);
+      toast(`Getauscht: ${tradeCost(rate, n)} ${RES_INFO[give].name} → ${n} ${RES_INFO[get].name}`);
       n = 1;
       draw();
     });
@@ -727,7 +727,7 @@ function openTrade(preGet) {
 
     openClosable(
       el('h2', {}, 'Handel'),
-      el('p', {}, `Kurs ${rate} : 1${rate === 3 ? ' · mit der Handelsgilde 2 : 1' : ''}`),
+      el('p', {}, rate === TRADE_RATE ? 'Kurs 2 : 1 · mit der Handelsgilde 3 : 2' : 'Kurs 3 : 2 (Handelsgilde)'),
       row('Gib', give, (k) => { give = k; if (get === k) get = null; }),
       row('Erhalte', get, (k) => { get = k; if (give === k) give = null; }),
       amount,
@@ -1748,7 +1748,7 @@ function renderHelp() {
     <h3>Kartennebel</h3>
     <p>Optional: Du siehst nur, was deine Einheiten und Städte sehen. Bereits erkundete Gebiete bleiben sichtbar, aber gegnerische Einheiten darin nicht. Die KI unterliegt denselben Regeln.</p>
     <h3>Handel</h3>
-    <p>Handeln kannst du erst mit einem <b>Markt</b> in einer deiner Städte (einer pro Reich genügt – in den anderen Städten ist er ausgegraut). Dann tippst du oben auf einen Rohstoff: 3 beliebige Rohstoffe gegen 1 anderen, mit der Forschung <b>Handelsgilde</b> 2 gegen 1.</p>
+    <p>Handeln kannst du erst mit einem <b>Markt</b> in einer deiner Städte (einer pro Reich genügt – in den anderen Städten ist er ausgegraut). Dann tippst du oben auf einen Rohstoff: 2 beliebige Rohstoffe gegen 1 anderen, mit der Forschung <b>Handelsgilde</b> 3 gegen 2.</p>
     <h3>Gelände</h3>
     <p><b>Gebirge</b> und <b>Seen</b> sind unpassierbar (nur der Drache fliegt darüber). Ein <b>Wald</b>feld zu betreten kostet 2 Bewegung statt 1 – ein einzelner Schritt in den Wald geht aber immer. Verteidigungsbonus gibt es nur in Städten.</p>
     <h3>Heilung</h3>

@@ -127,7 +127,7 @@ export const TECHS = {
   plough: { branch: 'eco', name: 'Pflug', icon: '🌱', cost: { wood: 16 }, req: [], desc: 'Bauernhöfe +2 Nahrung' },
   saw: { branch: 'eco', name: 'Sägewerk', icon: '🪓', cost: { food: 16, ore: 8 }, req: [], desc: 'Holzfäller +2 Holz' },
   mining: { branch: 'eco', name: 'Bergbau', icon: '⛏️', cost: { food: 16, wood: 16 }, req: [], desc: 'Minen +2 Erz' },
-  guild: { branch: 'eco', name: 'Handelsgilde', icon: '💰', cost: { food: 45, wood: 40, ore: 30 }, req: ['plough'], desc: 'Handel 2:1 statt 3:1 (braucht einen Markt)' },
+  guild: { branch: 'eco', name: 'Handelsgilde', icon: '💰', cost: { food: 45, wood: 40, ore: 30 }, req: ['plough'], desc: 'Handel 3:2 statt 2:1 (braucht einen Markt)' },
   masonry: { branch: 'eco', name: 'Baukunst', icon: '🏛️', cost: { wood: 24, ore: 16 }, req: ['saw', 'mining'], desc: 'Stadtausbau 25 % günstiger' },
   medic: { branch: 'def', name: 'Heilkunde', icon: '🌿', cost: { food: 28 }, req: [], desc: 'Einheiten heilen 2 mehr' },
   stonework: { branch: 'def', name: 'Steinmetz', icon: '🧱', cost: { wood: 12, ore: 20 }, req: [], desc: 'Türme +6 Leben, Mauern stärker (×2,6)' },
@@ -140,21 +140,21 @@ export const TECH_ORDER = Object.keys(TECHS);
 export const CITY_MAX_LEVEL = 5;
 export const CITY_NAMES = ['', 'Dorf', 'Siedlung', 'Stadt', 'Burgstadt', 'Metropole'];
 export const START_RES = { food: 6, wood: 6, ore: 4 };
-export const TRADE_RATE = 3;
-export const TRADE_RATE_GUILD = 2;
+export const TRADE_RATE = 2;
+export const TRADE_RATE_GUILD = 1.5; // 3 : 2
 
 // Gebäude: jede Stadt hat so viele Bauplätze wie ihre Stufe
 export const BUILDINGS = {
   farm: { art: 'einen', name: 'Bauernhof', icon: '🌾', cost: { wood: 4 }, desc: '+3 Nahrung' },
   lumber: { art: 'einen', name: 'Holzfäller', icon: '🌲', cost: { food: 4 }, desc: '+1 Holz, +1 je Wald im Gebiet' },
-  mine: { art: 'eine', name: 'Mine', icon: '⛏️', cost: { food: 4, wood: 4 }, desc: '+1 Erz, +2 je Hügel/Berg im Gebiet' },
+  mine: { art: 'eine', name: 'Mine', icon: '⛏️', cost: { food: 4, wood: 4 }, desc: '+2 Erz, +2 je Hügel/Berg im Gebiet' },
   barracks: { art: 'eine', name: 'Kaserne', icon: '🛡️', cost: { wood: 6, ore: 4 }, desc: 'Ritter möglich, neue Einheiten können sofort ziehen, Einheiten in der Stadt ausbilden (Rang +1)' },
   workshop: { art: 'eine', name: 'Werkstatt', icon: '⚙️', cost: { wood: 8, ore: 4 }, desc: 'Katapulte möglich' },
   wall: { art: 'eine', name: 'Mauer', icon: '🧱', cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt ×2,2' },
   sanctum: { art: 'einen', name: 'Turm der Weisen', icon: '🔮', cost: { wood: 6, ore: 6 }, desc: 'Zauberer möglich' },
   nest: { art: 'ein', name: 'Basiliskennest', icon: '🦎', cost: { food: 10, wood: 8, ore: 12 }, minLevel: 3, desc: 'Basilisk möglich (Stadt ab Stufe 3)' },
   lair: { art: 'eine', name: 'Trollhöhle', icon: '🦴', cost: { food: 10, wood: 12, ore: 16 }, minLevel: 4, desc: 'Schwarzer Troll möglich (Stadt ab Stufe 4)' },
-  market: { art: 'einen', name: 'Markt', icon: '⚖️', cost: { food: 16, wood: 16, ore: 8 }, perRealm: 1, desc: 'Erlaubt Handel (3:1, mit Handelsgilde 2:1), einer pro Reich' },
+  market: { art: 'einen', name: 'Markt', icon: '⚖️', cost: { food: 16, wood: 16, ore: 8 }, perRealm: 1, desc: 'Erlaubt Handel (2:1, mit Handelsgilde 3:2), einer pro Reich' },
   dragonlair: { art: 'eine', name: 'Drachenhöhle', icon: '🐉', cost: { food: 20, wood: 20, ore: 30 }, perRealm: 1, desc: 'Drache möglich (nur eine im Reich)' },
 };
 export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'sanctum', 'nest', 'lair', 'dragonlair', 'wall', 'market'];
@@ -221,8 +221,8 @@ export const MAP_SIZES = {
 };
 
 export const BIOMES = {
-  mixed: { name: 'Gemischt', water: 0.12, mountain: 0.08, hill: 0.1, forest: 0.22, falloff: 0.35 },
-  forest: { name: 'Wälder', water: 0.08, mountain: 0.06, hill: 0.08, forest: 0.36, falloff: 0.25 },
+  mixed: { name: 'Gemischt', water: 0.12, mountain: 0.07, hill: 0.12, forest: 0.18, falloff: 0.35 },
+  forest: { name: 'Wälder', water: 0.08, mountain: 0.05, hill: 0.1, forest: 0.3, falloff: 0.25 },
   mountains: { name: 'Gebirge', water: 0.06, mountain: 0.16, hill: 0.18, forest: 0.14, falloff: 0.2 },
   islands: { name: 'Inseln', water: 0.3, mountain: 0.05, hill: 0.09, forest: 0.18, falloff: 0.9 },
   plains: { name: 'Steppe', water: 0.08, mountain: 0.05, hill: 0.08, forest: 0.12, falloff: 0.3 },

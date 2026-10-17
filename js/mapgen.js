@@ -79,6 +79,12 @@ function generateTerrain(rng, cols, rows, biome) {
     else if (elev[i] >= hT) terrain[i] = 'hill';
     else rest.push(i);
   }
+  // Gebirgspässe: geschlossene Bergketten an einigen Stellen zu Hügeln abflachen
+  for (const i of land) {
+    if (terrain[i] !== 'mountain') continue;
+    const mNb = geo.nb[i].filter((j) => terrain[j] === 'mountain').length;
+    if (mNb >= 2 && rng.float() < 0.3) terrain[i] = 'hill';
+  }
   const fT = quantile(rest.map((i) => moist[i]), 1 - biome.forest / Math.max(0.01, rest.length / geo.n));
   for (const i of rest) if (moist[i] >= fT) terrain[i] = 'forest';
 
@@ -171,8 +177,10 @@ export function generateMap({ seed, cols, rows, players, biome = 'mixed', villag
     if (landCount < geo.n * 0.45) continue;
     const placed = placeCities(rng, geo, terrain, players, villageDensity);
     if (!placed) continue;
-    if (!best || placed.imbalance < best.imbalance) best = { terrain, cities: placed.cities, imbalance: placed.imbalance };
-    if (placed.imbalance <= 1) break;
+    // Zu wenige Städte (weniger als 3 je Spieler) gelten als schlechter Versuch
+    const score = placed.imbalance + (placed.cities.length < players * 3 ? 10 : 0);
+    if (!best || score < best.imbalance) best = { terrain, cities: placed.cities, imbalance: score };
+    if (score <= 1) break;
   }
   if (!best) throw new Error('Karte konnte nicht erzeugt werden');
   for (const c of best.cities) best.terrain[c.idx] = 'plain';
@@ -194,6 +202,13 @@ export function generateMap({ seed, cols, rows, players, biome = 'mixed', villag
         have++;
       }
     }
+  }
+  // Jede Stadt (auch Dörfer) hat mindestens ein Erzfeld (Hügel) in ihrem Gebiet
+  for (const c of best.cities) {
+    const area = geo.within(c.idx, 2).filter((j) => j !== c.idx && !isCity.has(j));
+    if (area.some((j) => best.terrain[j] === 'hill' || best.terrain[j] === 'mountain')) continue;
+    const pool = rng.shuffle(area.filter((j) => best.terrain[j] === 'plain' || best.terrain[j] === 'forest'));
+    if (pool.length) best.terrain[pool[0]] = 'hill';
   }
   return { cols, rows, terrain: best.terrain, cities: best.cities };
 }
