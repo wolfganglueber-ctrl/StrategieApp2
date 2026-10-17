@@ -188,7 +188,10 @@ export function generateMap({ seed, cols, rows, players, biome = 'mixed', villag
   const isCity = new Set(best.cities.map((c) => c.idx));
   const rng = new Rng(seed ^ 0x5bd1e995);
   for (const c of best.cities.filter((x) => x.capital)) {
-    const nb = geo.nb[c.idx].filter((j) => !isCity.has(j));
+    // Burg: die 6 Nachbarfelder werden zum Burghof (begehbare Wiese)
+    for (const j of geo.nb[c.idx]) if (!isCity.has(j)) best.terrain[j] = 'plain';
+    // Rohstoffe liegen im Ring direkt um die Burg
+    const nb = geo.within(c.idx, 2).filter((j) => geo.dist(c.idx, j) === 2 && !isCity.has(j));
     const count = (t) => nb.filter((j) => best.terrain[j] === t).length;
     const want = [['forest', 1], ['hill', 1], ['plain', 2]];
     for (const [t, n] of want) {

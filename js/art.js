@@ -995,9 +995,10 @@ export function drawCity(ctx, city, x, y, H, col) {
     miniDragon(ctx, perch[0], perch[1], s, col);
   }
   // Stufenanzeige
-  if (city.level > 1) {
-    for (let k = 0; k < city.level; k++) {
-      const px = x - (city.level - 1) * 5 * s + k * 10 * s, py = y + 29 * s;
+  const lv = city.stars ?? city.level;
+  if (lv > 1) {
+    for (let k = 0; k < lv; k++) {
+      const px = x - (lv - 1) * 5 * s + k * 10 * s, py = y + 29 * s;
       ctx.fillStyle = '#ffd34d';
       ctx.strokeStyle = '#6b4a00';
       ctx.lineWidth = 1;
@@ -2397,6 +2398,9 @@ export function drawFigure(ctx, type, col, level = 1) {
     case 'basilisk':
       drawBasilisk(ctx, col);
       break;
+    case 'trebuchet':
+      drawTrebuchet(ctx, col);
+      break;
   }
   ctx.restore();
 }
@@ -2592,6 +2596,276 @@ function drawBasilisk(ctx, col) {
   ctx.beginPath();
   ctx.arc(28, -28, 0.6, 0, Math.PI * 2);
   ctx.fill();
+}
+
+// Tribok: hohes Gestell, langer Wurfarm mit Schlinge, schwerer Gegengewichtskasten
+function drawTrebuchet(ctx, col) {
+  const wood = '#9a6634', woodD = '#5c3b1b', iron = '#4b4f55';
+  const beam = (x0, y0, x1, y1, w, c = wood) => {
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(20,14,10,0.85)';
+    ctx.lineWidth = w + 1;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+    ctx.strokeStyle = c;
+    ctx.lineWidth = w;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,220,170,0.3)';
+    ctx.lineWidth = w * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(x0 - w * 0.2, y0 - w * 0.2);
+    ctx.lineTo(x1 - w * 0.2, y1 - w * 0.2);
+    ctx.stroke();
+  };
+  // Hinteres Gestell (dunkler)
+  beam(-12, -4, -2, -46, 3, woodD);
+  beam(10, -4, 0, -46, 3, woodD);
+  // Schlitten
+  beam(-20, 0, 20, 0, 4.2);
+  beam(-17, -6, 17, -6, 2.6, shade(wood, -0.1));
+  for (const bx of [-14, -2, 10]) {
+    ctx.fillStyle = iron;
+    ctx.fillRect(bx, -8, 1.6, 10);
+  }
+  // Gegengewichtskasten an der kurzen Seite (rechts), hängt am Drehpunkt
+  const px = 1, py = -46;
+  const kx = 13, ky = -36;
+  beam(px, py, kx, ky, 3.2, woodD);
+  ctx.strokeStyle = '#3a3f45';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(kx - 3, ky + 1);
+  ctx.lineTo(kx - 5, ky + 8);
+  ctx.moveTo(kx + 3, ky + 1);
+  ctx.lineTo(kx + 5, ky + 8);
+  ctx.stroke();
+  ctx.fillStyle = grad(ctx, kx - 7, kx + 7, '#a97a45', '#4e3017');
+  ctx.beginPath();
+  ctx.moveTo(kx - 7, ky + 7);
+  ctx.lineTo(kx + 7, ky + 7);
+  ctx.lineTo(kx + 6, ky + 18);
+  ctx.lineTo(kx - 6, ky + 18);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.8);
+  // Steinfüllung und Eisenbänder
+  ctx.fillStyle = '#8d877e';
+  for (const [sx, sy, r] of [[-3.5, 8.5, 1.8], [0, 7.8, 2], [3.6, 8.6, 1.7]]) {
+    ctx.beginPath();
+    ctx.arc(kx + sx, ky + sy, r, Math.PI, 0);
+    ctx.fill();
+  }
+  ctx.fillStyle = iron;
+  ctx.fillRect(kx - 6.6, ky + 11, 13.2, 1.4);
+  ctx.fillRect(kx - 6.2, ky + 15.5, 12.4, 1.4);
+  ctx.fillStyle = '#c9ccd1';
+  for (const rx of [-5, 0, 5]) ctx.fillRect(kx + rx - 0.5, ky + 11.2, 1, 1);
+  // Langer Wurfarm nach hinten oben links, mit Schlinge und Stein
+  const ax = -30, ay = -70;
+  beam(px, py, ax, ay, 2.8);
+  ctx.strokeStyle = '#d8c79e';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.quadraticCurveTo(ax - 6, ay + 10, ax - 2, ay + 18);
+  ctx.moveTo(ax, ay);
+  ctx.quadraticCurveTo(ax + 3, ay + 10, ax + 1, ay + 18);
+  ctx.stroke();
+  const rg = ctx.createRadialGradient(ax - 1.6, ay + 17.6, 0.4, ax - 0.5, ay + 19, 3.4);
+  rg.addColorStop(0, '#d2cdc4');
+  rg.addColorStop(1, '#5f5a53');
+  ctx.fillStyle = rg;
+  ctx.beginPath();
+  ctx.arc(ax - 0.5, ay + 19.5, 3, 0, Math.PI * 2);
+  ctx.fill();
+  outline(ctx, 0.6);
+  // Vorderes Gestell
+  beam(-10, -4, 0, -46, 3.4);
+  beam(12, -4, 2, -46, 3.4);
+  beam(-6, -24, 8, -24, 2.4, shade(wood, -0.05));
+  // Drehachse
+  ctx.fillStyle = iron;
+  ctx.beginPath();
+  ctx.arc(px, py, 2.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#c9ccd1';
+  ctx.beginPath();
+  ctx.arc(px - 0.6, py - 0.6, 0.8, 0, Math.PI * 2);
+  ctx.fill();
+  // Wimpel in Spielerfarbe
+  beam(-16, -2, -16, -26, 1.2, woodD);
+  ctx.fillStyle = cloth(ctx, -16, -4, col);
+  ctx.beginPath();
+  ctx.moveTo(-16, -26);
+  ctx.lineTo(-5, -23);
+  ctx.lineTo(-16, -19);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.6);
+}
+
+// Burghof: Pflaster auf den 6 Burgfeldern um den Bergfried
+export function drawCourt(ctx, x, y, H, seed) {
+  const s = H / 40;
+  const g = ctx.createLinearGradient(x - H, y - H, x + H, y + H);
+  g.addColorStop(0, '#ddcfae');
+  g.addColorStop(1, '#a8946c');
+  ctx.fillStyle = g;
+  hexPath(ctx, x, y, H - 1);
+  ctx.fill();
+  ctx.save();
+  hexPath(ctx, x, y, H - 1);
+  ctx.clip();
+  // Pflastersteine in versetzten Reihen
+  ctx.strokeStyle = 'rgba(95,75,45,0.35)';
+  ctx.lineWidth = 0.8 * s;
+  const bw = 8 * s, bh = 5 * s;
+  for (let r = -6; r <= 6; r++) {
+    const yy = y + r * bh;
+    ctx.beginPath();
+    ctx.moveTo(x - H, yy);
+    ctx.lineTo(x + H, yy);
+    ctx.stroke();
+    for (let c = -6; c <= 6; c++) {
+      const xx = x + c * bw + (r & 1) * bw * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(xx, yy);
+      ctx.lineTo(xx, yy + bh);
+      ctx.stroke();
+    }
+  }
+  for (let k = 0; k < 7; k++) {
+    const px = x + (hash(seed * 13 + k) - 0.5) * H * 1.4, py = y + (hash(seed * 29 + k) - 0.5) * H * 1.4;
+    ctx.fillStyle = hash(seed + k * 3) > 0.5 ? 'rgba(255,250,235,0.25)' : 'rgba(70,55,30,0.18)';
+    ctx.fillRect(px, py, bw * 0.9, bh * 0.8);
+  }
+  ctx.restore();
+}
+
+// Große Burg über 7 Felder: Ringmauer mit sechs Ecktürmen, Torhaus und Bergfried in der Mitte
+export const CASTLE_BOX = { left: 3.1, right: 3.1, top: 4.4, bottom: 2.6 }; // in Hexgrößen
+export function drawCastle(ctx, city, x, y, H, col) {
+  const s = H / 40;
+  const R = 2.42 * H, wh = 15 * s, wt = 4 * s;
+  const P = [];
+  for (let k = 0; k < 6; k++) P.push([x + Math.cos((Math.PI / 3) * k) * R, y + Math.sin((Math.PI / 3) * k) * R]);
+  const seg = (k, front) => {
+    const [ax, ay] = P[k], [bx, by] = P[(k + 1) % 6];
+    // Mauerfläche
+    const g = ctx.createLinearGradient(0, Math.min(ay, by) - wh, 0, Math.max(ay, by));
+    g.addColorStop(0, front ? '#e9dfc8' : '#b9ab8e');
+    g.addColorStop(1, front ? '#a99a7c' : '#7f7360');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+    ctx.lineTo(bx, by - wh);
+    ctx.lineTo(ax, ay - wh);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(60,45,25,0.6)';
+    ctx.lineWidth = 0.9 * s;
+    ctx.stroke();
+    // Steinlagen
+    ctx.strokeStyle = 'rgba(80,65,45,0.28)';
+    ctx.lineWidth = 0.6 * s;
+    for (let f = 0.25; f < 1; f += 0.25) {
+      ctx.beginPath();
+      ctx.moveTo(ax, ay - wh * f);
+      ctx.lineTo(bx, by - wh * f);
+      ctx.stroke();
+    }
+    // Wehrgang oben
+    ctx.fillStyle = front ? '#d8ccb2' : '#cfc3a8';
+    ctx.beginPath();
+    ctx.moveTo(ax, ay - wh);
+    ctx.lineTo(bx, by - wh);
+    ctx.lineTo(bx, by - wh - wt);
+    ctx.lineTo(ax, ay - wh - wt);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(60,45,25,0.55)';
+    ctx.stroke();
+    // Zinnen auf der Außenkante
+    const n = 9;
+    ctx.fillStyle = '#efe6d2';
+    for (let i = 0; i < n; i++) {
+      const t0 = (i + 0.15) / n, t1 = (i + 0.6) / n;
+      const x0 = ax + (bx - ax) * t0, y0 = ay + (by - ay) * t0 - wh - (front ? 0 : wt);
+      const x1 = ax + (bx - ax) * t1, y1 = ay + (by - ay) * t1 - wh - (front ? 0 : wt);
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.lineTo(x1, y1 - 3.5 * s);
+      ctx.lineTo(x0, y0 - 3.5 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(60,45,25,0.5)';
+      ctx.lineWidth = 0.5 * s;
+      ctx.stroke();
+    }
+    // Schießscharten und Banner auf der Vorderseite
+    if (front) {
+      ctx.fillStyle = '#2b2118';
+      for (const t of [0.25, 0.75]) {
+        const mx = ax + (bx - ax) * t, my = ay + (by - ay) * t;
+        ctx.fillRect(mx - 0.7 * s, my - wh * 0.7, 1.4 * s, 4 * s);
+      }
+    }
+  };
+  const cornerTower = (k) => {
+    const [tx, ty] = P[k];
+    const top = turret(ctx, tx, ty + 2 * s, 7.5 * s, 30 * s, col, s);
+    flag(ctx, tx, top, 9 * s, col, s, k === 4 || k === 5);
+  };
+  // Rückseite: Mauern und Türme hinten
+  for (const k of [3, 4, 5]) seg(k, false);
+  cornerTower(4);
+  cornerTower(5);
+  cornerTower(3);
+  cornerTower(0);
+  // Bergfried in der Mitte (immer als prächtige Burg)
+  const keep = { ...city, level: 5, stars: city.level, buildings: ['farm', 'mine', 'lumber', 'barracks', 'market', ...(city.buildings || []).filter((b) => b === 'dragonlair')] };
+  drawCity(ctx, keep, x, y - 6 * s, H * 1.45, col);
+  // Vorderseite mit Torhaus
+  for (const k of [2, 0]) seg(k, true);
+  seg(1, true);
+  const gx = x, gy = y + R * Math.sin(Math.PI / 3);
+  // Torhaus: zwei Tortürme und ein Bogen mit Fallgitter
+  ctx.fillStyle = stone(ctx, gx - 14 * s, gx + 14 * s);
+  ctx.fillRect(gx - 12 * s, gy - wh - 8 * s, 24 * s, wh + 8 * s);
+  ctx.strokeStyle = 'rgba(60,45,25,0.6)';
+  ctx.lineWidth = 0.9 * s;
+  ctx.strokeRect(gx - 12 * s, gy - wh - 8 * s, 24 * s, wh + 8 * s);
+  merlons(ctx, gx - 12 * s, gx + 12 * s, gy - wh - 8 * s, s, 5);
+  ctx.fillStyle = '#2a1d12';
+  ctx.beginPath();
+  ctx.moveTo(gx - 6 * s, gy);
+  ctx.lineTo(gx - 6 * s, gy - 9 * s);
+  ctx.arc(gx, gy - 9 * s, 6 * s, Math.PI, 0);
+  ctx.lineTo(gx + 6 * s, gy);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(150,150,160,0.8)';
+  ctx.lineWidth = 0.7 * s;
+  for (let k = -4; k <= 4; k += 2) {
+    ctx.beginPath();
+    ctx.moveTo(gx + k * s, gy - 1 * s);
+    ctx.lineTo(gx + k * s, gy - 13 * s);
+    ctx.stroke();
+  }
+  for (let yy = gy - 3 * s; yy > gy - 13 * s; yy -= 3 * s) {
+    ctx.beginPath();
+    ctx.moveTo(gx - 5.5 * s, yy);
+    ctx.lineTo(gx + 5.5 * s, yy);
+    ctx.stroke();
+  }
+  banner(ctx, gx - 9 * s, gy - wh - 4 * s, 4 * s, 11 * s, col, s);
+  banner(ctx, gx + 9 * s, gy - wh - 4 * s, 4 * s, 11 * s, col, s);
+  cornerTower(2);
+  cornerTower(1);
 }
 
 // Schwarzer Troll: gebeugter Koloss mit Steinhammer, Stachel-Schulterpanzer, Kette und Kriegsbemalung

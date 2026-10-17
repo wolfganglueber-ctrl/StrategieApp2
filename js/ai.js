@@ -1,7 +1,7 @@
 // Computergegner. Bewertet für jede Einheit alle Züge (Bewegung + Angriff) und wählt den besten.
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
 import {
-  UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY,
+  UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY, structureLimit,
   trainCost, costTotal,
 } from './data.js';
 import {
@@ -243,8 +243,8 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
   const options = UNIT_ORDER.filter((k) => !canRecruit(state, pid, ci, k));
   if (!options.length) return null;
   if (!P.smart) {
-    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, catapult: 0.5, mage: 0.5, basilisk: 1, troll: 3, dragon: 3 };
-    if (ctx.mine.filter((u) => u.type === 'catapult').length >= Math.max(1, Math.floor(ctx.mine.filter((u) => !UNITS[u.type].structure).length / 4))) w.catapult = 0;
+    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, catapult: 0.5, trebuchet: 0.5, mage: 0.5, basilisk: 1, troll: 3, dragon: 3 };
+    if (ctx.mine.filter((u) => u.type === 'catapult' || u.type === 'trebuchet').length >= Math.max(1, Math.floor(ctx.mine.filter((u) => !UNITS[u.type].structure).length / 4))) w.catapult = w.trebuchet = 0;
     return weightedPick(options, (k) => w[k], rng);
   }
   const danger = ctx.cityDanger.get(city.idx) || 0;
@@ -253,14 +253,17 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
   const mineCount = (t) => ctx.mine.filter((u) => u.type === t).length;
   const melee = ctx.mine.filter((u) => UNITS[u.type].range === 1 && u.type !== 'tower').length;
   const ranged = ctx.mine.length - melee;
+  // Belagerungsgerät (Katapult, Tribok) höchstens jede vierte Einheit
+  const siegeFull = mineCount('catapult') + mineCount('trebuchet') >= Math.max(1, Math.floor(ctx.mine.filter((u) => !UNITS[u.type].structure).length / 4));
   const w = {
     warrior: 3,
     archer: 2.5 + (danger > 0 ? 1.5 : 0) + (ranged * 2 < melee ? 2 : 0),
     rider: neutralLeft > 0 ? 3.5 : 1.2,
     defender: danger > 4 ? 3 : 0.6,
     knight: 4,
-    // Katapulte nur als Beimischung (höchstens jede vierte Einheit)
-    catapult: mineCount('catapult') >= Math.max(1, Math.floor(ctx.mine.filter((u) => !UNITS[u.type].structure).length / 4)) ? 0 : 1.5 + Math.min(enemyDef, 4) * 0.4,
+    // Belagerungsgerät nur als Beimischung (siegeFull)
+    catapult: siegeFull ? 0 : 1.5 + Math.min(enemyDef, 4) * 0.4,
+    trebuchet: siegeFull ? 0 : 2,
     mage: ctx.mine.length >= 4 ? 3 : 0.5,
     basilisk: ctx.mine.length >= 5 ? 3 : 0.6,
     troll: 50,
@@ -397,7 +400,7 @@ function economyAction(state, ctx, P, pid, rng) {
       const ci = cityIdx(c);
       const tower = state.units.find((u) => u.type === 'tower' && u.owner === pid && ctx.territory[u.idx] === ci);
       if (tower && tower.level < 3 && canAfford(res, TOWER_UPGRADE[tower.level]) && rng() < 0.5) return { type: 'towerUp', unitId: tower.id };
-      if (towersOfCity(state, ci, ctx.territory) < TOWERS_PER_CITY && rng() < 0.5) {
+      if (towersOfCity(state, ci, ctx.territory) < structureLimit(c, 'tower') && rng() < 0.5) {
         let best = null;
         for (const j of ctx.geo.within(c.idx, 1)) {
           if (canBuildTower(state, pid, j, ctx.territory, 'tower', ci)) continue;
@@ -407,7 +410,7 @@ function economyAction(state, ctx, P, pid, rng) {
         if (best) return { type: 'tower', idx: best.j, city: c.idx };
       }
       // Steinwälle am Rand des Gebiets, dort wo der Gegner herkommt
-      if (P.upgrade >= 1 && towersOfCity(state, ci, ctx.territory, 'barrier') < 4 && rng() < 0.25) {
+      if (P.upgrade >= 1 && towersOfCity(state, ci, ctx.territory, 'barrier') < (c.castle ? 8 : 4) && rng() < 0.25) {
         let best = null;
         for (const j of ctx.geo.within(c.idx, 2)) {
           if (ctx.geo.dist(j, c.idx) < 2 || canBuildTower(state, pid, j, ctx.territory, 'barrier', ci)) continue;
@@ -422,7 +425,7 @@ function economyAction(state, ctx, P, pid, rng) {
   // Forschung, wenn Rohstoffe übrig sind
   if (P.upgrade > 0 && !saveTroll && rng() < P.upgrade) {
     const resSum = res.food + res.wood + res.ore;
-    const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'medic', 'enlight', 'blessing', 'guild'].filter((t) => t !== 'guild' || tradeRate(state, pid));
+    const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'rotation', 'smelting', 'stirrups', 'keep', 'tactics', 'granary', 'counterweight', 'battlements', 'medic', 'enlight', 'blessing', 'guild'].filter((t) => t !== 'guild' || tradeRate(state, pid));
     if (resSum > (wantArmy ? 70 : 35)) {
       for (const t of prio) {
         if (techAvailable(state, pid, t) && canAfford(res, TECHS[t].cost)) return { type: 'research', tech: t };

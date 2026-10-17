@@ -4,7 +4,7 @@ import { hexCenter, pixelToIndex, boardSize, SQRT3, getGeo } from './hex.js';
 import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS, PERKS } from './data.js';
 import { computeTerritory, statsOf, inAura } from './game.js';
 import {
-  hash, hexPath, mix, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, drawWallLink, FIG_BOX,
+  hash, hexPath, mix, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, drawWallLink, FIG_BOX, drawCastle, drawCourt, CASTLE_BOX,
 } from './art.js';
 
 export const HEX = 40;
@@ -375,6 +375,10 @@ export class Renderer {
     const T = s.terrain;
     const own = this.ownMap || this.territory();
     const cityAt = new Map(s.cities.map((c) => [c.idx, c]));
+    // Burghof: die 6 Felder um eine Burg werden gepflastert
+    const geo = getGeo(s.cols, s.rows);
+    const court = new Set();
+    for (const c of s.cities) if (c.castle) for (const j of geo.nb[c.idx]) court.add(j);
     const W = HEX * SQRT3;
     const r0 = Math.max(0, Math.floor((y0 - HEX * 1.5) / (HEX * 1.5)));
     const r1 = Math.min(s.rows - 1, Math.ceil((y1 + HEX * 3) / (HEX * 1.5)));
@@ -401,6 +405,7 @@ export class Renderer {
         const c = this.center(i);
         drawTileSide(ctx, t, c.x, c.y, HEX, DEPTH);
         drawTileTop(ctx, t, c.x, c.y, HEX, i);
+        if (court.has(i)) drawCourt(ctx, c.x, c.y, HEX, i);
         if (own[i] >= 0) {
           ctx.fillStyle = PLAYER_COLORS[own[i]].main;
           ctx.globalAlpha = 0.16;
@@ -449,6 +454,8 @@ export class Renderer {
       for (const i of row) {
         const c = this.center(i);
         const city = cityAt.get(i);
+        if (city?.castle) continue; // Burg wird als eigenes Bild über 7 Felder gezeichnet
+        if (court.has(i)) continue;
         if (city) {
           // Räumliche Tiefe: weicher Schatten nach rechts unten
           ctx.save();
@@ -538,6 +545,33 @@ export class Renderer {
     ctx.drawImage(raw, 0, 0);
     sp = { cv, k };
     this.sprites.set(key, sp);
+    return sp;
+  }
+
+  // Burg als Bild im Puffer (je Besitzer, Drachenhöhle und Zoomstufe)
+  castleSprite(c) {
+    const k = Math.max(0.5, Math.round(this.cam.z * this.dpr * 4) / 4);
+    if (this.castleScale !== k) {
+      this.castles = new Map();
+      this.castleScale = k;
+    }
+    const lair = c.buildings?.includes('dragonlair') ? 'd' : '';
+    const key = c.owner + lair + c.level;
+    let sp = this.castles.get(key);
+    if (sp) return sp;
+    const B = CASTLE_BOX;
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil((B.left + B.right) * HEX * k);
+    cv.height = Math.ceil((B.top + B.bottom) * HEX * k);
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(k, 0, 0, k, B.left * HEX * k, B.top * HEX * k);
+    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+    ctx.shadowBlur = 4 * k;
+    ctx.shadowOffsetX = 3 * k;
+    ctx.shadowOffsetY = 2 * k;
+    drawCastle(ctx, c, 0, 0, HEX, PLAYER_COLORS[c.owner] || NEUTRAL_COLOR);
+    sp = { cv };
+    this.castles.set(key, sp);
     return sp;
   }
 
@@ -785,8 +819,17 @@ export class Renderer {
         ctx.drawImage(ch.cv, cx * CHUNK, cy * CHUNK, ch.cv.width / ch.scale, ch.cv.height / ch.scale);
       }
     }
-    // Kartennebel
+    // Burgen über 7 Felder (vor dem Nebel, damit er sie verdeckt)
     const fog = this.overlay.fog;
+    for (const c of this.state.cities) {
+      if (!c.castle || (fog && !fog.explored?.[c.idx])) continue;
+      const p = this.center(c.idx);
+      if (p.x < vr.x0 - HEX * 4 || p.x > vr.x1 + HEX * 4 || p.y < vr.y0 - HEX * 3 || p.y > vr.y1 + HEX * 5) continue;
+      const sp = this.castleSprite(c);
+      const B = CASTLE_BOX;
+      ctx.drawImage(sp.cv, p.x - B.left * HEX, p.y - B.top * HEX, (B.left + B.right) * HEX, (B.top + B.bottom) * HEX);
+    }
+    // Kartennebel
     if (fog) this.drawFog(ctx, fog, vr);
 
     const o = this.overlay;

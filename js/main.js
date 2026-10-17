@@ -5,14 +5,14 @@ import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
   incomeOf, unitCount, upkeepTotal, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
-  perkOptions, canTrain, flankers, canBuild, mergeTargets, canSplit,
+  perkOptions, canTrain, flankers, canBuild, mergeTargets, canSplit, castleOf, defenseMult,
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
 import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
-  hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT,
+  hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
   RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, trainCost, moveCap, TRADE_RATE,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
@@ -401,7 +401,7 @@ function onTap(sx, sy) {
       act({ type: 'tower', unitType: type, idx: i, city }, {
         after: () => {
           const ci = S.cityAt[city];
-          if (again != null && towersOfCity(S, ci, undefined, 'barrier') < STRUCTURE_LIMIT.barrier && canAfford(S.players[S.current].res, UNITS.barrier.cost)) {
+          if (again != null && towersOfCity(S, ci, undefined, 'barrier') < structureLimit(S.cities[ci], 'barrier') && canAfford(S.players[S.current].res, UNITS.barrier.cost)) {
             clearSel();
             sel.placeTower = ci;
             sel.placeType = 'barrier';
@@ -847,7 +847,7 @@ function aiEventView(ev, f) {
 }
 
 // ---------------------------------------------------------------- Klänge
-const MOVE_SOUND = { rider: 'hooves', knight: 'hooves', catapult: 'wheels', troll: 'stomp', mage: 'glide', dragon: 'wings', basilisk: 'steps' };
+const MOVE_SOUND = { rider: 'hooves', knight: 'hooves', catapult: 'wheels', trebuchet: 'wheels', troll: 'stomp', mage: 'glide', dragon: 'wings', basilisk: 'steps' };
 
 // Stereo-Position eines Feldes: links/rechts am Bildschirm
 function panOf(idx) {
@@ -859,11 +859,11 @@ function panOf(idx) {
 function attackSounds(ev, hitSec, ranged, vol) {
   const { att, def } = ev;
   const pa = panOf(att.idx), pd = panOf(def.idx);
-  if (att.type === 'catapult') sound.play('catapult', { pan: pa, vol });
+  if (att.type === 'catapult' || att.type === 'trebuchet') sound.play('catapult', { pan: pa, vol });
   else if (ranged) sound.play('bow', { pan: pa, vol });
   else if (att.type === 'troll' && Math.random() < 0.6) sound.play('roar', { pan: pa, vol });
   else if (att.type === 'dragon') sound.play('breath', { pan: pa, vol });
-  const hitSound = att.type === 'catapult' ? 'boom' : ranged ? 'thunk' : att.type === 'troll' ? 'smash' : att.type === 'mage' || att.type === 'dragon' ? 'hit' : 'clash';
+  const hitSound = att.type === 'catapult' || att.type === 'trebuchet' ? 'boom' : ranged ? 'thunk' : att.type === 'troll' ? 'smash' : att.type === 'mage' || att.type === 'dragon' ? 'hit' : 'clash';
   sound.play(hitSound, { pan: pd, vol, delay: hitSec });
   if (ev.counter > 0 && !ranged) sound.play('clash', { pan: pa, vol: vol * 0.6, delay: hitSec + 0.2 });
   if (ev.killed || ev.splash?.some((h) => h.killed)) sound.play('fall', { pan: pd, vol, delay: hitSec + 0.15 });
@@ -1173,6 +1173,7 @@ function tileInfo(i) {
 let cityTab = 'units';
 const RECRUIT_BLOCK = {
   needs: (T) => `braucht ${BUILDINGS[T.needs].name}`,
+  tech: (T) => `braucht ${TECHS[T.tech].name}`,
   cap: () => 'Versorgung voll',
   limit: () => 'höchstens einer pro Stadt',
   unique: (T) => T.perRealm > 1 ? `höchstens ${T.perRealm} pro Reich` : 'nur einer pro Reich',
@@ -1287,7 +1288,7 @@ function renderCityPanel(panel, ci, occ) {
       },
         iconCanvas(k, p.id, 58),
         el('div', { class: 'name' }, T.name),
-        why === 'needs' ? el('span', { class: 'lock' }, '🔒 ', BUILDINGS[T.needs].name) : costEl(T.cost, p.res)));
+        why === 'needs' ? el('span', { class: 'lock' }, '🔒 ', BUILDINGS[T.needs].name) : why === 'tech' ? el('span', { class: 'lock' }, '🔬 ', TECHS[T.tech].name) : costEl(T.cost, p.res)));
     }
     panel.append(grid);
     const ready = hasBuilding(c, 'barracks') ? ' Dank Kaserne können sie sofort ziehen.' : '';
@@ -1298,7 +1299,7 @@ function renderCityPanel(panel, ci, occ) {
       ['tower', 'Auf einem Feld im Stadtgebiet, schießt auf Gegner. 3 Ausbaustufen. Belegt keinen Bauplatz.'],
       ['barrier', 'Sehr stabiles Wallstück, blockiert den Weg. Mehrere nebeneinander bilden eine Mauer, die Gegner umgehen müssen.'],
     ]) {
-      const nt = towersOfCity(S, ci, undefined, type), max = STRUCTURE_LIMIT[type];
+      const nt = towersOfCity(S, ci, undefined, type), max = structureLimit(S.cities[ci], type);
       list.append(el('div', { class: 'build-row tower-row' },
         el('span', { class: 'bicon' }, iconCanvas(type, p.id, 56, 1)),
         el('div', { class: 'binfo' }, el('b', {}, `${UNITS[type].name} (${nt}/${max})`), el('span', { class: 'muted' }, text)),
@@ -1363,7 +1364,7 @@ function renderPanelContent(panel) {
       el('span', { class: 'title' }, `${UNITS[sel.placeType].name} platzieren`),
       el('button', { class: 'btn small', onclick: () => { clearSel(); refresh(); } }, sel.placeType === 'barrier' ? 'Fertig' : 'Abbrechen')));
     panel.append(el('div', { class: 'note' }, sel.placeType === 'barrier'
-      ? `Tippe helle Felder im Stadtgebiet an – Wallstück für Wallstück (${towersOfCity(S, sel.placeTower, undefined, 'barrier')}/${STRUCTURE_LIMIT.barrier}).`
+      ? `Tippe helle Felder im Stadtgebiet an – Wallstück für Wallstück (${towersOfCity(S, sel.placeTower, undefined, 'barrier')}/${structureLimit(S.cities[sel.placeTower], 'barrier')}).`
       : 'Tippe ein helles Feld im Stadtgebiet an.'));
     return;
   }
@@ -1464,7 +1465,9 @@ function renderPanelContent(panel) {
       panel.append(el('div', { class: 'city-head' },
         el('span', { class: 'title' }, `${c.capital ? 'Hauptstadt' : 'Dorf'} (${owner})`),
         el('span', { class: 'yield' }, ...RES.map((k) => el('span', {}, icon(k), `+${y[k]}`)))));
-      panel.append(el('div', { class: 'note' }, 'Stelle eine Einheit darauf. Übersteht sie die gegnerische Runde, gehört die Stadt samt Gebiet dir.'));
+      panel.append(el('div', { class: 'note' }, c.castle
+        ? 'Burg: Erst wenn auf den 6 Burgfeldern kein Verteidiger mehr steht, kannst du den Bergfried betreten. Übersteht deine Einheit dort die gegnerische Runde, gehört die Burg dir.'
+        : 'Stelle eine Einheit darauf. Übersteht sie die gegnerische Runde, gehört die Stadt samt Gebiet dir.'));
     } else {
       const t = TERRAIN[S.terrain[i]];
       const terr = computeTerritory(S)[i];
@@ -1473,6 +1476,7 @@ function renderPanelContent(panel) {
         el('span', { class: 'title' }, t.name),
         el('span', { class: 'yield' }, icon(t.res), `${ownerTxt} 1 ${RES_INFO[t.res].name}`)));
       if (!t.pass) panel.append(el('div', { class: 'note' }, 'Unpassierbar.'));
+      if (castleOf(S, i)) panel.append(el('div', { class: 'note' }, `🏰 Burgfeld: Verteidiger bekommen ×${fmt(defenseMult(S, i))} Verteidigung.`));
     }
     return;
   }
@@ -1740,6 +1744,9 @@ function renderHelp() {
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
     <h3>Abreißen 🗑</h3>
     <p>Verbaut? Im Reiter „Gebäude“ hat jedes fertige Gebäude einen 🗑-Knopf: Nach einer Rückfrage wird es abgerissen, der Bauplatz ist wieder frei, und du bekommst die Hälfte der Baukosten zurück. Eigene Türme und Steinwälle reißt du ab, indem du sie antippst. Einheiten, die du nicht mehr brauchst, löst du mit „🗑 Entlassen“ auf – Rohstoffe gibt es dafür nicht zurück.</p>
+    <h3>Die Burg 🏰</h3>
+    <p>Jede Hauptstadt ist von Anfang an eine große <b>Burg</b> über 7 Felder: der Bergfried in der Mitte und 6 gepflasterte Burgfelder rundherum, umgeben von einer Ringmauer mit Ecktürmen und Torhaus. Auf allen 7 Feldern bekommen Verteidiger den Burgbonus (mindestens doppelte Verteidigung, mit der Forschung Burgausbau +25 %), du kannst also 7 Einheiten in der Burg aufstellen. In der Burg dürfen bis zu 6 Türme und 12 Steinwälle stehen – genug für einen ganzen Wallring 2 Felder vor dem Bergfried.</p>
+    <p>Eroberung: Der Bergfried lässt sich erst betreten, wenn auf den 6 Burgfeldern kein Verteidiger mehr steht. Die letzte Burg fällt also nur nach einer großen Schlacht.</p>
     <h3>Türme</h3>
     <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt). Türme bewegen sich nicht, greifen aber Gegner in Reichweite an und lassen sich in 3 Stufen ausbauen: tippe den Turm an. Hat ein Turm in deinem Zug noch nicht geschossen, feuert er beim Zugende automatisch auf das lohnendste Ziel (sichtbar animiert; in den Einstellungen abschaltbar).</p>
     <h3>Steinwälle 🧱</h3>
@@ -1756,7 +1763,7 @@ function renderHelp() {
     <p>Einheiten, die eine Runde nichts tun, heilen 2 Lebenspunkte – in der Nähe eigener Städte 4. Zauberer heilen sofort.</p>
     <h3>Einheiten</h3>
     <table><tr><th>Einheit</th><th>❤</th><th>Angr.</th><th>Vert.</th><th>Bew.</th><th>Reichw.</th></tr>${rows}</table>
-    <p>Ritter brauchen eine Kaserne, Katapulte eine Werkstatt, Zauberer einen Turm der Weisen, der Basilisk ein Basiliskennest, der Schwarze Troll eine Trollhöhle, der Drache eine Drachenhöhle. Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
+    <p>Ritter brauchen eine Kaserne, Katapulte und Triboks eine Werkstatt, Zauberer einen Turm der Weisen, der Basilisk ein Basiliskennest, der Schwarze Troll eine Trollhöhle, der Drache eine Drachenhöhle. Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
     <h3>Zugweite</h3>
     <p>Auch voll entwickelt ziehen Fußtruppen höchstens 4 Felder, Katapulte 3, Reiter und Ritter 6 – auch wenn sie über eigene Einheiten springen.</p>
     <h3>Ränge und Fähigkeiten ★</h3>
@@ -1768,6 +1775,8 @@ function renderHelp() {
     <p>Katapulte sind Belagerungswaffen: Gegen Städte, Türme und Wälle machen sie vollen Schaden, gegen Truppen im offenen Feld nur 60 %. Sie treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Gegenmittel: Reiter und Ritter, denn Katapulte haben keine Verteidigung und können nach einer Bewegung nicht schießen. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +10 % (höchstens +30 %): Einkesseln lohnt sich.</p>
     <h3>Schwarzer Troll</h3>
     <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel und braucht eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
+    <h3>Tribok</h3>
+    <p>Die schwerste Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einzelnes Feld mit vollem Schaden (kein Flächenschaden, kein Abschlag gegen Truppen), kann aber nicht auf direkte Nachbarn schießen und nicht nach einer Bewegung. Braucht eine Werkstatt und die Forschung <b>Gegengewicht</b> (nach Ballistik), höchstens 3 pro Reich, Unterhalt 1 Nahrung + 1 Holz. Ideal, um Burgverteidiger aus sicherer Entfernung zu treffen.</p>
     <h3>Basilisk 🦎</h3>
     <p>Eine Riesenechse mit tödlichem Blick: Sie greift aus 2 Feldern an, und wer getroffen wird und überlebt, <b>versteinert</b> – er setzt seinen nächsten Zug aus und schlägt bis dahin nicht zurück (grau dargestellt). Troll, Drache, Türme und Wälle sind immun. Ideal, um einen starken Gegner festzuhalten, während deine Armee angreift. Braucht ein Basiliskennest (Stadt ab Stufe 3), höchstens 2 pro Reich.</p>
     <h3>Drache 🐉</h3>

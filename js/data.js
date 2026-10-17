@@ -29,6 +29,7 @@ export const UNITS = {
   dragon: { name: 'Drache', cost: { food: 500, wood: 300, ore: 700 }, hp: 300, atk: 12, def: 10, move: 5, range: 1, supply: 3, regen: 6, perRealm: 1, flying: true, splash: 0.4, arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten, Feueratem trifft auch Gegner neben dem Ziel, heilt jede Runde 6 Leben. Ein Endgegner – extrem mächtig und extrem teuer; Schützen und Türme treffen ihn härter (+60 %). Bei Rang 3 und 5 je drei Fähigkeiten zur Wahl. Einer pro Reich.' },
   barrier: { name: 'Steinwall', cost: { wood: 6, ore: 14 }, hp: 50, atk: 0, def: 6, move: 0, range: 0, structure: true, desc: 'Sehr stabiles Wallstück, blockiert den Weg. Im Stadtgebiet setzen; benachbarte Wallstücke verbinden sich zu einer Mauer und lenken den Gegner.' },
   basilisk: { name: 'Basilisk', cost: { food: 18, wood: 8, ore: 16 }, hp: 28, atk: 3, def: 3, move: 3, range: 2, supply: 2, perRealm: 2, petrify: true, needs: 'nest', desc: 'Versteinernder Blick aus 2 Feldern: Das Ziel setzt seinen nächsten Zug aus und schlägt nicht zurück (Troll und Drache sind immun). Höchstens 2 pro Reich.' },
+  trebuchet: { name: 'Tribok', cost: { food: 4, wood: 24, ore: 16 }, hp: 14, atk: 5, def: 0, move: 1, range: 5, minRange: 2, noMoveAttack: true, perRealm: 3, upkeep: { food: 1, wood: 1 }, needs: 'workshop', tech: 'counterweight', desc: 'Schwere Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einziges Feld (kein Flächenschaden), aber nicht direkt daneben und nicht nach Bewegung. Braucht Werkstatt und die Forschung Gegengewicht, höchstens 3 pro Reich.' },
   catapult: { name: 'Katapult', cost: { wood: 12, ore: 10 }, hp: 12, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, splash: 0.5, fieldMult: 0.6, upkeep: { food: 1, wood: 1 }, needs: 'workshop', desc: 'Belagerungswaffe mit Reichweite 3, nicht nach Bewegung. Gegen Städte, Türme und Wälle voller Schaden, gegen Truppen im Feld nur 60 %. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Unterhalt 1 Nahrung + 1 Holz. Braucht eine Werkstatt.' },
 };
 // Wert einer Einheit für die KI (Rohstoffsumme / 2), danach Kaufpreise verdoppeln:
@@ -40,9 +41,9 @@ for (const k of Object.keys(UNITS)) {
   UNITS[k].value = t / 2;
   if (!UNITS[k].structure) for (const r of Object.keys(UNITS[k].cost)) UNITS[k].cost[r] *= UNIT_PRICE;
 }
-export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult', 'mage', 'basilisk', 'troll', 'dragon'];
+export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult', 'trebuchet', 'mage', 'basilisk', 'troll', 'dragon'];
 // Höchste Zugweite bei voller Entwicklung (gilt auch für Sprünge über eigene Einheiten)
-export const MOVE_CAP = { catapult: 3, rider: 6, knight: 6, dragon: 6 };
+export const MOVE_CAP = { catapult: 3, trebuchet: 2, rider: 6, knight: 6, dragon: 6 };
 export const MOVE_CAP_DEFAULT = 4;
 export function moveCap(type) {
   return MOVE_CAP[type] ?? MOVE_CAP_DEFAULT;
@@ -80,6 +81,7 @@ export const PERK_CHOICES = {
   defender: [['shieldwall', 'hunter'], ['tough', 'siege']],
   knight: [['charge', 'shieldwall'], ['siege', 'tough']],
   catapult: [['fire', 'siege'], ['tough', 'swift']],
+  trebuchet: [['siege', 'hunter'], ['tough', 'swift']],
   mage: [['greatheal', 'wideaura'], ['tough', 'swift']],
   troll: [['rampage', 'tough'], ['siege', 'charge']],
   basilisk: [['hunter', 'tough'], ['swift', 'siege']],
@@ -113,6 +115,13 @@ export const TOWER_UPGRADE = [null, { wood: 6, ore: 8 }, { wood: 8, ore: 12 }];
 export const TOWERS_PER_CITY = 2;
 // Bauwerke im Stadtgebiet: Höchstzahl pro Stadt
 export const STRUCTURE_LIMIT = { tower: TOWERS_PER_CITY, barrier: 6 };
+// Die Burg (Hauptstadt, 7 Felder) trägt mehr Türme und einen ganzen Wallring
+export const CASTLE_LIMIT = { tower: 6, barrier: 12 };
+export function structureLimit(city, type) {
+  return (city?.castle ? CASTLE_LIMIT : STRUCTURE_LIMIT)[type];
+}
+// Verteidigungsbonus auf allen 7 Burgfeldern (mindestens)
+export const CASTLE_DEF = 2;
 
 // Entwicklungsbaum: einmalig erforschen, gilt für das ganze Reich
 export const TECH_BRANCHES = [['mil', 'Militär'], ['eco', 'Wirtschaft'], ['def', 'Verteidigung']];
@@ -123,16 +132,24 @@ export const TECHS = {
   armor: { branch: 'mil', name: 'Plattenrüstung', icon: '🥋', cost: { food: 16, ore: 36 }, req: ['smith'], mod: { all: { def: 0.5 } }, desc: 'Alle Einheiten +0,5 Verteidigung' },
   oxcart: { branch: 'mil', name: 'Ochsenkarren', icon: '🐂', cost: { food: 12, wood: 24 }, req: [], mod: { catapult: { move: 1 } }, desc: 'Katapulte +1 Bewegung' },
   ballistics: { branch: 'mil', name: 'Ballistik', icon: '🎯', cost: { wood: 32, ore: 28 }, req: ['oxcart'], mod: { catapult: { range: 1, atk: 1 } }, desc: 'Katapulte +1 Reichweite, +1 Angriff' },
+  counterweight: { branch: 'mil', name: 'Gegengewicht', icon: '🪨', cost: { wood: 36, ore: 30 }, req: ['ballistics'], desc: 'Ermöglicht den Tribok (Werkstatt): präziser Fernschuss bis 5 Felder' },
+  stirrups: { branch: 'mil', name: 'Steigbügel', icon: '🏇', cost: { food: 20, ore: 24 }, req: ['horse'], mod: { knight: { atk: 1 }, rider: { atk: 0.5 } }, desc: 'Ritter +1 Angriff, Reiter +0,5 Angriff' },
+  tactics: { branch: 'mil', name: 'Schlachtordnung', icon: '🚩', cost: { food: 24, wood: 12, ore: 20 }, req: ['smith'], desc: 'Flankenbonus +15 % statt +10 % je Nachbar' },
   roads: { branch: 'mil', name: 'Straßenbau', icon: '🛤️', cost: { food: 24, wood: 24, ore: 12 }, req: ['oxcart'], mod: { foot: { move: 1 } }, desc: 'Krieger, Schützen, Wächter +1 Bewegung' },
   plough: { branch: 'eco', name: 'Pflug', icon: '🌱', cost: { wood: 16 }, req: [], desc: 'Bauernhöfe +2 Nahrung' },
   saw: { branch: 'eco', name: 'Sägewerk', icon: '🪓', cost: { food: 16, ore: 8 }, req: [], desc: 'Holzfäller +2 Holz' },
   mining: { branch: 'eco', name: 'Bergbau', icon: '⛏️', cost: { food: 16, wood: 16 }, req: [], desc: 'Minen +2 Erz' },
   guild: { branch: 'eco', name: 'Handelsgilde', icon: '💰', cost: { food: 45, wood: 40, ore: 30 }, req: ['plough'], desc: 'Handel 3:2 statt 2:1 (braucht einen Markt)' },
+  rotation: { branch: 'eco', name: 'Dreifelderwirtschaft', icon: '🌾', cost: { wood: 20, ore: 10 }, req: ['plough'], desc: 'Bauernhöfe weitere +2 Nahrung' },
+  smelting: { branch: 'eco', name: 'Erzschmelze', icon: '🔥', cost: { food: 20, wood: 20 }, req: ['mining'], desc: 'Minen weitere +2 Erz' },
+  granary: { branch: 'eco', name: 'Kornspeicher', icon: '🏚️', cost: { food: 10, wood: 26, ore: 10 }, req: ['plough'], desc: 'Unterhalt der Armee: ein Viertel weniger Nahrung' },
   masonry: { branch: 'eco', name: 'Baukunst', icon: '🏛️', cost: { wood: 24, ore: 16 }, req: ['saw', 'mining'], desc: 'Stadtausbau 25 % günstiger' },
   medic: { branch: 'def', name: 'Heilkunde', icon: '🌿', cost: { food: 28 }, req: [], desc: 'Einheiten heilen 2 mehr' },
   stonework: { branch: 'def', name: 'Steinmetz', icon: '🧱', cost: { wood: 12, ore: 20 }, req: [], desc: 'Türme +6 Leben, Mauern stärker (×2,6)' },
   enlight: { branch: 'def', name: 'Erleuchtung', icon: '✨', cost: { food: 20, ore: 18 }, req: ['medic'], desc: 'Schutzaura der Zauberer reicht 2 Felder weit' },
   blessing: { branch: 'def', name: 'Segen', icon: '🙏', cost: { food: 24, wood: 14 }, req: ['medic'], desc: 'Zauberer heilen 2 mehr und beenden die Erschütterung' },
+  battlements: { branch: 'def', name: 'Wehrgang', icon: '🏯', cost: { wood: 20, ore: 30 }, req: ['stonework'], desc: 'Steinwälle +25 Leben' },
+  keep: { branch: 'def', name: 'Burgausbau', icon: '🏰', cost: { food: 20, wood: 24, ore: 30 }, req: ['stonework'], desc: 'Alle 7 Burgfelder: Verteidigung +25 %' },
   towers2: { branch: 'def', name: 'Turmbaukunst', icon: '🗼', cost: { wood: 20, ore: 28 }, req: ['stonework'], mod: { tower: { range: 1, atk: 1 } }, desc: 'Türme +1 Reichweite, +1 Angriff' },
 };
 export const TECH_ORDER = Object.keys(TECHS);

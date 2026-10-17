@@ -3,7 +3,7 @@ import { getGeo } from './hex.js';
 import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
-  TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
+  TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
   PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, trainCost, REGIMENT_MAX, REGIMENT_TYPES,
 } from './data.js';
 import { generateMap } from './mapgen.js';
@@ -50,7 +50,7 @@ export function createGame(config) {
   }
   // Hauptstädte zuweisen (Reihenfolge der Spieler gemischt durch Seed)
   const caps = state.cities.filter((c) => c.capital);
-  caps.forEach((c, i) => { c.owner = i; c.level = 2; });
+  caps.forEach((c, i) => { c.owner = i; c.level = 2; c.castle = true; });
   for (const c of state.cities) c.buildings = [];
   state.cities.forEach((c, i) => (state.cityAt[c.idx] = i));
   // Startkrieger neben der Hauptstadt
@@ -91,6 +91,7 @@ export function statsOf(state, u) {
     Object.assign(st, TOWER_LEVELS[u.level || 1]);
     if (hasTech(state, u.owner, 'stonework')) st.hp += 6;
   }
+  if (u.type === 'barrier' && hasTech(state, u.owner, 'battlements')) st.hp += 25;
   const techs = state.players[u.owner]?.tech;
   if (techs) {
     for (const t of techs) {
@@ -137,7 +138,7 @@ export function attackMult(state, att, def, fromIdx = att.idx) {
   if (hasPerk(att, 'hunter') && (CAVALRY.includes(def.type) || def.type === 'troll' || def.type === 'dragon')) m += 0.4;
   // Drachen sind anfällig gegen Pfeile
   if (UNITS[def.type].arrowWeak && (att.type === 'archer' || att.type === 'tower')) m += 0.6;
-  if (!isStructure(att)) m += FLANK_BONUS * flankers(state, att, def);
+  if (!isStructure(att)) m += (hasTech(state, att.owner, 'tactics') ? 0.15 : FLANK_BONUS) * flankers(state, att, def);
   // Belagerungswaffen: gegen Truppen im offenen Feld schwächer
   if (UNITS[att.type].fieldMult && !isStructure(def) && !cityOn(state, def.idx)) m *= UNITS[att.type].fieldMult;
   return m;
@@ -233,7 +234,7 @@ export function canBuildTower(state, pid, idx, territory = computeTerritory(stat
   if (territory[idx] >= 0 && state.cities[territory[idx]].owner !== pid) return 'territory';
   if (state.cityAt[idx] >= 0 || !TERRAIN[state.terrain[idx]].pass) return 'tile';
   if (state.units.some((u) => u.idx === idx)) return 'occupied';
-  if (towersOfCity(state, ci, territory, type) >= STRUCTURE_LIMIT[type]) return 'limit';
+  if (towersOfCity(state, ci, territory, type) >= structureLimit(c, type)) return 'limit';
   if (!canAfford(state.players[pid].res, UNITS[type].cost)) return 'cost';
   return null;
 }
@@ -283,10 +284,31 @@ export function unitRange(state, u) {
   return statsOf(state, u).range;
 }
 
-// Nur Städte geben Verteidigungsbonus, Gelände nicht
+// Nur Städte (und alle 7 Burgfelder) geben Verteidigungsbonus, Gelände nicht
 export function defenseMult(state, idx) {
+  const c = cityOn(state, idx) || castleOf(state, idx);
+  if (!c) return 1;
+  const d = cityDefense(c, c.owner >= 0 && hasTech(state, c.owner, 'stonework'));
+  if (!c.castle) return d;
+  return Math.max(d, CASTLE_DEF) * (c.owner >= 0 && hasTech(state, c.owner, 'keep') ? 1.25 : 1);
+}
+
+// Burg: die Hauptstadt belegt ihr Feld und die 6 Nachbarfelder
+export function castleOf(state, idx) {
   const c = cityOn(state, idx);
-  return c ? cityDefense(c, c.owner >= 0 && hasTech(state, c.owner, 'stonework')) : 1;
+  if (c) return c.castle ? c : null;
+  for (const j of geoOf(state).nb[idx]) {
+    const d = cityOn(state, j);
+    if (d?.castle) return d;
+  }
+  return null;
+}
+
+// Der Burgfried lässt sich erst betreten, wenn kein Verteidiger mehr auf den Burgfeldern steht
+export function castleBlocked(state, idx, pid, occ = buildOcc(state)) {
+  const c = cityOn(state, idx);
+  if (!c?.castle || c.owner < 0 || c.owner === pid) return false;
+  return geoOf(state).nb[idx].some((j) => occ[j] && occ[j].owner === c.owner);
 }
 
 // Erreichbare Zielfelder: Map ziel -> vorgänger (für Pfade).
@@ -311,6 +333,7 @@ export function getMoves(state, u, occ = buildOcc(state), moveOverride) {
         if (j === u.idx || !TERRAIN[state.terrain[j]].pass) continue;
         const o = occ[j];
         if (o && o.owner !== u.owner) continue;
+        if (!o && castleBlocked(state, j, u.owner, occ)) continue;
         // Wald kostet 1 Bewegung mehr; ein erster Schritt ist aber immer möglich
         let ns = s + (o ? 0 : state.terrain[j] === 'forest' ? 2 : 1);
         if (ns > maxSteps && s === 0 && !o) ns = maxSteps;
@@ -346,7 +369,7 @@ function flyMoves(state, u, occ, maxSteps) {
         if (parent.has(j) || (occ[j] && occ[j].owner !== u.owner)) continue;
         parent.set(j, i);
         next.push(j);
-        if (!occ[j] && TERRAIN[state.terrain[j]].pass) res.set(j, i);
+        if (!occ[j] && TERRAIN[state.terrain[j]].pass && !castleBlocked(state, j, u.owner, occ)) res.set(j, i);
       }
     }
     layer = next;
@@ -366,10 +389,11 @@ export function pathTo(moves, from, to) {
 export function getTargets(state, u, fromIdx, occ = buildOcc(state)) {
   const geo = geoOf(state);
   const rng = unitRange(state, u);
+  const minR = UNITS[u.type].minRange || 1;
   const res = [];
   for (const j of geo.within(fromIdx, rng)) {
     const o = occ[j];
-    if (o && o.owner !== u.owner && j !== fromIdx) res.push(o);
+    if (o && o.owner !== u.owner && j !== fromIdx && (minR <= 1 || geo.dist(fromIdx, j) >= minR)) res.push(o);
   }
   return res;
 }
@@ -430,6 +454,7 @@ export function upkeepTotal(state, pid) {
     const c = upkeepOf(u.type);
     for (const k in c) up[k] += c[k] * (u.count || 1);
   }
+  if (hasTech(state, pid, 'granary')) up.food = Math.ceil(up.food * 0.75);
   return up;
 }
 
@@ -450,9 +475,9 @@ export function cityYield(state, ci, territory = computeTerritory(state)) {
     if (t === 'hill' || t === 'mountain') rocks++;
   }
   const tech = (t) => c.owner >= 0 && hasTech(state, c.owner, t);
-  if (hasBuilding(c, 'farm')) inc.food += 3 + (tech('plough') ? 2 : 0);
+  if (hasBuilding(c, 'farm')) inc.food += 3 + (tech('plough') ? 2 : 0) + (tech('rotation') ? 2 : 0);
   if (hasBuilding(c, 'lumber')) inc.wood += 1 + forests + (tech('saw') ? 2 : 0);
-  if (hasBuilding(c, 'mine')) inc.ore += 2 + rocks * 2 + (tech('mining') ? 2 : 0);
+  if (hasBuilding(c, 'mine')) inc.ore += 2 + rocks * 2 + (tech('mining') ? 2 : 0) + (tech('smelting') ? 2 : 0);
   return inc;
 }
 
@@ -496,6 +521,7 @@ export function canRecruit(state, pid, ci, type) {
   const c = state.cities[ci];
   const T = UNITS[type];
   if (!T || !c || c.owner !== pid) return 'invalid';
+  if (T.tech && !hasTech(state, pid, T.tech)) return 'tech';
   if (T.needs && !hasBuilding(c, T.needs)) return 'needs';
   if (T.perRealm && state.units.filter((u) => u.owner === pid && u.type === type).length >= T.perRealm) return 'unique';
   if (T.healer && state.units.filter((u) => u.owner === pid && u.type === type).length >= cityCount(state, pid)) return 'limit';
@@ -722,7 +748,7 @@ export function applyAction(state, a) {
         state.units = state.units.filter((x) => x !== t);
         state.stats.kills[pid]++;
         state.stats.losses[t.owner] += t.count || 1;
-        if (UNITS[u.type].range === 1 && !isStructure(u)) {
+        if (UNITS[u.type].range === 1 && !isStructure(u) && !castleBlocked(state, t.idx, pid)) {
           e.advance = t.idx;
           u.idx = t.idx;
         }
