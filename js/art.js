@@ -174,10 +174,24 @@ function shadowEllipse(ctx, x, y, rx, ry, a = 0.28) {
   ctx.fill();
 }
 
+// Schlagschatten: Licht von links oben, Schatten fällt nach rechts unten
+function castShadow(ctx, x, y, w, h, a = 0.26) {
+  const g = ctx.createRadialGradient(x, y, 0, x + h * 0.3, y + h * 0.1, h * 0.6);
+  g.addColorStop(0, `rgba(10,15,5,${a})`);
+  g.addColorStop(1, 'rgba(10,15,5,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(x + h * 0.28, y + h * 0.08, h * 0.5, w, 0.32, 0, Math.PI * 2);
+  ctx.fill();
+  shadowEllipse(ctx, x + w * 0.2, y + w * 0.1, w * 0.9, w * 0.35, a * 0.9);
+}
+
 function conifer(ctx, x, y, s) {
-  shadowEllipse(ctx, x + 2 * s, y + 1 * s, 7 * s, 2.6 * s);
+  castShadow(ctx, x, y, 6 * s, 22 * s);
   ctx.fillStyle = '#5a3a1e';
   ctx.fillRect(x - 1.3 * s, y - 4 * s, 2.6 * s, 5 * s);
+  ctx.fillStyle = '#2e1c0d';
+  ctx.fillRect(x + 0.2 * s, y - 4 * s, 1.1 * s, 5 * s);
   for (let l = 0; l < 3; l++) {
     const by = y - 3 * s - l * 5.5 * s, w = (8 - l * 2) * s, h = 9 * s;
     ctx.fillStyle = '#1f5e2a';
@@ -194,13 +208,31 @@ function conifer(ctx, x, y, s) {
     ctx.lineTo(x - w * 0.05, by);
     ctx.closePath();
     ctx.fill();
+    // Unterkante jeder Lage wirft Schatten auf die nächste
+    ctx.fillStyle = 'rgba(5,30,10,0.45)';
+    ctx.beginPath();
+    ctx.moveTo(x - w, by);
+    ctx.lineTo(x + w, by);
+    ctx.lineTo(x + w * 0.7, by + 1.4 * s);
+    ctx.lineTo(x - w * 0.7, by + 1.4 * s);
+    ctx.closePath();
+    ctx.fill();
   }
+  ctx.fillStyle = 'rgba(210,255,170,0.35)';
+  ctx.beginPath();
+  ctx.moveTo(x - 0.3 * s, y - 19.5 * s);
+  ctx.lineTo(x - 2.2 * s, y - 15 * s);
+  ctx.lineTo(x - 0.6 * s, y - 15.5 * s);
+  ctx.closePath();
+  ctx.fill();
 }
 
 function leafTree(ctx, x, y, s) {
-  shadowEllipse(ctx, x + 2 * s, y + 1 * s, 8 * s, 3 * s);
+  castShadow(ctx, x, y, 7 * s, 22 * s);
   ctx.fillStyle = '#5a3a1e';
   ctx.fillRect(x - 1.5 * s, y - 7 * s, 3 * s, 8 * s);
+  ctx.fillStyle = '#2e1c0d';
+  ctx.fillRect(x + 0.3 * s, y - 7 * s, 1.2 * s, 8 * s);
   const g = ctx.createRadialGradient(x - 3 * s, y - 15 * s, 1, x, y - 12 * s, 9 * s);
   g.addColorStop(0, '#8fd45e');
   g.addColorStop(0.6, '#3f9a3a');
@@ -211,6 +243,13 @@ function leafTree(ctx, x, y, s) {
   ctx.arc(x + 3.5 * s, y - 11 * s, 5.5 * s, 0, Math.PI * 2);
   ctx.arc(x, y - 16 * s, 6.5 * s, 0, Math.PI * 2);
   ctx.fill();
+  // Blattbüschel: Lichtflecken oben links, Schattentaschen unten rechts
+  for (const [dx, dy, r, c] of [[-4, -17, 2.2, 'rgba(200,245,140,0.45)'], [-1, -20, 1.6, 'rgba(200,245,140,0.4)'], [-6, -12, 1.5, 'rgba(200,245,140,0.3)'], [4, -9, 2.6, 'rgba(10,45,15,0.4)'], [6, -13, 1.8, 'rgba(10,45,15,0.35)'], [1, -11, 1.6, 'rgba(10,45,15,0.3)']]) {
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.arc(x + dx * s, y + dy * s, r * s, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 export function drawForest(ctx, x, y, H, seed) {
@@ -240,6 +279,25 @@ export function drawHill(ctx, x, y, H, seed) {
     ctx.ellipse(cx, cy, rx * s, ry * s, 0, Math.PI, 0);
     ctx.closePath();
     ctx.fill();
+    // Schattenflanke rechts und Grasbüschel
+    ctx.fillStyle = 'rgba(60,40,10,0.28)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx * s, ry * s, 0, -Math.PI * 0.42, 0);
+    ctx.lineTo(cx + rx * 0.25 * s, cy);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(95,110,40,0.7)';
+    ctx.lineWidth = 0.9 * s;
+    for (let k = 0; k < 4; k++) {
+      const gx = cx + (hash(seed * 13 + dx + k) - 0.5) * rx * 1.3 * s, gy = cy - hash(seed * 17 + dy + k) * ry * 0.6 * s;
+      ctx.beginPath();
+      ctx.moveTo(gx - 1.2 * s, gy - 1.6 * s);
+      ctx.lineTo(gx, gy);
+      ctx.lineTo(gx + 0.2 * s, gy - 2.2 * s);
+      ctx.moveTo(gx, gy);
+      ctx.lineTo(gx + 1.4 * s, gy - 1.5 * s);
+      ctx.stroke();
+    }
   }
   // Erzbrocken
   for (let k = 0; k < 3; k++) {
@@ -260,6 +318,15 @@ export function drawHill(ctx, x, y, H, seed) {
 export function drawMountain(ctx, x, y, H, seed) {
   const s = H / 40;
   const peak = (px, py, w, h) => {
+    // Langer Schlagschatten nach rechts unten
+    ctx.fillStyle = 'rgba(15,12,25,0.22)';
+    ctx.beginPath();
+    ctx.moveTo(px - w * 0.3, py);
+    ctx.lineTo(px + w * 1.5, py + w * 0.2);
+    ctx.lineTo(px + w * 0.9, py + w * 0.42);
+    ctx.lineTo(px - w * 0.5, py + w * 0.25);
+    ctx.closePath();
+    ctx.fill();
     shadowEllipse(ctx, px + w * 0.25, py, w * 1.05, w * 0.28, 0.3);
     // Licht- und Schattenseite
     ctx.fillStyle = '#a8a297';
@@ -276,6 +343,41 @@ export function drawMountain(ctx, x, y, H, seed) {
     ctx.lineTo(px + w * 0.1, py);
     ctx.closePath();
     ctx.fill();
+    // Gesteinsschichten und Felskanten
+    ctx.strokeStyle = 'rgba(40,36,32,0.35)';
+    ctx.lineWidth = 0.8;
+    for (let k = 1; k <= 3; k++) {
+      const f = 0.25 + k * 0.17;
+      ctx.beginPath();
+      ctx.moveTo(px - w * (1 - f) * 0.92, py - h * f);
+      ctx.lineTo(px - w * (1 - f) * 0.4, py - h * f + 1.5 * s);
+      ctx.lineTo(px - w * 0.05, py - h * f - 0.5 * s);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(px + w * 0.1, py - h * f + 1 * s);
+      ctx.lineTo(px + w * (1 - f) * 0.85, py - h * f + 2.5 * s);
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,250,235,0.18)';
+    ctx.beginPath();
+    ctx.moveTo(px - w * 0.08, py - h);
+    ctx.lineTo(px - w * 0.6, py - h * 0.35);
+    ctx.lineTo(px - w * 0.45, py - h * 0.33);
+    ctx.closePath();
+    ctx.fill();
+    // Geröll am Fuß
+    for (let k = 0; k < 3; k++) {
+      const bx = px + (hash(seed * 19 + k + w) - 0.5) * w * 1.4, by = py - 0.5 * s;
+      ctx.fillStyle = '#7d776d';
+      ctx.beginPath();
+      ctx.ellipse(bx, by, 2.4 * s, 1.5 * s, 0, Math.PI, 0);
+      ctx.fill();
+      ctx.fillStyle = '#4f4a43';
+      ctx.beginPath();
+      ctx.ellipse(bx + 0.8 * s, by, 1.4 * s, 1.1 * s, 0, Math.PI * 1.5, 0);
+      ctx.lineTo(bx + 0.8 * s, by);
+      ctx.fill();
+    }
     // Grat
     ctx.strokeStyle = 'rgba(40,36,32,0.5)';
     ctx.lineWidth = 1;
@@ -2292,8 +2394,204 @@ export function drawFigure(ctx, type, col, level = 1) {
     case 'dragon':
       drawDragon(ctx, col);
       break;
+    case 'basilisk':
+      drawBasilisk(ctx, col);
+      break;
   }
   ctx.restore();
+}
+
+// Basilisk: geschuppte Riesenechse mit Kamm in Spielerfarbe und glühendem Versteinerungsblick
+function drawBasilisk(ctx, col) {
+  const sc = '#3f6b2a', scD = '#1b3010', scL = '#8fbf5a', belly = '#d9cf8a';
+  const body = (x0, y0, r) => {
+    const g = ctx.createRadialGradient(x0 - r * 0.4, y0 - r * 0.5, r * 0.1, x0, y0, r);
+    g.addColorStop(0, scL);
+    g.addColorStop(0.5, sc);
+    g.addColorStop(1, scD);
+    return g;
+  };
+  ctx.lineCap = 'round';
+  // Schwanz in S-Kurve nach hinten links
+  ctx.strokeStyle = scD;
+  ctx.lineWidth = 7.5;
+  ctx.beginPath();
+  ctx.moveTo(-4, 2);
+  ctx.bezierCurveTo(-16, 6, -24, 0, -22, -8);
+  ctx.bezierCurveTo(-21, -14, -28, -17, -33, -12);
+  ctx.stroke();
+  ctx.strokeStyle = sc;
+  ctx.lineWidth = 5.5;
+  ctx.stroke();
+  ctx.strokeStyle = scL;
+  ctx.lineWidth = 1.4;
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath();
+  ctx.moveTo(-6, 0);
+  ctx.bezierCurveTo(-16, 3, -22, -2, -21, -9);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  // Schwanzstachel
+  ctx.fillStyle = col.main;
+  ctx.beginPath();
+  ctx.moveTo(-31, -14);
+  ctx.lineTo(-37, -17);
+  ctx.lineTo(-34, -10);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.7);
+  // Hinterbeine
+  const leg = (x, y, dx, far) => {
+    ctx.strokeStyle = far ? scD : sc;
+    ctx.lineWidth = 4.2;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(x + dx, y + 2, x + dx * 0.6, y + 8);
+    ctx.stroke();
+    ctx.strokeStyle = '#efe6c8';
+    ctx.lineWidth = 0.9;
+    for (const k of [-1.6, 0, 1.6]) {
+      ctx.beginPath();
+      ctx.moveTo(x + dx * 0.6 + k, y + 8);
+      ctx.lineTo(x + dx * 0.6 + k * 1.6 + 1, y + 10);
+      ctx.stroke();
+    }
+  };
+  leg(-9, -2, -4, true);
+  leg(7, -4, 4, true);
+  // Rumpf
+  ctx.fillStyle = body(-1, -6, 14);
+  ctx.beginPath();
+  ctx.ellipse(-1, -5, 13, 8, -0.15, 0, Math.PI * 2);
+  ctx.fill();
+  outline(ctx, 0.9);
+  // Bauchschuppen
+  ctx.fillStyle = belly;
+  ctx.beginPath();
+  ctx.ellipse(1, 0, 9, 3, -0.1, 0, Math.PI);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(90,70,30,0.55)';
+  ctx.lineWidth = 0.6;
+  for (let i = -6; i <= 8; i += 2.4) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0.5);
+    ctx.lineTo(i + 0.6, 2.8);
+    ctx.stroke();
+  }
+  // Schuppenmuster
+  ctx.strokeStyle = 'rgba(20,40,10,0.55)';
+  ctx.lineWidth = 0.6;
+  for (let r = 0; r < 3; r++) {
+    for (let i = 0; i < 6; i++) {
+      const sx = -10 + i * 4 + (r % 2) * 2, sy = -10 + r * 3;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 1.6, 0.1 * Math.PI, 0.9 * Math.PI);
+      ctx.stroke();
+    }
+  }
+  shine(ctx, -5, -10, 5, 2, 0.25);
+  // Rückenkamm in Spielerfarbe
+  ctx.fillStyle = cloth(ctx, -12, 8, col);
+  ctx.beginPath();
+  ctx.moveTo(-12, -9);
+  for (let i = 0; i < 5; i++) {
+    const x = -11 + i * 4.4;
+    ctx.lineTo(x + 1.2, -18 - (i === 2 ? 3 : 0) + Math.abs(i - 2) * 1.2);
+    ctx.lineTo(x + 3.2, -12.5);
+  }
+  ctx.lineTo(10, -10);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.7);
+  // Vorderbeine
+  leg(-6, 0, -3, false);
+  leg(8, -1, 3, false);
+  // Hals und Kopf, erhoben nach rechts
+  ctx.fillStyle = body(12, -16, 9);
+  ctx.beginPath();
+  ctx.moveTo(6, -10);
+  ctx.quadraticCurveTo(12, -14, 13, -24);
+  ctx.lineTo(19, -24);
+  ctx.quadraticCurveTo(18, -12, 11, -3);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.8);
+  ctx.fillStyle = body(17, -28, 8);
+  ctx.beginPath();
+  ctx.moveTo(10, -26);
+  ctx.quadraticCurveTo(13, -33, 20, -32);
+  ctx.quadraticCurveTo(28, -31, 30, -26);
+  ctx.quadraticCurveTo(27, -22, 20, -21);
+  ctx.quadraticCurveTo(13, -21, 10, -26);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.9);
+  // Maul mit Zähnen und Zunge
+  ctx.strokeStyle = scD;
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(30, -25.5);
+  ctx.quadraticCurveTo(24, -24, 18, -24.5);
+  ctx.stroke();
+  ctx.fillStyle = '#fff8e0';
+  for (const tx of [21, 24, 27]) {
+    ctx.beginPath();
+    ctx.moveTo(tx, -24.6);
+    ctx.lineTo(tx + 0.8, -22.8);
+    ctx.lineTo(tx + 1.6, -24.8);
+    ctx.fill();
+  }
+  ctx.strokeStyle = '#c0263a';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(30, -25.5);
+  ctx.lineTo(34, -24.5);
+  ctx.moveTo(34, -24.5);
+  ctx.lineTo(36, -26);
+  ctx.moveTo(34, -24.5);
+  ctx.lineTo(36, -23.5);
+  ctx.stroke();
+  // Kopfkrone (Kamm) in Spielerfarbe mit Goldspitzen
+  ctx.fillStyle = cloth(ctx, 10, 22, col);
+  ctx.beginPath();
+  ctx.moveTo(11, -28);
+  ctx.lineTo(10, -38);
+  ctx.lineTo(14, -32);
+  ctx.lineTo(16, -41);
+  ctx.lineTo(18, -32.5);
+  ctx.lineTo(22, -38);
+  ctx.lineTo(21, -31);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.7);
+  ctx.fillStyle = '#f2d27a';
+  for (const [gx, gy] of [[10, -38], [16, -41], [22, -38]]) {
+    ctx.beginPath();
+    ctx.arc(gx, gy, 0.9, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Glühendes Auge
+  const eg = ctx.createRadialGradient(22, -28, 0, 22, -28, 6);
+  eg.addColorStop(0, 'rgba(255,240,120,0.95)');
+  eg.addColorStop(0.35, 'rgba(190,255,80,0.55)');
+  eg.addColorStop(1, 'rgba(120,255,60,0)');
+  ctx.fillStyle = eg;
+  ctx.beginPath();
+  ctx.arc(22, -28, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fff36b';
+  ctx.beginPath();
+  ctx.ellipse(22, -28, 2.1, 1.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#111';
+  ctx.beginPath();
+  ctx.ellipse(22.2, -28, 0.5, 1.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Nüster
+  ctx.fillStyle = scD;
+  ctx.beginPath();
+  ctx.arc(28, -28, 0.6, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 // Schwarzer Troll: gebeugter Koloss mit Steinhammer, Stachel-Schulterpanzer, Kette und Kriegsbemalung

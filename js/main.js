@@ -473,6 +473,8 @@ function unitStatsText(u, isPreview) {
 function unitNotes(u) {
   const notes = [UNITS[u.type].desc];
   if (u.shaken) notes.push('⭐ Erschüttert: halbe Verteidigung, kein Gegenschlag.');
+  if (u.stone) notes.push('🪨 Versteinert: setzt den nächsten Zug aus und schlägt nicht zurück.');
+  else if (u.stoneNow) notes.push('🪨 Versteinert: setzt diesen Zug aus.');
   if (inAura(S, u)) notes.push('🛡 Schutzaura: 25 % weniger Schaden, Flächenschaden halbiert.');
   if (UNITS[u.type].healer) notes.push(`Heilt ${healAmount(S, u)} Leben bis 3 Felder weit.`);
   if (!UNITS[u.type].structure) {
@@ -830,7 +832,7 @@ function aiEventView(ev, f) {
 }
 
 // ---------------------------------------------------------------- Klänge
-const MOVE_SOUND = { rider: 'hooves', knight: 'hooves', catapult: 'wheels', troll: 'stomp', mage: 'glide', dragon: 'wings' };
+const MOVE_SOUND = { rider: 'hooves', knight: 'hooves', catapult: 'wheels', troll: 'stomp', mage: 'glide', dragon: 'wings', basilisk: 'steps' };
 
 // Stereo-Position eines Feldes: links/rechts am Bildschirm
 function panOf(idx) {
@@ -922,7 +924,10 @@ async function playEvent(ev, f, isAI, pan = true) {
         if (ev.killed) R.ghost({ ...def, hp: 0 }, hit + 420 * f, hit / (hit + 420 * f));
         else R.shake(def.id, def.idx, 300 * f, hit);
         R.floatText(def.idx, `−${ev.dmg}`, '#fecaca', 900 * f, hit);
-        if (ev.shaken) R.floatText(def.idx, 'erschüttert!', '#fde68a', 1100 * f, hit + 350 * f);
+        if (ev.stone) {
+          R.floatText(def.idx, 'versteinert!', '#d6d3d1', 1200 * f, hit + 350 * f);
+          sound.play('petrify', { pan: panOf(def.idx), vol: isAI === 'quiet' ? 0.6 : 1, delay: hit / 1000 + 0.1 });
+        } else if (ev.shaken) R.floatText(def.idx, 'erschüttert!', '#fde68a', 1100 * f, hit + 350 * f);
         if (ev.counter > 0) R.floatText(att.idx, `−${ev.counter}`, '#fecaca', 900 * f, hit + 200 * f);
         for (const h of ev.splash || []) {
           if (h.killed) R.ghost({ ...h.snap, hp: 0 }, hit + 420 * f, hit / (hit + 420 * f));
@@ -1002,6 +1007,9 @@ async function playEvent(ev, f, isAI, pan = true) {
       if (ev.snap) R.ghost({ ...ev.snap }, 500 * Math.max(f, 0.6), 0);
       R.floatText(ev.idx, `${ev.building ? BUILDINGS[ev.building].name : UNITS[ev.unit].name} ${ev.disband ? 'entlassen' : 'abgerissen'}`, '#fca5a5', 1000 * Math.max(f, 0.6));
       if (f > 0) sound.play('fall', { pan: panOf(ev.idx), vol: isAI ? 0.4 : 0.8 });
+      break;
+    case 'stone':
+      if (unitById(S, ev.id)?.owner === humanId()) R.floatText(ev.idx, '🪨 setzt aus', '#d6d3d1', 900);
       break;
     case 'defect':
       if (f > 0) R.ring(ev.idx, PLAYER_COLORS[ev.pid].main, 600 * f);
@@ -1728,7 +1736,7 @@ function renderHelp() {
     <p>Einheiten, die eine Runde nichts tun, heilen 2 Lebenspunkte – in der Nähe eigener Städte 4. Zauberer heilen sofort.</p>
     <h3>Einheiten</h3>
     <table><tr><th>Einheit</th><th>❤</th><th>Angr.</th><th>Vert.</th><th>Bew.</th><th>Reichw.</th></tr>${rows}</table>
-    <p>Ritter brauchen eine Kaserne, Katapulte eine Werkstatt, Zauberer einen Turm der Weisen, der Schwarze Troll eine Trollhöhle, der Drache eine Drachenhöhle. Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
+    <p>Ritter brauchen eine Kaserne, Katapulte eine Werkstatt, Zauberer einen Turm der Weisen, der Basilisk ein Basiliskennest, der Schwarze Troll eine Trollhöhle, der Drache eine Drachenhöhle. Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
     <h3>Zugweite</h3>
     <p>Auch voll entwickelt ziehen Fußtruppen höchstens 4 Felder, Katapulte 3, Reiter und Ritter 6 – auch wenn sie über eigene Einheiten springen.</p>
     <h3>Ränge und Fähigkeiten ★</h3>
@@ -1740,6 +1748,8 @@ function renderHelp() {
     <p>Katapulte treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +10 % (höchstens +30 %): Einkesseln lohnt sich.</p>
     <h3>Schwarzer Troll</h3>
     <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel, braucht 3 Versorgung und eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
+    <h3>Basilisk 🦎</h3>
+    <p>Eine Riesenechse mit tödlichem Blick: Sie greift aus 2 Feldern an, und wer getroffen wird und überlebt, <b>versteinert</b> – er setzt seinen nächsten Zug aus und schlägt bis dahin nicht zurück (grau dargestellt). Troll, Drache, Türme und Wälle sind immun. Ideal, um einen starken Gegner festzuhalten, während deine Armee angreift. Braucht ein Basiliskennest (Stadt ab Stufe 3), 2 Versorgung, höchstens 2 pro Reich.</p>
     <h3>Drache 🐉</h3>
     <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), sein Feueratem trifft auch Gegner neben dem Ziel, und er heilt jede Runde 6 Leben. Er ist ein Endgegner: etwa fünfmal so stark wie früher, aber zehnmal so teuer – bei Rang 3 und 5 wählst du jeweils aus drei Fähigkeiten. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (in jeder Stadt baubar, aber nur eine im Reich – ein kleiner Drache auf dem Stadtturm zeigt, wo sie steht), 3 Versorgung, und es gibt nur einen Drachen pro Reich.</p>
     <h3>Geräusche 🔊</h3>

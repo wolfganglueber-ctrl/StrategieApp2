@@ -449,7 +449,16 @@ export class Renderer {
       for (const i of row) {
         const c = this.center(i);
         const city = cityAt.get(i);
-        if (city) drawCity(ctx, city, c.x, c.y, HEX, colorOf(city.owner));
+        if (city) {
+          // Räumliche Tiefe: weicher Schatten nach rechts unten
+          ctx.save();
+          ctx.shadowColor = 'rgba(0,0,0,0.38)';
+          ctx.shadowBlur = 4;
+          ctx.shadowOffsetX = 3;
+          ctx.shadowOffsetY = 2;
+          drawCity(ctx, city, c.x, c.y, HEX, colorOf(city.owner));
+          ctx.restore();
+        }
         else if (T[i] === 'forest') drawForest(ctx, c.x, c.y, HEX, i);
         else if (T[i] === 'hill') drawHill(ctx, c.x, c.y, HEX, i);
         else if (T[i] === 'mountain') drawMountain(ctx, c.x, c.y, HEX, i);
@@ -458,13 +467,13 @@ export class Renderer {
   }
 
   // Figuren werden einmal pro Typ/Farbe/Zoomstufe in einen Puffer gezeichnet
-  sprite(type, owner, exhausted, level) {
+  sprite(type, owner, exhausted, level, stone = false) {
     const k = Math.max(0.5, Math.round(this.cam.z * this.dpr * 4) / 4) * (HEX / 40) * FIG;
     if (this.spriteScale !== k) {
       this.sprites = new Map();
       this.spriteScale = k;
     }
-    const key = type + owner + (exhausted ? 'x' : '') + (level || '');
+    const key = type + owner + (exhausted ? 'x' : '') + (stone ? 's' : '') + (level || '');
     let sp = this.sprites.get(key);
     if (sp) return sp;
     const base = PLAYER_COLORS[owner] || NEUTRAL_COLOR;
@@ -472,17 +481,61 @@ export class Renderer {
       ? { main: mix(base.main, GREY, 0.75), dark: mix(base.dark, '#4a4844', 0.75), light: mix(base.light, '#c9c6c0', 0.75) }
       : base;
     const B = FIG_BOX;
-    const cv = document.createElement('canvas');
-    cv.width = Math.ceil((B.left + B.right) * k);
-    cv.height = Math.ceil((B.top + B.bottom) * k);
-    const ctx = cv.getContext('2d');
-    ctx.setTransform(k, 0, 0, k, B.left * k, B.top * k);
-    drawFigure(ctx, type, col, level);
-    if (exhausted) {
-      ctx.globalCompositeOperation = 'source-atop';
-      ctx.fillStyle = 'rgba(60,60,60,0.5)';
-      ctx.fillRect(-B.left, -B.top, B.left + B.right, B.top + B.bottom);
+    const W = Math.ceil((B.left + B.right) * k), H = Math.ceil((B.top + B.bottom) * k);
+    const raw = document.createElement('canvas');
+    raw.width = W;
+    raw.height = H;
+    const rc = raw.getContext('2d');
+    rc.setTransform(k, 0, 0, k, B.left * k, B.top * k);
+    drawFigure(rc, type, col, level);
+    // Plastische Beleuchtung: Licht von links oben, Schatten nach rechts unten
+    rc.setTransform(1, 0, 0, 1, 0, 0);
+    rc.globalCompositeOperation = 'source-atop';
+    const lg = rc.createLinearGradient(W * 0.25, H * 0.15, W * 0.8, H * 0.95);
+    lg.addColorStop(0, 'rgba(255,248,225,0.16)');
+    lg.addColorStop(0.5, 'rgba(0,0,0,0)');
+    lg.addColorStop(1, 'rgba(10,5,20,0.28)');
+    rc.fillStyle = lg;
+    rc.fillRect(0, 0, W, H);
+    if (stone) {
+      // Versteinert: entsättigt, Steinfarbe und Risse
+      const mask = document.createElement('canvas');
+      mask.width = W;
+      mask.height = H;
+      mask.getContext('2d').drawImage(raw, 0, 0);
+      rc.globalCompositeOperation = 'saturation';
+      rc.fillStyle = '#808080';
+      rc.fillRect(0, 0, W, H);
+      rc.globalCompositeOperation = 'destination-in';
+      rc.drawImage(mask, 0, 0);
+      rc.globalCompositeOperation = 'source-atop';
+      rc.fillStyle = 'rgba(150,145,135,0.45)';
+      rc.fillRect(0, 0, W, H);
+      rc.setTransform(k, 0, 0, k, B.left * k, B.top * k);
+      rc.strokeStyle = 'rgba(40,36,32,0.7)';
+      rc.lineWidth = 0.7;
+      for (const pts of [[[-6, -30], [-3, -22], [-7, -15], [-4, -6]], [[5, -26], [8, -18], [4, -10]], [[-12, -4], [-5, 0], [3, -2]]]) {
+        rc.beginPath();
+        rc.moveTo(pts[0][0], pts[0][1]);
+        for (const [px, py] of pts.slice(1)) rc.lineTo(px, py);
+        rc.stroke();
+      }
+      rc.setTransform(1, 0, 0, 1, 0, 0);
     }
+    if (exhausted) {
+      rc.fillStyle = 'rgba(60,60,60,0.5)';
+      rc.fillRect(0, 0, W, H);
+    }
+    // Schlagschatten für räumliche Tiefe
+    const cv = document.createElement('canvas');
+    cv.width = W;
+    cv.height = H;
+    const ctx = cv.getContext('2d');
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = 2.5 * k;
+    ctx.shadowOffsetX = 2.2 * k;
+    ctx.shadowOffsetY = 1.4 * k;
+    ctx.drawImage(raw, 0, 0);
     sp = { cv, k };
     this.sprites.set(key, sp);
     return sp;
@@ -510,7 +563,8 @@ export class Renderer {
       ctx.fillStyle = g;
       ctx.fillRect(x - 30 * s, y - 40 * s, 60 * s, 60 * s);
     }
-    const sp = this.sprite(u.type, u.owner, exhausted, u.level);
+    const stone = !!(u.stone || u.stoneNow);
+    const sp = this.sprite(u.type, u.owner, exhausted && !stone, u.level, stone);
     const B = FIG_BOX;
     if (exhausted) ctx.globalAlpha *= 0.8;
     // Verband: mehrere Figuren, so viele wie (rechnerisch) noch stehen

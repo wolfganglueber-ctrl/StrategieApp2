@@ -6,7 +6,7 @@ import {
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
-  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, canTrain, unitCount, canBuild, mergeTargets,
+  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, canTrain, unitCount, canBuild, mergeTargets, canPetrify,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -14,7 +14,7 @@ export const AI_PARAMS = {
   1: { noise: 6, mistake: 0.35, risk: 0, lossW: 0.3, smart: false, upgrade: 0, guard: 0, idle: 0.25 },
   2: { noise: 3, mistake: 0.12, risk: 0.3, lossW: 0.6, smart: false, upgrade: 0.25, guard: 0.5, idle: 0.05 },
   3: { noise: 2, mistake: 0.07, risk: 0.6, lossW: 0.9, smart: true, upgrade: 0.4, guard: 0.8, idle: 0 },
-  4: { noise: 0.25, mistake: 0, risk: 1, lossW: 1, smart: true, upgrade: 1, guard: 1, idle: 0 },
+  4: { noise: 1, mistake: 0.03, risk: 0.8, lossW: 0.95, smart: true, upgrade: 0.7, guard: 0.9, idle: 0 },
   5: { noise: 0.1, mistake: 0, risk: 1, lossW: 1, smart: true, upgrade: 1, guard: 1, idle: 0 },
 };
 
@@ -170,6 +170,7 @@ function attackScore(state, ctx, P, u, t, from) {
   let gain = (Math.min(r.dmg, t.hp) / DT.hp) * dv * 1.2;
   // Fernkampf zuerst: erschütterte Ziele sind für Nahkämpfer leichte Beute
   if (UT.range > 1 && !r.kill && !t.shaken) gain += 1.5;
+  if (UNITS[u.type].petrify && !r.kill && canPetrify(t)) gain += Math.min(baseValue(t) * 0.3, 8);
   if (r.kill) gain += dv + 3;
   const tc = cityOn(state, t.idx);
   if (tc && tc.owner === u.owner) gain += r.kill ? 8 : 3; // Besetzer aus eigener Stadt werfen
@@ -242,7 +243,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
   const options = UNIT_ORDER.filter((k) => !canRecruit(state, pid, ci, k));
   if (!options.length) return null;
   if (!P.smart) {
-    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, catapult: 0.5, mage: 0.5, troll: 3, dragon: 3 };
+    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, catapult: 0.5, mage: 0.5, basilisk: 1, troll: 3, dragon: 3 };
     return weightedPick(options, (k) => w[k], rng);
   }
   const danger = ctx.cityDanger.get(city.idx) || 0;
@@ -259,6 +260,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
     knight: 4,
     catapult: 1.5 + enemyDef * 0.8,
     mage: ctx.mine.length >= 4 ? 3 : 0.5,
+    basilisk: ctx.mine.length >= 5 ? 3 : 0.6,
     troll: 50,
     dragon: 60,
   };
@@ -297,6 +299,7 @@ function chooseBuilding(state, ctx, pid, ci, inc) {
     workshop: ctx.ownCities.length >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'barracks')) ? 1.4 : 0.2,
     dragonlair: c.level >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.6 : 0, // KI baut sie spät
     lair: c.level >= 4 && !ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.5 : 0,
+    nest: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'nest')) ? 1.3 : 0.1,
     sanctum: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'sanctum')) ? 1.5 : 0.3,
     wall: (ctx.cityDanger.get(c.idx) || 0) > 3 ? 3 : 0.4,
     market: ctx.ownCities.some((x) => hasBuilding(x, 'market')) ? 0 : ctx.ownCities.length >= 3 ? 2 : 1,

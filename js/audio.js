@@ -473,6 +473,12 @@ class SoundEngine {
         this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 300, dur: 0.9, vol: 0.4 * v, attack: 0.1, pan });
         this.grains(d, t + 0.1, { n: 22, spread: 0.9, fmin: 2500, fmax: 7000, vol: 0.06 * v, pan, decay: false });
         break;
+      case 'petrify':
+        // Versteinerung: knirschendes, rieselndes Gestein mit dumpfem Nachhall
+        this.grains(d, t, { n: 28, spread: 0.7, fmin: 900, fmax: 4500, vol: 0.07 * v, pan });
+        this.noise(d, t, { buf: this.brown, type: 'bandpass', f: 380, f2: 160, q: 1.2, dur: 0.7, vol: 0.45 * v, attack: 0.05, pan, verb: 0.35 });
+        this.thump(d, t + 0.45, { f: 70, vol: 0.3 * v, dur: 0.35, pan });
+        break;
       case 'heal':
         [880, 1109, 1319, 1760].forEach((f, i) => this.tone(d, t + i * 0.08, { f, dur: 0.6, vol: 0.07 * v, attack: 0.01, pan, verb: 0.6 }));
         this.noise(d, t, { type: 'highpass', f: 5000, dur: 0.6, vol: 0.04 * v, attack: 0.1, pan, verb: 0.6 });

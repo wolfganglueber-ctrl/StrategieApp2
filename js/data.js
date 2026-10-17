@@ -28,6 +28,7 @@ export const UNITS = {
   troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 7, def: 5, move: 2, range: 1, supply: 3, regen: 3, perRealm: 5, needs: 'lair', desc: 'Ein Titan: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben. Braucht 3 Versorgung und eine Trollhöhle, höchstens 5 pro Reich.' },
   dragon: { name: 'Drache', cost: { food: 500, wood: 300, ore: 700 }, hp: 300, atk: 12, def: 10, move: 5, range: 1, supply: 3, regen: 6, perRealm: 1, flying: true, splash: 0.4, arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten, Feueratem trifft auch Gegner neben dem Ziel, heilt jede Runde 6 Leben. Ein Endgegner – extrem mächtig und extrem teuer; Schützen und Türme treffen ihn härter (+60 %). Bei Rang 3 und 5 je drei Fähigkeiten zur Wahl. Einer pro Reich.' },
   barrier: { name: 'Steinwall', cost: { wood: 6, ore: 14 }, hp: 50, atk: 0, def: 6, move: 0, range: 0, structure: true, desc: 'Sehr stabiles Wallstück, blockiert den Weg. Im Stadtgebiet setzen; benachbarte Wallstücke verbinden sich zu einer Mauer und lenken den Gegner.' },
+  basilisk: { name: 'Basilisk', cost: { food: 18, wood: 8, ore: 16 }, hp: 28, atk: 3, def: 3, move: 3, range: 2, supply: 2, perRealm: 2, petrify: true, needs: 'nest', desc: 'Versteinernder Blick aus 2 Feldern: Das Ziel setzt seinen nächsten Zug aus und schlägt nicht zurück (Troll und Drache sind immun). Höchstens 2 pro Reich.' },
   catapult: { name: 'Katapult', cost: { wood: 8, ore: 6 }, hp: 10, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, splash: 0.5, needs: 'workshop', desc: 'Reichweite 3, nicht nach Bewegung. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Braucht eine Werkstatt.' },
 };
 // Wert einer Einheit für die KI (Rohstoffsumme / 2), danach Kaufpreise verdoppeln:
@@ -39,7 +40,7 @@ for (const k of Object.keys(UNITS)) {
   UNITS[k].value = t / 2;
   if (!UNITS[k].structure) for (const r of Object.keys(UNITS[k].cost)) UNITS[k].cost[r] *= UNIT_PRICE;
 }
-export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult', 'mage', 'troll', 'dragon'];
+export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult', 'mage', 'basilisk', 'troll', 'dragon'];
 // Höchste Zugweite bei voller Entwicklung (gilt auch für Sprünge über eigene Einheiten)
 export const MOVE_CAP = { catapult: 3, rider: 6, knight: 6, dragon: 6 };
 export const MOVE_CAP_DEFAULT = 4;
@@ -81,6 +82,7 @@ export const PERK_CHOICES = {
   catapult: [['fire', 'siege'], ['tough', 'swift']],
   mage: [['greatheal', 'wideaura'], ['tough', 'swift']],
   troll: [['rampage', 'tough'], ['siege', 'charge']],
+  basilisk: [['hunter', 'tough'], ['swift', 'siege']],
   dragon: [['fire', 'tough', 'swift'], ['siege', 'charge', 'hunter']],
 };
 export const PERK_RANKS = [3, 5];
@@ -144,11 +146,12 @@ export const BUILDINGS = {
   workshop: { art: 'eine', name: 'Werkstatt', icon: '⚙️', cost: { wood: 8, ore: 4 }, desc: 'Katapulte möglich' },
   wall: { art: 'eine', name: 'Mauer', icon: '🧱', cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt ×2,2' },
   sanctum: { art: 'einen', name: 'Turm der Weisen', icon: '🔮', cost: { wood: 6, ore: 6 }, desc: 'Zauberer möglich' },
+  nest: { art: 'ein', name: 'Basiliskennest', icon: '🦎', cost: { food: 10, wood: 8, ore: 12 }, minLevel: 3, desc: 'Basilisk möglich (Stadt ab Stufe 3)' },
   lair: { art: 'eine', name: 'Trollhöhle', icon: '🦴', cost: { food: 10, wood: 12, ore: 16 }, minLevel: 4, desc: 'Schwarzer Troll möglich (Stadt ab Stufe 4)' },
   market: { art: 'einen', name: 'Markt', icon: '⚖️', cost: { food: 16, wood: 16, ore: 8 }, desc: 'Erlaubt Handel (3:1, mit Handelsgilde 2:1)' },
   dragonlair: { art: 'eine', name: 'Drachenhöhle', icon: '🐉', cost: { food: 20, wood: 20, ore: 30 }, perRealm: 1, desc: 'Drache möglich (nur eine im Reich)' },
 };
-export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'sanctum', 'lair', 'dragonlair', 'wall', 'market'];
+export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'sanctum', 'nest', 'lair', 'dragonlair', 'wall', 'market'];
 
 // Stadtzentrum liefert von jedem Rohstoff so viel wie die Stufe
 export function cityCenterYield(city) {
@@ -197,8 +200,8 @@ export const DIFFICULTIES = [
   { level: 1, name: 'Anfänger', desc: 'Macht viele Fehler.' },
   { level: 2, name: 'Leicht', desc: 'Spielt planlos, aber aggressiv.' },
   { level: 3, name: 'Normal', desc: 'Achtet auf Gefahren und Fokusfeuer.' },
-  { level: 4, name: 'Schwer', desc: 'Spielt sauber und baut seine Wirtschaft aus.' },
-  { level: 5, name: 'Meister', desc: 'Wie Schwer, aber mit +50 % Rohstoffen.' },
+  { level: 4, name: 'Schwer', desc: 'Spielt überlegt und baut seine Wirtschaft aus, macht aber gelegentlich Fehler.' },
+  { level: 5, name: 'Meister', desc: 'Spielt fehlerfrei und hat +50 % Rohstoffe.' },
 ];
 
 export const MAP_SIZES = {

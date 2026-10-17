@@ -121,6 +121,10 @@ export function statsOf(state, u) {
   return st;
 }
 
+export function canPetrify(t) {
+  return !isStructure(t) && t.type !== 'troll' && t.type !== 'dragon' && !t.stone;
+}
+
 export function hasPerk(u, p) {
   return !!u.perks?.includes(p);
 }
@@ -381,7 +385,7 @@ export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp
   const kill = dmg >= def.hp;
   let counter = 0;
   const geo = geoOf(state);
-  if (!kill && !def.shaken && geo.dist(fromIdx, def.idx) <= unitRange(state, def)) {
+  if (!kill && !def.shaken && !def.stone && !def.stoneNow && geo.dist(fromIdx, def.idx) <= unitRange(state, def)) {
     counter = Math.round((dF / tot) * D.def * 4.5 * nd * (inAura(state, att, fromIdx) ? 1 - AURA.reduce : 1));
   }
   return { dmg, counter, kill, die: counter >= attHp };
@@ -573,6 +577,14 @@ export function startTurn(state) {
     u.attacked = false;
     u.acted = false;
     u.shaken = false;
+    // Versteinert: diesen Zug aussetzen, danach wieder frei
+    if (u.stone) {
+      u.stone = 0;
+      u.moved = u.attacked = true;
+      u.acted = true;
+      u.stoneNow = true;
+      ev.push({ k: 'stone', id: u.id, idx: u.idx });
+    } else u.stoneNow = false;
   }
   const inc = incomeOf(state, pid);
   const p = state.players[pid];
@@ -697,6 +709,8 @@ export function applyAction(state, a) {
         }
       } else {
         if (statsOf(state, u).range > 1 && !isStructure(t)) { t.shaken = true; e.shaken = true; }
+        // Basilisk versteinert: das Ziel setzt seinen nächsten Zug aus (Titanen und Bauwerke sind immun)
+        if (UNITS[u.type].petrify && canPetrify(t)) { t.stone = 1; e.stone = true; }
       }
       if (!e.killed && r.counter > 0) {
         u.hp -= r.counter;
@@ -882,6 +896,8 @@ export function applyAction(state, a) {
     case 'end': {
       // Türme, die noch nicht geschossen haben, feuern am Zugende selbst
       const pre = towerVolley(state, pid);
+      // Ausgesetzter Zug ist vorbei: die Versteinerung löst sich
+      for (const u of state.units) if (u.owner === pid) u.stoneNow = false;
       return pre.concat(endTurn(state));
     }
     default:
