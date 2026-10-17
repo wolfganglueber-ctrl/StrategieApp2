@@ -12,6 +12,12 @@ Rundenbasiertes 2D-Strategiespiel (Mittelalter) mit schöner Textur-Grafik. Hexf
 | `npm test` | `node tools/test.mjs`: erzeugt alle 50 Level und spielt ~90 KI-Partien auf Regelfehler durch (dauert 1–3 Min.) |
 | `npm run sim -- 20 4 3 L` | KI-Balancing: 20 Partien Stufe 4 gegen 3 auf Kartengröße L |
 | `npm run build` | `dist/hexkrone.html`: alles in einer Datei (wird nicht eingecheckt) |
+| `npm run build:artifact` | `dist/hexkrone-artifact.html`: Version für das claude.ai-Artefakt |
+
+Spiel-Link (claude.ai-Artefakt, immer DIESEN aktualisieren, nie ein neues anlegen):
+**https://claude.ai/artifact/DSHgsarxYi3z7aj65QHMEA**
+Aktualisieren: `npm run build:artifact`, dann das Artifact-Tool zuerst mit `action: "read"` und dieser `url` aufrufen,
+danach `dist/hexkrone-artifact.html` mit derselben `url` veröffentlichen (ohne `icon`).
 
 CI: `.github/workflows/test.yml` führt bei jedem Push `node tools/test.mjs` aus.
 

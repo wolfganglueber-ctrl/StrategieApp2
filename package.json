@@ -8,6 +8,7 @@
     "start": "npx --yes http-server -c-1 -p 8080 .",
     "sim": "node tools/sim.mjs",
     "test": "node tools/test.mjs",
-    "build": "node tools/build-single.mjs"
+    "build": "node tools/build-single.mjs",
+    "build:artifact": "node tools/build-artifact.mjs"
   }
 }

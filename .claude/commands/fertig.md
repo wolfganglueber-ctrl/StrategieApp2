@@ -8,4 +8,7 @@ Beende die Sitzung sauber:
    - „Offene Aufgaben“: meine Wünsche aus dieser Sitzung, die noch nicht erledigt sind, plus bekannte Probleme. Bereits erledigte Punkte entfernen.
    - „Nächster Schritt“: der sinnvollste nächste Schritt in einem Satz.
 3. Committe alle Änderungen mit einer aussagekräftigen deutschen Commit-Nachricht und pushe auf den aktuellen Branch.
-4. Sag mir in zwei, drei Sätzen, was gesichert wurde und dass ich jetzt eine neue Sitzung starten kann. $ARGUMENTS
+4. Aktualisiere den Spiel-Link (steht in CLAUDE.md): `npm run build:artifact`, dann mit dem Artifact-Tool
+   zuerst `action: "read"` mit dieser `url`, danach `dist/hexkrone-artifact.html` mit derselben `url` veröffentlichen.
+   Niemals ein neues Artefakt anlegen. Falls das nicht klappt, sag es mir deutlich.
+5. Sag mir in zwei, drei Sätzen, was gesichert wurde, nenne den Spiel-Link und dass ich jetzt eine neue Sitzung starten kann. $ARGUMENTS

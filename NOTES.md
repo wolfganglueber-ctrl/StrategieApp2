@@ -1,4 +1,6 @@
 # Stand
+Spiel-Link: https://claude.ai/artifact/DSHgsarxYi3z7aj65QHMEA (wird bei /fertig aktualisiert)
+
 Version 0.5 (Branch `claude/strategy-game-app-c4z13v`), spielbar im Browser/als PWA.
 - Hexkarte mit Wiese, Wald, Hügel, Gebirge, See; 7 Kartengrößen bis 44×58 (Episch), 5 Landschaftstypen, fairer Generator mit teilbarem Karten-Code.
 - Rohstoffe Nahrung/Holz/Erz aus dem Stadtgebiet; Handel 3:1 (Markt/Handelsgilde 2:1) mit Mengenregler.
