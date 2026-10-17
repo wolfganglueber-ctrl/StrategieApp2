@@ -1582,6 +1582,68 @@ function gameOver() {
   openModal(...children);
 }
 
+// Speicherplätze: Spielstand speichern oder laden (10 Plätze im Browser)
+function gameLabel(st) {
+  const meta = st.meta || {};
+  if (meta.mode === 'level') {
+    const l = getLevels().find((x) => x.id === meta.levelId);
+    if (l) return `Level ${l.world + 1}-${l.num}`;
+  }
+  return `Freies Spiel${meta.setup ? ' · ' + MAP_SIZES[meta.setup.size]?.name : ''}`;
+}
+
+function openSlots(mode, back) {
+  const draw = () => {
+    const list = el('div', { class: 'slot-list' });
+    for (let n = 1; n <= store.SLOTS; n++) {
+      const d = store.slot(n);
+      const ok = d && d.state?.v === STATE_VERSION;
+      const info = d
+        ? el('div', { class: 'binfo' }, el('b', {}, `${n}. ${d.name}`), el('span', { class: 'muted' }, `Runde ${d.turn} · ${new Date(d.date).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}${ok ? '' : ' · alte Version'}`))
+        : el('div', { class: 'binfo' }, el('b', {}, `${n}. – leer –`));
+      const acts = el('span', { class: 'built-actions' });
+      if (mode === 'save') {
+        acts.append(el('button', {
+          class: 'btn small primary',
+          onclick: async () => {
+            if (d && !(await confirmDialog(`Platz ${n} überschreiben?`, `„${d.name}“ (Runde ${d.turn}) wird ersetzt.`, 'Überschreiben', 'Abbrechen'))) { draw(); return; }
+            const data = { name: gameLabel(S), date: Date.now(), turn: S.turn, state: S };
+            if (store.saveSlot(n, data)) toast(`💾 Gespeichert auf Platz ${n}`);
+            else toast('Speichern fehlgeschlagen – der Browser-Speicher ist voll. Lösche einen anderen Platz.', 4000);
+            draw();
+          },
+        }, 'Speichern'));
+      } else if (d) {
+        acts.append(el('button', {
+          class: 'btn small primary', disabled: !ok,
+          onclick: async () => {
+            if (S && !(await confirmDialog('Spielstand laden?', 'Das laufende Spiel wird durch den gespeicherten Stand ersetzt (ungespeicherter Fortschritt geht verloren).', 'Laden', 'Abbrechen'))) { draw(); return; }
+            closeModal();
+            S = store.slot(n).state;
+            enterGame();
+            toast(`📂 Platz ${n} geladen`);
+          },
+        }, 'Laden'));
+      }
+      if (d) {
+        acts.append(el('button', {
+          class: 'btn small raze', title: 'Platz löschen',
+          onclick: async () => {
+            if (await confirmDialog(`Platz ${n} löschen?`, `„${d.name}“ (Runde ${d.turn}) wird gelöscht.`, 'Löschen', 'Abbrechen')) store.clearSlot(n);
+            draw();
+          },
+        }, '🗑'));
+      }
+      list.append(el('div', { class: 'build-row' + (d ? '' : ' empty') }, info, acts));
+    }
+    openClosable(el('h2', {}, mode === 'save' ? '💾 Speichern' : '📂 Laden'),
+      el('p', {}, mode === 'save' ? 'Wähle einen Speicherplatz.' : 'Wähle einen gespeicherten Spielstand.'),
+      list,
+      el('button', { class: 'btn big', onclick: () => { closeModal(); if (back) back(); } }, 'Zurück'));
+  };
+  draw();
+}
+
 function gameMenu() {
   if (busy && humanTurn()) return;
   const meta = S.meta || {};
@@ -1602,6 +1664,8 @@ function gameMenu() {
         } catch { /* abgebrochen */ }
       },
     }, 'Karte teilen') : null,
+    el('button', { class: 'btn big', onclick: () => openSlots('save', gameMenu) }, '💾 Speichern'),
+    el('button', { class: 'btn big', onclick: () => openSlots('load', gameMenu) }, '📂 Laden'),
     el('button', { class: 'btn big', onclick: () => openSettings(gameMenu) }, 'Einstellungen'),
     el('button', { class: 'btn big', onclick: async () => { closeModal(); if (await confirmDialog('Neu starten?', 'Der aktuelle Fortschritt geht verloren.', 'Neu starten', 'Abbrechen')) restartGame(); } }, 'Neu starten'),
     el('button', { class: 'btn big', onclick: () => { closeModal(); saveGame(); S = null; showScreen('scrMenu'); } }, 'Hauptmenü'),
@@ -1800,6 +1864,7 @@ $('btnCampaign').addEventListener('click', () => {
 $('btnSkirmish').addEventListener('click', () => { renderSetup(); showScreen('scrSetup'); });
 $('btnHelp').addEventListener('click', () => { renderHelp(); showScreen('scrHelp'); });
 $('btnSettings').addEventListener('click', () => openSettings(() => { if (!$('scrLevels').classList.contains('hidden')) renderLevels(); }));
+$('btnLoad').addEventListener('click', () => openSlots('load'));
 $('btnContinue').addEventListener('click', () => {
   const g = store.savedGame();
   if (!g || g.v !== STATE_VERSION) { store.clearGame(); $('btnContinue').classList.add('hidden'); return; }

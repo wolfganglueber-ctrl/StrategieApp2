@@ -304,3 +304,5 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .btn.raze { padding: 5px 8px; background: rgba(239, 68, 68, 0.12); border-color: rgba(248, 113, 113, 0.45); }
 
 .pill small.neg { color: #f87171; }
+.slot-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.slot-list .build-row.empty { opacity: 0.6; }

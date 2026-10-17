@@ -12,8 +12,9 @@ function get(key, fallback) {
 function set(key, value) {
   try {
     localStorage.setItem(PREFIX + key, JSON.stringify(value));
+    return true;
   } catch {
-    /* Speicher nicht verfügbar */
+    return false; // Speicher nicht verfügbar oder voll
   }
 }
 function del(key) {
@@ -38,4 +39,9 @@ export const store = {
   savedGame: () => get('save', null),
   saveGame: (g) => set('save', g),
   clearGame: () => del('save'),
+  // 10 feste Speicherplätze: { name, date, turn, state }
+  SLOTS: 10,
+  slot: (n) => get('slot.' + n, null),
+  saveSlot: (n, data) => set('slot.' + n, data),
+  clearSlot: (n) => del('slot.' + n),
 };
