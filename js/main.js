@@ -18,6 +18,7 @@ import {
 import { getLevels, getWorldNames, starsFor } from './levels.js';
 import { store } from './storage.js';
 import { randomSeedCode, seedFromCode } from './rng.js';
+import { sound } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -379,6 +380,7 @@ function onTap(sx, sy) {
     }
     clearSel();
     sel.unitId = u.id;
+    sound.play('select', { pan: panOf(u.idx) });
     refresh();
     return;
   }
@@ -459,7 +461,7 @@ async function act(action, { undoable = true, after } = {}) {
   if (busy) return;
   const snap = undoable ? cloneState(S) : null;
   const ev = applyAction(S, action);
-  if (!ev) { toast('Das geht nicht.'); return; }
+  if (!ev) { sound.play('error'); toast('Das geht nicht.'); return; }
   if (undoable) { undoStack.push(snap); if (undoStack.length > 30) undoStack.shift(); }
   else undoStack = [];
   busy = true;
@@ -710,13 +712,81 @@ function aiEventView(ev, f) {
   return { f: 0, pan: false };
 }
 
+// ---------------------------------------------------------------- Klänge
+const MOVE_SOUND = { rider: 'hooves', knight: 'hooves', catapult: 'wheels', troll: 'stomp', mage: 'glide' };
+
+// Stereo-Position eines Feldes: links/rechts am Bildschirm
+function panOf(idx) {
+  const c = R.center(idx);
+  const p = R.worldToScreen(c.x, c.y);
+  return Math.max(-0.8, Math.min(0.8, (p.x / R.w) * 2 - 1));
+}
+
+function attackSounds(ev, hitSec, ranged, vol) {
+  const { att, def } = ev;
+  const pa = panOf(att.idx), pd = panOf(def.idx);
+  if (att.type === 'catapult') sound.play('catapult', { pan: pa, vol });
+  else if (ranged) sound.play('bow', { pan: pa, vol });
+  else if (att.type === 'troll' && Math.random() < 0.6) sound.play('roar', { pan: pa, vol });
+  const hitSound = att.type === 'catapult' ? 'boom' : ranged ? 'thunk' : att.type === 'troll' ? 'smash' : att.type === 'mage' ? 'hit' : 'clash';
+  sound.play(hitSound, { pan: pd, vol, delay: hitSec });
+  if (ev.counter > 0 && !ranged) sound.play('clash', { pan: pa, vol: vol * 0.6, delay: hitSec + 0.2 });
+  if (ev.killed || ev.splash?.some((h) => h.killed)) sound.play('fall', { pan: pd, vol, delay: hitSec + 0.15 });
+  if (ev.died) sound.play('fall', { pan: pa, vol, delay: hitSec + 0.3 });
+}
+
+// Umgebungsgeräusche: Anteile von Wasser, Wald, Bergen und Städten im sichtbaren Ausschnitt
+function updateAmbience() {
+  const st = R.state;
+  if (!st || !sound.ctx) return;
+  const cnt = { water: 0, forest: 0, rock: 0, plain: 0, city: 0, n: 0 };
+  const top = R.viewPad?.top || 0, bottom = R.viewPad?.bottom || 0;
+  for (let gx = 0; gx < 8; gx++) {
+    for (let gy = 0; gy < 8; gy++) {
+      const i = R.pick(((gx + 0.5) / 8) * R.w, top + ((gy + 0.5) / 8) * (R.h - top - bottom));
+      if (i < 0) continue;
+      cnt.n++;
+      const t = st.terrain[i];
+      if (st.cityAt[i] >= 0) cnt.city += 1 + st.cities[st.cityAt[i]].level * 0.5;
+      else if (t === 'water') cnt.water++;
+      else if (t === 'forest') cnt.forest++;
+      else if (t === 'hill' || t === 'mountain') cnt.rock++;
+      else cnt.plain++;
+    }
+  }
+  const n = Math.max(1, cnt.n), w = cnt.water / n;
+  const ocean = Math.min(1, Math.max(0, (w - 0.12) / 0.3));
+  // Kleine Seen zwischen Land plätschern wie ein Bach
+  const brook = w > 0.01 ? Math.min(1, w * 5) * (1 - ocean) : 0;
+  const zoomOut = Math.max(0, Math.min(1, (0.7 - R.cam.z) / 0.5));
+  sound.setAmbience({
+    ocean: Math.max(ocean, w > 0.05 ? 0.25 : 0),
+    brook,
+    wind: Math.min(1, (cnt.rock / n) * 2.2 + zoomOut * 0.5),
+    forest: Math.min(1, (cnt.forest / n) * 2 + (cnt.plain / n) * 0.4),
+    city: Math.min(1, (cnt.city / n) * 4) * (1 - zoomOut * 0.6),
+  });
+}
+setInterval(updateAmbience, 900);
+
+function applySoundSettings() {
+  sound.setOptions({ sfx: settings.sound, ambience: settings.ambience });
+}
+// Audio darf erst nach einer Berührung starten
+const unlockAudio = () => { sound.unlock(); applySoundSettings(); updateAmbience(); };
+window.addEventListener('pointerdown', unlockAudio, { capture: true });
+window.addEventListener('keydown', unlockAudio, { capture: true });
+
 async function playEvent(ev, f, isAI, pan = true) {
   if (isAI && !pan) isAI = 'quiet';
   const pause = (ms) => (ms * f > 0 ? sleep(ms * f) : Promise.resolve());
   switch (ev.k) {
     case 'move': {
       if (isAI === true && f > 0) await sleep(R.ensureVisible(ev.path[ev.path.length - 1], 220 * f));
-      const d = R.animateMove(ev.id, ev.path, (isAI ? 140 : 110) * f);
+      const stepMs = (isAI ? 140 : 110) * f;
+      const mu = unitById(S, ev.id);
+      if (mu && f > 0) sound.play(MOVE_SOUND[mu.type] || 'steps', { steps: ev.path.length - 1, stepMs, pan: panOf(ev.path[0]), vol: isAI === 'quiet' ? 0.5 : 1 });
+      const d = R.animateMove(ev.id, ev.path, stepMs);
       await sleep(d);
       await pause(isAI ? 60 : 0);
       break;
@@ -728,6 +798,7 @@ async function playEvent(ev, f, isAI, pan = true) {
       const L = 380 * f;
       if (L > 0) {
         const hit = L * 0.5;
+        attackSounds(ev, hit / 1000, ranged, isAI === 'quiet' ? 0.6 : 1);
         if (ev.died) R.ghost({ ...att }, L + 450 * f, (L + 120 * f) / (L + 450 * f), def.idx);
         else R.lunge(att.id, att.idx, def.idx, L, ranged, ev.advance != null);
         if (ev.killed) R.ghost({ ...def, hp: 0 }, hit + 420 * f, hit / (hit + 420 * f));
@@ -750,22 +821,26 @@ async function playEvent(ev, f, isAI, pan = true) {
     }
     case 'recruit':
       if (isAI === true && f > 0) await sleep(R.ensureVisible(ev.idx, 200 * f));
+      if (f > 0) sound.play('drum', { pan: panOf(ev.idx), vol: isAI ? 0.5 : 0.8 });
       await sleep(R.pop(ev.id, 320 * f));
       await pause(isAI ? 60 : 0);
       break;
     case 'build':
       R.invalidate(true, ev.idx);
       R.ring(ev.idx, '#7dd3fc', 600 * f);
+      if (f > 0) sound.play('hammer', { pan: panOf(ev.idx), vol: isAI ? 0.5 : 1 });
       R.floatText(ev.idx, BUILDINGS[ev.building].name, '#bae6fd', 1100 * f);
       await pause(isAI ? 250 : 120);
       break;
     case 'upgrade':
       if (!ev.tower) R.invalidate(true, ev.idx);
       R.ring(ev.idx, '#fde047', 600 * f);
+      if (f > 0) sound.play(ev.tower ? 'hammer' : 'fanfare', { pan: panOf(ev.idx), vol: isAI ? 0.5 : 1 });
       R.floatText(ev.idx, ev.tower ? `Turm Stufe ${ev.level}` : CITY_NAMES[ev.level], '#fde047', 1000 * f);
       await pause(isAI ? 300 : 150);
       break;
     case 'research':
+      if (S.players[ev.pid].human) sound.play('chime');
       if (S.players[ev.pid].human) toast(`Erforscht: ${TECHS[ev.tech].icon} ${TECHS[ev.tech].name}`);
       break;
     case 'capture': {
@@ -773,6 +848,7 @@ async function playEvent(ev, f, isAI, pan = true) {
       if (f > 0) {
         if (isAI === true) await sleep(R.ensureVisible(ev.idx, 220 * f));
         R.ring(ev.idx, PLAYER_COLORS[ev.pid].main, 700 * f);
+        sound.play('horn', { pan: panOf(ev.idx), vol: S.players[ev.pid].human || (ev.from >= 0 && S.players[ev.from].human) ? 1 : 0.5 });
         R.floatText(ev.idx, 'Erobert!', PLAYER_COLORS[ev.pid].light, 1100 * f);
       }
       const c = cityOn(S, ev.idx);
@@ -785,17 +861,20 @@ async function playEvent(ev, f, isAI, pan = true) {
       if (ev.by != null && f > 0) {
         if (isAI === true) await sleep(R.ensureVisible(ev.idx, 200 * f));
         R.ring(ev.idx, '#86efac', 500 * f);
+        sound.play('heal', { pan: panOf(ev.idx), vol: isAI === 'quiet' ? 0.5 : 1 });
       }
       R.floatText(ev.idx, `+${ev.amount}`, '#86efac', 800 * Math.max(f, 0.6));
       if (ev.by != null) await pause(isAI ? 260 : 160);
       break;
     case 'rank':
       if (f > 0) R.ring(ev.idx, '#fde047', 600 * f);
+      if (f > 0) sound.play('sparkle', { pan: panOf(ev.idx), vol: isAI ? 0.5 : 1, delay: 0.25 * f });
       R.floatText(ev.idx, `★ ${RANK_NAMES[ev.rank]}`, '#fde047', 1200 * Math.max(f, 0.6), 250 * f);
       if (unitById(S, ev.id)?.owner === humanId() && PERK_RANKS.includes(ev.rank)) toast(`★ ${UNITS[unitById(S, ev.id).type].name} ist jetzt ${RANK_NAMES[ev.rank]} – wähle eine Fähigkeit!`);
       await pause(isAI ? 200 : 100);
       break;
     case 'perk':
+      sound.play('chime', { pan: panOf(ev.idx), vol: isAI ? 0.4 : 1 });
       R.floatText(ev.idx, `${PERKS[ev.perk].icon} ${PERKS[ev.perk].name}`, '#fde68a', 1100 * Math.max(f, 0.6));
       break;
     case 'wake':
@@ -803,10 +882,11 @@ async function playEvent(ev, f, isAI, pan = true) {
       break;
     case 'eliminated':
       toast(`${S.players[ev.pid].name} wurde besiegt!`);
+      sound.play('lowhorn');
       await pause(600);
       break;
     case 'turn':
-      if (S.players[ev.pid].human) hideBanner();
+      if (S.players[ev.pid].human) { hideBanner(); sound.play('bell'); }
       break;
     case 'income':
       updateHud();
@@ -1268,6 +1348,7 @@ function gameOver() {
   const human = S.players.find((p) => p.human);
   const won = human && S.over.winner === human.id;
   store.clearGame();
+  sound.play(won ? 'victory' : 'defeat');
   const meta = S.meta || {};
   const children = [el('h2', {}, won ? '🏆 Sieg!' : 'Niederlage')];
   if (meta.mode === 'level') {
@@ -1326,6 +1407,10 @@ function openSettings(onClose) {
     el('h2', {}, 'Einstellungen'),
     el('label', {}, 'Tempo der Computergegner'),
     seg([[1, 'Normal'], [0.5, 'Schnell'], [0, 'Sofort']], settings.speed, (v) => { settings.speed = v; store.saveSettings(settings); }),
+    el('label', {}, 'Geräusche (Kampf, Bewegung, Ereignisse)'),
+    seg([[true, 'An'], [false, 'Aus']], settings.sound, (v) => { settings.sound = v; store.saveSettings(settings); applySoundSettings(); }),
+    el('label', {}, 'Umgebung (Meer, Wind, Wald, Stadt)'),
+    seg([[0, 'Aus'], [0.3, 'Leise'], [0.6, 'Normal'], [1, 'Laut']], settings.ambience, (v) => { settings.ambience = v; store.saveSettings(settings); applySoundSettings(); }),
     el('label', {}, 'Vibration'),
     toggle('vibrate'),
     el('label', {}, 'Zugende bestätigen'),
@@ -1464,6 +1549,8 @@ function renderHelp() {
     <p>Katapulte treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +10 % (höchstens +30 %): Einkesseln lohnt sich.</p>
     <h3>Schwarzer Troll</h3>
     <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel, braucht 3 Versorgung und eine Trollhöhle (Stadt ab Stufe 4). Nur einer pro Reich.</p>
+    <h3>Geräusche 🔊</h3>
+    <p>Kampf, Bewegung und Ereignisse sind zu hören, im Hintergrund je nach Kartenausschnitt Meeresrauschen, plätschernde Seen, Wind über den Bergen, Vögel im Wald und das Treiben der Städte. Alles wird im Gerät erzeugt und funktioniert offline. Lautstärke und Umgebung stellst du im Menü unter Einstellungen ein.</p>
     <h3>Wache halten 💤</h3>
     <p>Eine Einheit auf Wache wird nicht mehr als „bereit“ angezeigt und nicht von „Nächste Einheit“ ausgewählt, bis du sie wieder bewegst oder ein Gegner auf 3 Felder herankommt.</p>
     <h3>Schwierigkeit</h3>
@@ -1495,6 +1582,8 @@ $('btnNext').addEventListener('click', nextUnit);
 $('btnEnd').addEventListener('click', onEndTurn);
 
 document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') sound.suspend();
+  else if (sound.ctx) sound.unlock();
   if (document.visibilityState === 'hidden' && S && !busy && humanTurn()) saveGame();
 });
 

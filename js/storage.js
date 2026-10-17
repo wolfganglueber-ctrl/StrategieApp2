@@ -31,7 +31,7 @@ export const store = {
     p.stars[levelId] = Math.max(p.stars[levelId] || 0, stars);
     set('progress', p);
   },
-  settings: () => Object.assign({ speed: 1, vibrate: true, confirmEnd: true, unlockAll: false, fogCampaign: false }, get('settings', {})),
+  settings: () => Object.assign({ speed: 1, sound: true, ambience: 0.6, vibrate: true, confirmEnd: true, unlockAll: false, fogCampaign: false }, get('settings', {})),
   saveSettings: (s) => set('settings', s),
   lastSetup: () => get('setup', null),
   saveSetup: (s) => set('setup', s),
