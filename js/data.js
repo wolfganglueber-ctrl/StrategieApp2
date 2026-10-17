@@ -87,6 +87,9 @@ export const PERK_RANKS = [3, 5];
 export const FLANK_BONUS = 0.1;
 export const FLANK_MAX = 3;
 export const CAVALRY = ['rider', 'knight'];
+// Verbände: bis zu 3 gleiche Einheiten auf einem Feld (Titanen, Zauberer und Bauwerke nicht)
+export const REGIMENT_MAX = 3;
+export const REGIMENT_TYPES = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult'];
 
 // Zauberer: Schutzaura und Heilen
 export const AURA = { radius: 1, radius2: 2, reduce: 0.25, splash: 0.5 };

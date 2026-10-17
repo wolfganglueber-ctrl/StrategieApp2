@@ -4,7 +4,7 @@ import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
-  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, trainCost,
+  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, trainCost, REGIMENT_MAX, REGIMENT_TYPES,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -115,6 +115,8 @@ export function statsOf(state, u) {
   if (hasPerk(u, 'tough')) st.hp = Math.round(st.hp * 1.25);
   if (hasPerk(u, 'shieldwall')) st.def = Math.round(st.def * 1.3 * 10) / 10;
   if (hasPerk(u, 'swift')) st.move++;
+  // Verband: Lebenspunkte aller Mitglieder
+  st.hp *= u.count || 1;
   st.move = Math.min(st.move, moveCap(u.type));
   return st;
 }
@@ -372,12 +374,15 @@ export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp
   const aF = atk * (attHp / A.hp);
   const dF = D.def * (def.hp / D.hp) * defenseMult(state, def.idx) * (def.shaken ? 0.5 : 1);
   const tot = aF + dF;
-  const dmg = Math.round((aF / tot) * atk * 4.5 * (inAura(state, def) ? 1 - AURA.reduce : 1));
+  // Verbände teilen Schaden mal Mitgliederzahl aus; Flächenwaffen treffen Verbände härter
+  const na = att.count || 1, nd = def.count || 1;
+  const crowd = nd > 1 && splashOf(att) > 0 ? 1 + 0.25 * (nd - 1) : 1;
+  const dmg = Math.round((aF / tot) * atk * 4.5 * na * crowd * (inAura(state, def) ? 1 - AURA.reduce : 1));
   const kill = dmg >= def.hp;
   let counter = 0;
   const geo = geoOf(state);
   if (!kill && !def.shaken && geo.dist(fromIdx, def.idx) <= unitRange(state, def)) {
-    counter = Math.round((dF / tot) * D.def * 4.5 * (inAura(state, att, fromIdx) ? 1 - AURA.reduce : 1));
+    counter = Math.round((dF / tot) * D.def * 4.5 * nd * (inAura(state, att, fromIdx) ? 1 - AURA.reduce : 1));
   }
   return { dmg, counter, kill, die: counter >= attHp };
 }
@@ -485,7 +490,7 @@ export function unitCap(state, pid) {
 
 export function unitCount(state, pid) {
   let n = 0;
-  for (const u of state.units) if (u.owner === pid && !UNITS[u.type].structure) n += UNITS[u.type].supply || 1;
+  for (const u of state.units) if (u.owner === pid && !UNITS[u.type].structure) n += (UNITS[u.type].supply || 1) * (u.count || 1);
   return n;
 }
 
@@ -544,7 +549,7 @@ export function startTurn(state) {
         }
         h += (inTerritory ? 4 : 2) + (hasTech(state, pid, 'medic') ? 2 : 0);
       }
-      h = Math.min(max - u.hp, h);
+      h = Math.min(max - u.hp, h * (u.count || 1));
       u.hp += h;
       ev.push({ k: 'heal', id: u.id, idx: u.idx, amount: h });
     }
@@ -631,7 +636,7 @@ function applySplash(state, att, idx, dmg) {
       hit.killed = true;
       state.units = state.units.filter((x) => x !== unit);
       state.stats.kills[att.owner]++;
-      state.stats.losses[unit.owner]++;
+      state.stats.losses[unit.owner] += unit.count || 1;
     }
     out.push(hit);
   }
@@ -674,7 +679,7 @@ export function applyAction(state, a) {
         e.killed = true;
         state.units = state.units.filter((x) => x !== t);
         state.stats.kills[pid]++;
-        state.stats.losses[t.owner]++;
+        state.stats.losses[t.owner] += t.count || 1;
         if (UNITS[u.type].range === 1 && !isStructure(u)) {
           e.advance = t.idx;
           u.idx = t.idx;
@@ -689,7 +694,7 @@ export function applyAction(state, a) {
           e.died = true;
           state.units = state.units.filter((x) => x !== u);
           state.stats.kills[t.owner]++;
-          state.stats.losses[pid]++;
+          state.stats.losses[pid] += u.count || 1;
         }
       }
       if (splashOf(u)) e.splash = applySplash(state, u, defSnap.idx, r.dmg);
@@ -703,7 +708,7 @@ export function applyAction(state, a) {
       const u = unitById(state, a.unitId);
       const t = unitById(state, a.targetId);
       if (!u || !t || u.owner !== pid || !canAttack(u) || !getHealTargets(state, u).includes(t)) return null;
-      const h = Math.min(statsOf(state, t).hp - t.hp, healAmount(state, u));
+      const h = Math.min(statsOf(state, t).hp - t.hp, healAmount(state, u) * (t.count || 1));
       t.hp += h;
       if (hasTech(state, pid, 'blessing')) t.shaken = false;
       u.attacked = true;
@@ -812,13 +817,79 @@ export function applyAction(state, a) {
       ev.push({ k: 'research', tech: a.tech, pid });
       break;
     }
+    case 'merge': {
+      const u = unitById(state, a.unitId), t = unitById(state, a.targetId);
+      if (!u || !t || u.owner !== pid || !canMerge(state, u, t)) return null;
+      const before = statsOf(state, t).hp;
+      if ((u.rank || 1) > (t.rank || 1)) { t.rank = u.rank; t.xp = u.xp; t.perks = u.perks; t.pick = u.pick; }
+      t.count = (t.count || 1) + (u.count || 1);
+      t.hp = Math.min(statsOf(state, t).hp, t.hp + u.hp + (statsOf(state, t).hp - before - statsOf(state, u).hp));
+      t.moved = t.attacked = t.acted = true;
+      state.units = state.units.filter((x) => x !== u);
+      ev.push({ k: 'merge', id: t.id, from: u.idx, idx: t.idx, count: t.count });
+      break;
+    }
+    case 'split': {
+      const u = unitById(state, a.unitId);
+      if (!u || u.owner !== pid || !canSplit(state, u)) return null;
+      const spot = splitSpot(state, u);
+      const per = Math.max(1, Math.round(u.hp / u.count));
+      const nu = { ...u, id: state.nextUnitId++, idx: spot, count: 1, hp: per, perks: [...(u.perks || [])], sentry: false };
+      u.count--;
+      u.hp = Math.max(1, Math.min(statsOf(state, u).hp, u.hp - per));
+      state.units.push(nu);
+      ev.push({ k: 'split', id: nu.id, idx: spot, from: u.idx });
+      break;
+    }
     case 'end': {
-      return endTurn(state);
+      // Türme, die noch nicht geschossen haben, feuern am Zugende selbst
+      const pre = towerVolley(state, pid);
+      return pre.concat(endTurn(state));
     }
     default:
       return null;
   }
   updateExplored(state);
+  return ev;
+}
+
+// Verbände: zusammenlegen (gleicher Typ, benachbart, beide noch unbewegt) und aufteilen
+export function canMerge(state, u, t) {
+  if (!u || !t || u === t || u.owner !== t.owner || u.type !== t.type || !REGIMENT_TYPES.includes(u.type)) return false;
+  if ((u.count || 1) + (t.count || 1) > REGIMENT_MAX) return false;
+  if (u.acted || u.moved || u.attacked || t.acted || t.moved || t.attacked) return false;
+  return geoOf(state).dist(u.idx, t.idx) === 1;
+}
+export function mergeTargets(state, u) {
+  return state.units.filter((t) => canMerge(state, u, t));
+}
+function splitSpot(state, u) {
+  const occ = buildOcc(state);
+  return geoOf(state).nb[u.idx].find((j) => !occ[j] && TERRAIN[state.terrain[j]].pass && state.cityAt[j] < 0)
+    ?? geoOf(state).nb[u.idx].find((j) => !occ[j] && TERRAIN[state.terrain[j]].pass);
+}
+export function canSplit(state, u) {
+  return (u.count || 1) > 1 && !u.acted && !u.moved && !u.attacked && splitSpot(state, u) != null;
+}
+
+// Automatisches Turmfeuer am Zugende: lohnendstes Ziel (erst Siege, dann meister Schaden)
+function towerVolley(state, pid) {
+  const ev = [];
+  for (const tw of state.units.filter((u) => u.owner === pid && u.type === 'tower')) {
+    if (!state.units.includes(tw) || !canAttack(tw)) continue;
+    const vis = state.fog ? visibility(state, pid) : null;
+    let best = null;
+    for (const t of getTargets(state, tw, tw.idx)) {
+      if (vis && !vis[t.idx]) continue;
+      const r = computeCombat(state, tw, t);
+      const score = (r.kill ? 1000 : 0) + (Math.min(r.dmg, t.hp) / statsOf(state, t).hp) * (UNITS[t.type].value || 1) * (t.count || 1);
+      if (!best || score > best.score) best = { t, score };
+    }
+    if (!best) continue;
+    const e = applyAction(state, { type: 'attack', unitId: tw.id, targetId: best.t.id });
+    if (e) { for (const x of e) x.auto = true; ev.push(...e); }
+    if (state.over) break;
+  }
   return ev;
 }
 

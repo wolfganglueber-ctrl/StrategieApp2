@@ -6,7 +6,7 @@ import {
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
-  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, canTrain, unitCount, canBuild,
+  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, canTrain, unitCount, canBuild, mergeTargets,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -22,7 +22,7 @@ const memory = { key: '', done: new Set() };
 
 // Wert einer Einheit: Kosten, Rang und Gesundheit
 function baseValue(u) {
-  return UNITS[u.type].value * (1 + 0.25 * ((u.rank || 1) - 1));
+  return UNITS[u.type].value * (1 + 0.25 * ((u.rank || 1) - 1)) * (u.count || 1);
 }
 function unitValue(u, maxHp) {
   return baseValue(u) * (0.4 + 0.6 * (u.hp / maxHp)) + 1;
@@ -442,6 +442,19 @@ export function planAction(state, rng = Math.random) {
     memory.econ = 0;
   }
   const ctx = buildContext(state, pid, P);
+
+  // Verbände bilden: nur weit hinter der Front, damit Katapulte sie nicht treffen
+  if (P.smart && ctx.mine.length >= 6) {
+    for (const u of ctx.mine) {
+      if (memory.done.has(u.id) || u.acted || (ctx.distEnemy[u.idx] >= 0 && ctx.distEnemy[u.idx] < 7)) continue;
+      const t = mergeTargets(state, u).find((x) => !memory.done.has(x.id));
+      if (t && rng() < 0.5) {
+        memory.done.add(u.id);
+        memory.done.add(t.id);
+        return { type: 'merge', unitId: u.id, targetId: t.id };
+      }
+    }
+  }
 
   let best = null;
   for (const u of ctx.mine) {

@@ -5,7 +5,7 @@ import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
   incomeOf, unitCap, unitCount, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
-  perkOptions, canTrain, flankers, canBuild,
+  perkOptions, canTrain, flankers, canBuild, mergeTargets, canSplit,
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
@@ -134,7 +134,7 @@ function saveGame() {
 
 // ---------------------------------------------------------------- Auswahl & Overlay
 function clearSel() {
-  sel = { unitId: null, cityIdx: null, infoIdx: null, placeTower: null, placeType: 'tower', group: null };
+  sel = { unitId: null, cityIdx: null, infoIdx: null, placeTower: null, placeType: 'tower', group: null, merge: false };
 }
 
 // ---------------------------------------------------------------- Gruppen
@@ -357,6 +357,11 @@ function refresh() {
     }
     if (targets.size) o.targets = targets;
   }
+  if (sel.merge && u) {
+    o.moves = null;
+    o.targets = null;
+    o.merges = new Set(mergeTargets(S, u).map((x) => x.idx));
+  }
   if (sel.cityIdx != null) o.cityIdx = sel.cityIdx;
   if (sel.placeTower != null) {
     const terr = computeTerritory(S);
@@ -406,8 +411,19 @@ function onTap(sx, sy) {
     if (u && u.owner === S.current) { toggleGroupMember(u); return; }
     if (u && groupAttackers(u, occ).length) { doGroupAttack(u); return; }
     if (!u && groupMoves(occ).has(i)) { doGroupMove(i); return; }
-    // Die Gruppe bleibt gewählt, bis man sie auflöst
-    if (u) toast('Niemand aus der Gruppe erreicht dieses Ziel.');
+    // Gegner außer Reichweite: Gruppe bleibt; Tipp auf ein leeres Feld löst sie auf
+    if (u) { toast('Niemand aus der Gruppe erreicht dieses Ziel.'); return; }
+    clearSel();
+    refresh();
+    return;
+  }
+  // Verband bilden: nur violett markierte Nachbarn, mit Rückfrage
+  if (sel.merge) {
+    const from = unitById(S, sel.unitId);
+    if (from && u && mergeTargets(S, from).includes(u)) { doMerge(from, u); return; }
+    sel.merge = false;
+    toast('Verband bilden abgebrochen.');
+    refresh();
     return;
   }
   const selU = sel.unitId != null ? unitById(S, sel.unitId) : null;
@@ -544,6 +560,15 @@ function doAttack(u, t) {
 
 function doHeal(u, t) {
   act({ type: 'heal', unitId: u.id, targetId: t.id }, { after: () => clearSel() });
+}
+
+async function doMerge(u, t) {
+  const total = (u.count || 1) + (t.count || 1);
+  const ok = await confirmDialog('Verband bilden?',
+    `${UNITS[u.type].name} und ${UNITS[t.type].name} werden zu einem Verband aus ${total} Einheiten zusammengelegt. Beide haben damit diesen Zug verbraucht. Aufteilen geht in einer späteren Runde wieder.`,
+    'Zusammenlegen', 'Abbrechen');
+  if (!ok) { sel.merge = false; refresh(); return; }
+  act({ type: 'merge', unitId: u.id, targetId: t.id }, { after: () => clearSel() });
 }
 
 function doRecruit(idx, type) {
@@ -940,6 +965,16 @@ async function playEvent(ev, f, isAI, pan = true) {
       break;
     case 'wake':
       break;
+    case 'merge':
+      if (f > 0) R.ring(ev.idx, '#c084fc', 600 * f);
+      R.floatText(ev.idx, `Verband ×${ev.count}`, '#e9d5ff', 1100 * Math.max(f, 0.6));
+      sound.play('drum', { pan: panOf(ev.idx), vol: isAI ? 0.4 : 0.8 });
+      await pause(isAI ? 200 : 120);
+      break;
+    case 'split':
+      R.floatText(ev.idx, 'aufgeteilt', '#e9d5ff', 900 * Math.max(f, 0.6));
+      await sleep(R.pop(ev.id, 300 * f));
+      break;
     case 'eliminated':
       toast(`${S.players[ev.pid].name} wurde besiegt!`);
       sound.play('lowhorn');
@@ -1051,7 +1086,7 @@ function rankText(u) {
 }
 
 function unitCard(u, subtitle) {
-  const name = u.type === 'tower' ? `Turm · Stufe ${u.level}` : UNITS[u.type].structure ? UNITS[u.type].name : `${UNITS[u.type].name} · ${rankText(u)}`;
+  const name = u.type === 'tower' ? `Turm · Stufe ${u.level}` : UNITS[u.type].structure ? UNITS[u.type].name : `${UNITS[u.type].name}${(u.count || 1) > 1 ? ` ×${u.count}` : ''} · ${rankText(u)}`;
   return el('div', { class: 'unit-card' },
     iconCanvas(u.type, u.owner, 48, u.level),
     el('div', { class: 'uc-main' },
@@ -1244,6 +1279,14 @@ function renderPanel() {
       : 'Tippe ein helles Feld im Stadtgebiet an.'));
     return;
   }
+  if (sel.merge && sel.unitId != null) {
+    const mu = unitById(S, sel.unitId);
+    panel.append(el('div', { class: 'city-head' },
+      el('span', { class: 'title' }, `🔗 Verband bilden · ${mu ? UNITS[mu.type].name : ''}`),
+      el('button', { class: 'btn small', onclick: () => { sel.merge = false; refresh(); } }, 'Abbrechen')));
+    panel.append(el('div', { class: 'note' }, 'Tippe eine violett markierte gleiche Einheit direkt daneben an. Vor dem Zusammenlegen fragt das Spiel noch einmal nach.'));
+    return;
+  }
   if (sel.group) {
     const members = groupUnits();
     const row = el('div', { class: 'group-row' });
@@ -1292,6 +1335,8 @@ function renderPanel() {
         actions.append(el('button', { class: 'btn small primary', title: `Ausbilden zum ${RANK_NAMES[r + 1]}`, disabled: !!why, onclick: () => act({ type: 'train', unitId: u.id }, { after: () => clearSel() }) },
           `🎓 ${RANK_NAMES[r + 1]} `, costEl(trainCost(u.type, r), S.players[S.current].res)));
       }
+      if (mergeTargets(S, u).length) actions.append(el('button', { class: 'btn small merge', onclick: () => { sel.merge = true; refresh(); } }, '🔗 Verband bilden'));
+      if (canSplit(S, u)) actions.append(el('button', { class: 'btn small', onclick: () => act({ type: 'split', unitId: u.id }) }, `✂ Aufteilen (${u.count} → ${u.count - 1} + 1)`));
       panel.append(actions);
     }
     if (u.type === 'tower' && u.owner === S.current) {
@@ -1583,7 +1628,10 @@ function renderHelp() {
     Einheiten, die noch etwas tun können, haben einen leuchtenden Ring.</p>
     <h3>Gemeinsam angreifen 👥</h3>
     <p>Wähle eine Einheit und tippe auf „👥 Gemeinsam angreifen“ (am PC: Shift + Klick). Weitere eigene Einheiten fügst du per Tipp hinzu, „+ Umgebung“ nimmt alle in der Nähe auf.
-    Ein Tipp auf einen Gegner: Alle greifen nacheinander an und rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt. Die Gruppe bleibt danach gewählt – tippe einfach den nächsten Gegner an. Ein Tipp auf ein freies Feld bewegt die Gruppe. „Auflösen“ beendet sie; „Nur aus Stand“ verzichtet aufs Heranrücken.</p>
+    Ein Tipp auf einen Gegner: Alle greifen nacheinander an und rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt. Die Gruppe bleibt danach gewählt – tippe einfach den nächsten Gegner an. Ein Tipp auf ein hell markiertes Feld bewegt die Gruppe, ein Tipp auf ein anderes leeres Feld (oder „Auflösen“) beendet sie; „Nur aus Stand“ verzichtet aufs Heranrücken.</p>
+    <h3>Verbände 🔗</h3>
+    <p>Bis zu 3 gleiche Einheiten (Krieger, Schützen, Reiter, Wächter, Ritter, Katapulte) lassen sich zu einem Verband zusammenlegen – dann ziehst du sie mit einem Tipp. Wähle eine Einheit, tippe „🔗 Verband bilden“ und dann eine violett markierte gleiche Einheit direkt daneben; das Spiel fragt vorher nach. Beide dürfen in dieser Runde noch nichts getan haben, das Zusammenlegen verbraucht ihren Zug.
+    Ein Verband hat die Lebenspunkte aller Mitglieder und teilt entsprechend mehr Schaden aus; je angeschlagener er ist, desto weniger Figuren stehen auf dem Sockel. Er übernimmt den besten Rang. Aber Vorsicht: Katapulte, Drachenfeuer und „Wüten“ treffen Verbände härter (+25 % je weiterem Mitglied). Mit „✂ Aufteilen“ löst du eine Einheit wieder heraus.</p>
     <h3>Angreifen</h3>
     <p>Wählst du eine Einheit, zeigen rote Felder alle Ziele. Die Blase über dem Ziel nennt den Schaden (↩ = Gegenschlag, ✖ = Ziel wird besiegt). Ein Tipp auf das Ziel greift an.
     Nahkämpfer rücken nach einem Sieg auf das Feld vor.<br>
@@ -1594,7 +1642,7 @@ function renderHelp() {
     <h3>Gebäude</h3>
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
     <h3>Türme</h3>
-    <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt). Türme bewegen sich nicht, greifen aber Gegner in Reichweite an und lassen sich in 3 Stufen ausbauen: tippe den Turm an.</p>
+    <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt). Türme bewegen sich nicht, greifen aber Gegner in Reichweite an und lassen sich in 3 Stufen ausbauen: tippe den Turm an. Hat ein Turm in deinem Zug noch nicht geschossen, feuert er beim Zugende automatisch auf das lohnendste Ziel.</p>
     <h3>Steinwälle 🧱</h3>
     <p>Im Reiter „Gebäude“ einer Stadt setzt du Steinwälle auf freie Felder bis 2 Felder um die Stadt (bis zu 6 pro Stadt). Sie sind sehr stabil (50 Leben, Verteidigung 6), greifen nicht an, versperren aber den Weg: Gegner müssen sie umgehen oder mühsam einreißen – ideal, um Angreifer in die Reichweite deiner Türme und Schützen zu lenken. Nebeneinander gesetzte Wallstücke verbinden sich zu einer Mauer. Katapulte und Belagerer sind gegen sie besonders wirksam.</p>
     <h3>Forschung 🔬</h3>
