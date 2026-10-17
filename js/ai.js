@@ -15,7 +15,7 @@ export const AI_PARAMS = {
   2: { noise: 3, mistake: 0.12, risk: 0.3, lossW: 0.6, smart: false, upgrade: 0.25, guard: 0.5, idle: 0.05 },
   3: { noise: 2, mistake: 0.07, risk: 0.6, lossW: 0.9, smart: true, upgrade: 0.4, guard: 0.8, idle: 0 },
   4: { noise: 1, mistake: 0.03, risk: 0.8, lossW: 0.95, smart: true, upgrade: 0.7, guard: 0.9, idle: 0 },
-  5: { noise: 0.1, mistake: 0, risk: 1, lossW: 1, smart: true, upgrade: 1, guard: 1, idle: 0 },
+  5: { noise: 0.1, mistake: 0, risk: 1, lossW: 1, smart: true, upgrade: 1, guard: 1, idle: 0, armyCap: 1.4 },
 };
 
 const memory = { key: '', done: new Set() };
@@ -332,7 +332,8 @@ function economyAction(state, ctx, P, pid, rng) {
     maxEnemyArmy = Math.max(maxEnemyArmy, ctx.armyValue(ctx.enemies.filter((e) => e.owner === p.id)));
   }
   const totalDanger = [...ctx.cityDanger.values()].reduce((a, b) => a + b, 0);
-  const capped = unitCount(state, pid) >= unitCap(state, pid);
+  // Spieler haben kein Einheitenlimit; die KI hält sich an ein weiches Maß (Versorgung der Städte), bei Gefahr etwas mehr
+  const capped = unitCount(state, pid) >= unitCap(state, pid) * (P.armyCap || 1) + (totalDanger > 6 ? 2 : 0);
   const wantArmy = !capped && (ctx.mine.length < ctx.ownCities.length + 2 || myArmy < maxEnemyArmy * 0.9 || totalDanger > 6);
   const cityIdx = (c) => state.cityAt[c.idx];
 

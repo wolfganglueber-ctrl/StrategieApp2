@@ -3,7 +3,7 @@ import { Renderer } from './render.js';
 import { attachInput } from './input.js';
 import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
-  incomeOf, unitCap, unitCount, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
+  incomeOf, unitCount, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, canTrain, flankers, canBuild, mergeTargets, canSplit,
 } from './game.js';
@@ -575,7 +575,7 @@ async function doDemolish(idx, building) {
 
 async function doDisband(u) {
   const name = `${UNITS[u.type].name}${(u.count || 1) > 1 ? ` ×${u.count}` : ''}`;
-  const ok = await confirmDialog(`${name} entlassen?`, 'Die Einheit wird aufgelöst und gibt ihre Versorgung frei. Rohstoffe gibt es dafür nicht zurück.', 'Entlassen', 'Behalten');
+  const ok = await confirmDialog(`${name} entlassen?`, 'Die Einheit wird aufgelöst. Rohstoffe gibt es dafür nicht zurück.', 'Entlassen', 'Behalten');
   if (ok) act({ type: 'disband', unitId: u.id }, { after: () => clearSel() });
 }
 
@@ -594,15 +594,16 @@ async function doMerge(u, t) {
 }
 
 // Sofort-Aktionen im Stadtmenü: kein Warten auf Animationen, schnelles Klicken kommt an
-function quickAct(action) {
-  if (busy) return;
+function quickAct(action, undoable = true) {
+  if (busy) return false;
   const snap = cloneState(S);
   const ev = applyAction(S, action);
-  if (!ev) { sound.play('error'); toast('Das geht nicht.'); return; }
-  undoStack.push(snap);
+  if (!ev) { sound.play('error'); toast('Das geht nicht.'); return false; }
+  if (undoable) undoStack.push(snap);
   if (undoStack.length > 30) undoStack.shift();
   refresh();
   play(ev, 1, false); // Animation läuft nebenher
+  return true;
 }
 
 function doRecruit(idx, type) {
@@ -642,7 +643,11 @@ function openTech() {
         done ? el('span', { class: 'done' }, '✓')
           : el('button', {
             class: 'btn small', disabled: !avail || !my || !canAfford(p.res, T.cost),
-            onclick: async () => { closeModal(); await act({ type: 'research', tech: t }, { undoable: false }); openTech(); },
+            // Fenster bleibt offen, nur der Inhalt wird aufgefrischt (Scroll-Position bleibt)
+            onclick: () => {
+              const box = $('modalBox'), top = box.scrollTop;
+              if (quickAct({ type: 'research', tech: t }, false)) { draw(); $('modalBox').scrollTop = top; }
+            },
           }, costEl(T.cost, p.res))));
     }
     openClosable(el('h2', {}, '🔬 Forschung'), el('p', {}, 'Erforschte Verbesserungen gelten für dein ganzes Reich.'), tabs, list,
@@ -1071,7 +1076,7 @@ function updateHud() {
   for (const k of RES) {
     bar.append(el('button', { class: 'pill', title: `${RES_INFO[k].name} – tippen zum Handeln`, onclick: () => openTrade(k) }, icon(k), el('b', {}, human.res[k]), el('small', {}, `+${inc[k]}`)));
   }
-  $('unitText').textContent = `${unitCount(S, human.id)}/${unitCap(S, human.id)}`;
+  $('unitText').textContent = `${unitCount(S, human.id)}`;
   const nAvail = TECH_ORDER.filter((t) => techAvailable(S, human.id, t) && canAfford(human.res, TECHS[t].cost)).length;
   $('techText').textContent = human.tech.length;
   $('techBadge').textContent = nAvail;
@@ -1306,7 +1311,7 @@ function renderCityPanel(panel, ci, occ) {
     if (c.level < CITY_MAX_LEVEL) {
       const cost = upgradeCostOf(S, c);
       panel.append(el('div', { class: 'upgrade-row' },
-        el('span', { class: 'muted' }, `Ausbau zur ${CITY_NAMES[c.level + 1]}: +1 Bauplatz, +1 auf alle Rohstoffe, mehr Versorgung`),
+        el('span', { class: 'muted' }, `Ausbau zur ${CITY_NAMES[c.level + 1]}: +1 Bauplatz, +1 auf alle Rohstoffe`),
         el('button', { class: 'btn small primary', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost, p.res))));
     } else {
       panel.append(el('div', { class: 'note' }, 'Höchste Ausbaustufe erreicht.'));
@@ -1406,7 +1411,7 @@ function renderPanelContent(panel) {
         actions.append(el('button', { class: 'btn small primary', title: `Ausbilden zum ${RANK_NAMES[r + 1]}`, disabled: !!why, onclick: () => act({ type: 'train', unitId: u.id }, { after: () => clearSel() }) },
           `🎓 ${RANK_NAMES[r + 1]} `, costEl(trainCost(u.type, r), S.players[S.current].res)));
       }
-      actions.append(el('button', { class: 'btn small raze', title: 'Einheit auflösen (gibt Versorgung frei)', onclick: () => doDisband(u) }, '🗑 Entlassen'));
+      actions.append(el('button', { class: 'btn small raze', title: 'Einheit auflösen', onclick: () => doDisband(u) }, '🗑 Entlassen'));
       if (mergeTargets(S, u).length) actions.append(el('button', { class: 'btn small merge', onclick: () => { sel.merge = true; refresh(); } }, '🔗 Verband bilden'));
       if (canSplit(S, u)) actions.append(el('button', { class: 'btn small', onclick: () => act({ type: 'split', unitId: u.id }) }, `✂ Aufteilen (${u.count} → ${u.count - 1} + 1)`));
       panel.append(actions);
@@ -1696,12 +1701,12 @@ function renderHelp() {
     <h3>So baust du dein Reich auf</h3>
     <p><b>1. Ausbreiten:</b> Besetze mit Reitern und Kriegern früh neutrale Dörfer – jedes bringt Gebiet und Rohstoffe.<br>
     <b>2. Wirtschaft:</b> Baue Gebäude passend zum Gebiet: eine <b>Mine</b> bei Hügeln und Bergen, einen <b>Holzfäller</b> bei Wäldern, einen <b>Bauernhof</b> sonst.<br>
-    <b>3. Wachsen:</b> Baue Städte aus (bis Stufe 5): mehr Bauplätze, mehr Ertrag, mehr Versorgung. Jede Stadt besitzt 2 Felder Gebiet rundherum – eroberte Nachbarstädte bilden ein zusammenhängendes Reich.<br>
+    <b>3. Wachsen:</b> Baue Städte aus (bis Stufe 5): mehr Bauplätze, mehr Ertrag. Jede Stadt besitzt 2 Felder Gebiet rundherum – eroberte Nachbarstädte bilden ein zusammenhängendes Reich.<br>
     <b>4. Armee:</b> Eine <b>Kaserne</b> in Frontstädten lässt neue Einheiten sofort ziehen und ermöglicht Ritter. Fehlt ein Rohstoff, tippe oben auf die Rohstoffleiste und handle.<br>
     <b>5. Angriff:</b> Erst die Fernkämpfer schießen lassen, dann mit Nahkämpfern zuschlagen.</p>
     <h3>Ablauf einer Runde</h3>
     <p>Jede Einheit darf pro Runde einmal ziehen und einmal angreifen (erst ziehen, dann angreifen). Über eigene Einheiten springst du hinweg – das kostet keine Bewegung.
-    Du kannst pro Runde beliebig viele Einheiten rekrutieren (begrenzt durch Rohstoffe und Versorgung). Sie erscheinen auf freien Feldern im Stadtgebiet und handeln ab der nächsten Runde – mit Kaserne sofort.
+    Du kannst pro Runde beliebig viele Einheiten rekrutieren (begrenzt nur durch Rohstoffe). Sie erscheinen auf freien Feldern im Stadtgebiet und handeln ab der nächsten Runde – mit Kaserne sofort.
     Einheiten, die noch etwas tun können, haben einen leuchtenden Ring.</p>
     <h3>Gemeinsam angreifen 👥</h3>
     <p>Wähle eine Einheit und tippe auf „👥 Alle in der Nähe“ (alle eigenen Einheiten im Umkreis) oder „👥 Alle Ritter“ usw. (nur gleiche Einheiten im Umkreis); am PC geht auch Shift + Klick. Danach ist der Gruppenmodus aktiv. Weitere eigene Einheiten fügst du per Tipp hinzu oder nimmst sie wieder heraus.
@@ -1715,11 +1720,11 @@ function renderHelp() {
     <b>Erschüttert ⭐:</b> Wer von einem Fernkämpfer getroffen wird, hat bis zu seinem nächsten Zug nur halbe Verteidigung und schlägt nicht zurück.</p>
     <h3>Städte</h3>
     <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden; Türme und Steinwälle in ihrem Gebiet wechseln mit auf deine Seite.
-    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz und +1 auf alle Rohstoffe. Die Versorgung (Dorf 2, Siedlung 2, Stadt 3, Burgstadt 4, Metropole 5) begrenzt, wie viele Einheiten du haben kannst – lieber wenige, gut ausgebildete Einheiten als viele.</p>
+    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz und +1 auf alle Rohstoffe.</p>
     <h3>Gebäude</h3>
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
     <h3>Abreißen 🗑</h3>
-    <p>Verbaut? Im Reiter „Gebäude“ hat jedes fertige Gebäude einen 🗑-Knopf: Nach einer Rückfrage wird es abgerissen, der Bauplatz ist wieder frei, und du bekommst die Hälfte der Baukosten zurück. Eigene Türme und Steinwälle reißt du ab, indem du sie antippst. Einheiten, die du nicht mehr brauchst, löst du mit „🗑 Entlassen“ auf – das gibt ihre Versorgung frei, aber keine Rohstoffe zurück.</p>
+    <p>Verbaut? Im Reiter „Gebäude“ hat jedes fertige Gebäude einen 🗑-Knopf: Nach einer Rückfrage wird es abgerissen, der Bauplatz ist wieder frei, und du bekommst die Hälfte der Baukosten zurück. Eigene Türme und Steinwälle reißt du ab, indem du sie antippst. Einheiten, die du nicht mehr brauchst, löst du mit „🗑 Entlassen“ auf – Rohstoffe gibt es dafür nicht zurück.</p>
     <h3>Türme</h3>
     <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt). Türme bewegen sich nicht, greifen aber Gegner in Reichweite an und lassen sich in 3 Stufen ausbauen: tippe den Turm an. Hat ein Turm in deinem Zug noch nicht geschossen, feuert er beim Zugende automatisch auf das lohnendste Ziel.</p>
     <h3>Steinwälle 🧱</h3>
@@ -1747,11 +1752,11 @@ function renderHelp() {
     <h3>Katapult und Flanke</h3>
     <p>Katapulte treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +10 % (höchstens +30 %): Einkesseln lohnt sich.</p>
     <h3>Schwarzer Troll</h3>
-    <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel, braucht 3 Versorgung und eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
+    <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel und braucht eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
     <h3>Basilisk 🦎</h3>
-    <p>Eine Riesenechse mit tödlichem Blick: Sie greift aus 2 Feldern an, und wer getroffen wird und überlebt, <b>versteinert</b> – er setzt seinen nächsten Zug aus und schlägt bis dahin nicht zurück (grau dargestellt). Troll, Drache, Türme und Wälle sind immun. Ideal, um einen starken Gegner festzuhalten, während deine Armee angreift. Braucht ein Basiliskennest (Stadt ab Stufe 3), 2 Versorgung, höchstens 2 pro Reich.</p>
+    <p>Eine Riesenechse mit tödlichem Blick: Sie greift aus 2 Feldern an, und wer getroffen wird und überlebt, <b>versteinert</b> – er setzt seinen nächsten Zug aus und schlägt bis dahin nicht zurück (grau dargestellt). Troll, Drache, Türme und Wälle sind immun. Ideal, um einen starken Gegner festzuhalten, während deine Armee angreift. Braucht ein Basiliskennest (Stadt ab Stufe 3), höchstens 2 pro Reich.</p>
     <h3>Drache 🐉</h3>
-    <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), sein Feueratem trifft auch Gegner neben dem Ziel, und er heilt jede Runde 6 Leben. Er ist ein Endgegner: etwa fünfmal so stark wie früher, aber zehnmal so teuer – bei Rang 3 und 5 wählst du jeweils aus drei Fähigkeiten. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (in jeder Stadt baubar, aber nur eine im Reich – ein kleiner Drache auf dem Stadtturm zeigt, wo sie steht), 3 Versorgung, und es gibt nur einen Drachen pro Reich.</p>
+    <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), sein Feueratem trifft auch Gegner neben dem Ziel, und er heilt jede Runde 6 Leben. Er ist ein Endgegner: etwa fünfmal so stark wie früher, aber zehnmal so teuer – bei Rang 3 und 5 wählst du jeweils aus drei Fähigkeiten. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (in jeder Stadt baubar, aber nur eine im Reich – ein kleiner Drache auf dem Stadtturm zeigt, wo sie steht), und es gibt nur einen Drachen pro Reich.</p>
     <h3>Geräusche 🔊</h3>
     <p>Kampf, Bewegung und Ereignisse sind zu hören, im Hintergrund je nach Kartenausschnitt Meeresrauschen, plätschernde Seen, Wind über den Bergen, Vögel im Wald und das Treiben der Städte. Alles wird im Gerät erzeugt und funktioniert offline. Lautstärke und Umgebung stellst du im Menü unter Einstellungen ein.</p>
     <h3>Wache halten 💤</h3>

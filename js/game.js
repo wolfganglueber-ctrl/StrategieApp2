@@ -478,14 +478,13 @@ export function canRecruit(state, pid, ci, type) {
   if (!T || !c || c.owner !== pid) return 'invalid';
   if (T.needs && !hasBuilding(c, T.needs)) return 'needs';
   if (T.perRealm && state.units.filter((u) => u.owner === pid && u.type === type).length >= T.perRealm) return 'unique';
-  if (unitCount(state, pid) + (T.supply || 1) > unitCap(state, pid)) return 'cap';
   if (T.healer && state.units.filter((u) => u.owner === pid && u.type === type).length >= cityCount(state, pid)) return 'limit';
   if (!canAfford(state.players[pid].res, T.cost)) return 'cost';
   if (!spawnSpots(state, ci).length) return 'space';
   return null;
 }
 
-// Versorgung: jede Stadt versorgt so viele Einheiten, wie sie Gold einbringt
+// Versorgung: kein Limit für Spieler mehr, nur Richtmaß für die Armeegröße der KI
 export function unitCap(state, pid) {
   let sum = 0;
   for (const c of state.cities) if (c.owner === pid) sum += citySupply(c);
@@ -862,7 +861,7 @@ export function applyAction(state, a) {
       break;
     }
     case 'disband': {
-      // Eigene Einheit entlassen: gibt Versorgung frei, keine Rückerstattung
+      // Eigene Einheit entlassen: keine Rückerstattung
       const u = unitById(state, a.unitId);
       if (!u || u.owner !== pid || isStructure(u)) return null;
       state.units = state.units.filter((x) => x !== u);
