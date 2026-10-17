@@ -395,21 +395,332 @@ function tower(ctx, x, y, r, h, roof, s) {
   ctx.stroke();
 }
 
+// Steinverlauf für Mauern und Türme
+function stone(ctx, x0, x1, dark = 0) {
+  const g = ctx.createLinearGradient(x0, 0, x1, 0);
+  g.addColorStop(0, shade('#efe6d3', -dark));
+  g.addColorStop(0.55, shade('#cdbfa4', -dark));
+  g.addColorStop(1, shade('#9a8d74', -dark));
+  return g;
+}
+
+// Fahne an einer Stange
+function flag(ctx, x, y, len, col, s, big = false) {
+  const h = (big ? 10 : 7) * s, w = (big ? 16 : 11) * s;
+  ctx.strokeStyle = '#3a3a3a';
+  ctx.lineWidth = (big ? 1.6 : 1.2) * s;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y - len);
+  ctx.stroke();
+  ctx.fillStyle = '#e8c35a';
+  ctx.beginPath();
+  ctx.arc(x, y - len, 1.2 * s, 0, Math.PI * 2);
+  ctx.fill();
+  const fy = y - len + 1.5 * s;
+  ctx.fillStyle = col.main;
+  ctx.beginPath();
+  ctx.moveTo(x, fy);
+  ctx.quadraticCurveTo(x + w * 0.5, fy - 2 * s, x + w, fy + h * 0.3);
+  ctx.lineTo(x + w * 0.82, fy + h * 0.5);
+  ctx.lineTo(x + w, fy + h * 0.75);
+  ctx.quadraticCurveTo(x + w * 0.5, fy + h * 0.55, x, fy + h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = col.dark;
+  ctx.lineWidth = 0.7 * s;
+  ctx.stroke();
+}
+
+// Hängendes Banner mit goldenem Wappen
+function banner(ctx, x, y, w, h, col, s) {
+  ctx.fillStyle = col.main;
+  ctx.beginPath();
+  ctx.moveTo(x - w / 2, y);
+  ctx.lineTo(x + w / 2, y);
+  ctx.lineTo(x + w / 2, y + h);
+  ctx.lineTo(x, y + h - w * 0.45);
+  ctx.lineTo(x - w / 2, y + h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = col.dark;
+  ctx.lineWidth = 0.6 * s;
+  ctx.stroke();
+  ctx.fillStyle = '#f2c94c';
+  ctx.fillRect(x - w / 2, y, w, 1.2 * s);
+  ctx.beginPath();
+  ctx.moveTo(x, y + h * 0.25);
+  ctx.lineTo(x + w * 0.22, y + h * 0.42);
+  ctx.lineTo(x, y + h * 0.6);
+  ctx.lineTo(x - w * 0.22, y + h * 0.42);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// Zinnen auf einer waagerechten Kante
+function merlons(ctx, x0, x1, y, s, n) {
+  const w = (x1 - x0) / (n * 2 - 1);
+  ctx.fillStyle = '#e9e0cc';
+  ctx.strokeStyle = 'rgba(60,45,25,0.6)';
+  ctx.lineWidth = 0.6 * s;
+  for (let k = 0; k < n; k++) {
+    ctx.fillRect(x0 + k * 2 * w, y - 3 * s, w, 3 * s);
+    ctx.strokeRect(x0 + k * 2 * w, y - 3 * s, w, 3 * s);
+  }
+}
+
+// Runder Wehrturm mit Zinnenkranz und Kegeldach in Spielerfarbe
+function turret(ctx, x, y, r, h, col, s, roof = true) {
+  shadowEllipse(ctx, x + r * 0.5, y + 1 * s, r * 1.3, r * 0.45, 0.3);
+  ctx.fillStyle = stone(ctx, x - r, x + r);
+  ctx.fillRect(x - r, y - h, r * 2, h);
+  ctx.beginPath();
+  ctx.ellipse(x, y, r, r * 0.35, 0, 0, Math.PI);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(60,40,20,0.55)';
+  ctx.lineWidth = 0.7 * s;
+  ctx.beginPath();
+  ctx.moveTo(x - r, y);
+  ctx.lineTo(x - r, y - h);
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + r, y - h);
+  ctx.stroke();
+  // Steinfugen
+  ctx.strokeStyle = 'rgba(90,75,55,0.3)';
+  for (let yy = y - 4 * s; yy > y - h + 3 * s; yy -= 4 * s) {
+    ctx.beginPath();
+    ctx.moveTo(x - r, yy);
+    ctx.lineTo(x + r, yy);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#2b2118';
+  ctx.fillRect(x - 0.6 * s, y - h * 0.62, 1.2 * s, 3 * s);
+  // Kranz
+  const top = y - h;
+  ctx.fillStyle = stone(ctx, x - r - 1.2 * s, x + r + 1.2 * s);
+  ctx.fillRect(x - r - 1.2 * s, top - 2 * s, (r + 1.2 * s) * 2, 3 * s);
+  merlons(ctx, x - r - 1.2 * s, x + r + 1.2 * s, top - 2 * s, s, 3);
+  if (roof) {
+    const rg = ctx.createLinearGradient(x - r, 0, x + r, 0);
+    rg.addColorStop(0, shade(col.main, 0.3));
+    rg.addColorStop(1, shade(col.main, -0.35));
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.moveTo(x - r - 0.5 * s, top - 2 * s);
+    ctx.lineTo(x, top - 2 * s - r * 2.6);
+    ctx.lineTo(x + r + 0.5 * s, top - 2 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(40,20,10,0.6)';
+    ctx.stroke();
+  }
+  return roof ? top - 2 * s - r * 2.6 : top - 5 * s;
+}
+
+// Stadtmauer als Ring; erst die hintere Hälfte (vor den Häusern zeichnen), dann die vordere
+function cityWall(ctx, x, y, s, col, half, big) {
+  const cx = x, cy = y + 7 * s, rx = (big ? 33 : 31) * s, ry = (big ? 20 : 19) * s;
+  const wh = (big ? 11 : 8.5) * s;
+  const a0 = half === 'back' ? Math.PI : 0, a1 = half === 'back' ? Math.PI * 2 : Math.PI;
+  const N = 16;
+  const pt = (a) => [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry];
+  const gateA = Math.PI / 2, gateHalf = 0.16;
+  for (let k = 0; k < N; k++) {
+    const aa = a0 + ((a1 - a0) * k) / N, ab = a0 + ((a1 - a0) * (k + 1)) / N;
+    const [x0, y0] = pt(aa), [x1, y1] = pt(ab);
+    // Mauerfläche: vorne die Außenseite, hinten die Innenseite (im Schatten)
+    const light = half === 'back' ? -0.25 : -0.05 - 0.25 * Math.max(0, Math.cos(aa + Math.PI / 4));
+    ctx.fillStyle = shade('#d8ccb2', light);
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.lineTo(x1, y1 - wh);
+    ctx.lineTo(x0, y0 - wh);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(70,55,35,0.35)';
+    ctx.lineWidth = 0.5 * s;
+    ctx.stroke();
+    // Steinlage
+    ctx.beginPath();
+    ctx.moveTo(x0, y0 - wh * 0.5);
+    ctx.lineTo(x1, y1 - wh * 0.5);
+    ctx.stroke();
+    // Wehrgang oben
+    ctx.strokeStyle = '#f1e9d6';
+    ctx.lineWidth = 2.2 * s;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0 - wh);
+    ctx.lineTo(x1, y1 - wh);
+    ctx.stroke();
+    // Zinnen
+    if (k % 1 === 0) {
+      const mx = (x0 + x1) / 2, my = (y0 + y1) / 2 - wh;
+      ctx.fillStyle = shade('#e9e0cc', light * 0.6);
+      ctx.fillRect(mx - 1.3 * s, my - 3 * s, 2.6 * s, 3 * s);
+      ctx.strokeStyle = 'rgba(60,45,25,0.55)';
+      ctx.lineWidth = 0.5 * s;
+      ctx.strokeRect(mx - 1.3 * s, my - 3 * s, 2.6 * s, 3 * s);
+    }
+  }
+  ctx.strokeStyle = 'rgba(50,38,25,0.6)';
+  ctx.lineWidth = 0.9 * s;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, a0, a1);
+  ctx.stroke();
+  const tr = (big ? 4.6 : 3.8) * s, th = wh + (big ? 9 : 6) * s;
+  if (half === 'back') {
+    for (const a of [Math.PI * 1.22, Math.PI * 1.78]) {
+      const [tx, ty] = pt(a);
+      turret(ctx, tx, ty, tr, big ? th + 6 * s : th, col, s, big);
+    }
+  } else {
+    // Seitentürme und Torhaus
+    for (const a of [Math.PI * 0.02, Math.PI * 0.98]) {
+      const [tx, ty] = pt(a);
+      turret(ctx, tx, ty, tr, th, col, s, big);
+    }
+    const [gx, gy] = pt(gateA);
+    const gw = (big ? 12 : 10) * s, gh = wh + (big ? 7 : 5) * s;
+    ctx.fillStyle = stone(ctx, gx - gw / 2, gx + gw / 2);
+    ctx.fillRect(gx - gw / 2, gy - gh, gw, gh);
+    ctx.strokeStyle = 'rgba(60,40,20,0.6)';
+    ctx.lineWidth = 0.7 * s;
+    ctx.strokeRect(gx - gw / 2, gy - gh, gw, gh);
+    merlons(ctx, gx - gw / 2, gx + gw / 2, gy - gh, s, 3);
+    ctx.fillStyle = '#2b2118';
+    ctx.beginPath();
+    ctx.arc(gx, gy - 4 * s, 3 * s, Math.PI, 0);
+    ctx.lineTo(gx + 3 * s, gy);
+    ctx.lineTo(gx - 3 * s, gy);
+    ctx.fill();
+    // Fallgitter
+    ctx.strokeStyle = 'rgba(160,140,100,0.7)';
+    ctx.lineWidth = 0.5 * s;
+    for (let k = -2; k <= 2; k++) {
+      ctx.beginPath();
+      ctx.moveTo(gx + k * 1.2 * s, gy - 6.5 * s);
+      ctx.lineTo(gx + k * 1.2 * s, gy);
+      ctx.stroke();
+    }
+    if (big) banner(ctx, gx, gy - gh + 1.5 * s, 4 * s, 6 * s, col, s);
+  }
+  void gateHalf;
+}
+
+// Kleine Kirche mit Glockenturm
+function chapel(ctx, x, y, roof, s) {
+  house(ctx, x, y, 10 * s, 7 * s, roof, s);
+  const tx = x - 6 * s;
+  ctx.fillStyle = stone(ctx, tx - 2.5 * s, tx + 2.5 * s);
+  ctx.fillRect(tx - 2.5 * s, y - 15 * s, 5 * s, 15 * s);
+  ctx.strokeStyle = 'rgba(60,40,20,0.55)';
+  ctx.lineWidth = 0.7 * s;
+  ctx.strokeRect(tx - 2.5 * s, y - 15 * s, 5 * s, 15 * s);
+  ctx.fillStyle = '#2b2118';
+  ctx.fillRect(tx - 1 * s, y - 13 * s, 2 * s, 3 * s);
+  ctx.fillStyle = shade(roof, -0.2);
+  ctx.beginPath();
+  ctx.moveTo(tx - 3 * s, y - 15 * s);
+  ctx.lineTo(tx, y - 24 * s);
+  ctx.lineTo(tx + 3 * s, y - 15 * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = '#e8c35a';
+  ctx.lineWidth = 0.8 * s;
+  ctx.beginPath();
+  ctx.moveTo(tx, y - 24 * s);
+  ctx.lineTo(tx, y - 28 * s);
+  ctx.moveTo(tx - 1.5 * s, y - 26.5 * s);
+  ctx.lineTo(tx + 1.5 * s, y - 26.5 * s);
+  ctx.stroke();
+}
+
+// Burg: großer Bergfried mit Ecktürmchen, flankiert von Rundtürmen
+function fortress(ctx, x, y, s, col) {
+  const roof = col.main;
+  // Bergfried
+  const kw = 20 * s, kh = 30 * s, kx = x + 1 * s, ky = y + 9 * s, dep = 7 * s;
+  shadowEllipse(ctx, kx + 6 * s, ky + 1.5 * s, kw * 0.8, 4 * s, 0.35);
+  ctx.fillStyle = shade('#b8ab93', -0.05);
+  ctx.beginPath();
+  ctx.moveTo(kx + kw / 2, ky);
+  ctx.lineTo(kx + kw / 2 + dep, ky - dep * 0.55);
+  ctx.lineTo(kx + kw / 2 + dep, ky - kh - dep * 0.55);
+  ctx.lineTo(kx + kw / 2, ky - kh);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = stone(ctx, kx - kw / 2, kx + kw / 2);
+  ctx.fillRect(kx - kw / 2, ky - kh, kw, kh);
+  ctx.strokeStyle = 'rgba(60,40,20,0.6)';
+  ctx.lineWidth = 0.9 * s;
+  ctx.strokeRect(kx - kw / 2, ky - kh, kw, kh);
+  ctx.strokeStyle = 'rgba(90,75,55,0.28)';
+  ctx.lineWidth = 0.6 * s;
+  for (let yy = ky - 4 * s; yy > ky - kh; yy -= 4 * s) {
+    ctx.beginPath();
+    ctx.moveTo(kx - kw / 2, yy);
+    ctx.lineTo(kx + kw / 2, yy);
+    ctx.stroke();
+  }
+  // Oberer Rand der Seitenwand + Zinnen
+  merlons(ctx, kx - kw / 2, kx + kw / 2, ky - kh, s, 4);
+  // Fenster und Tor
+  ctx.fillStyle = '#2b2118';
+  for (const [wx, wy] of [[-5, -22], [5, -22], [0, -15]]) {
+    ctx.beginPath();
+    ctx.arc(kx + wx * s, ky + wy * s, 1.4 * s, Math.PI, 0);
+    ctx.lineTo(kx + wx * s + 1.4 * s, ky + wy * s + 3 * s);
+    ctx.lineTo(kx + wx * s - 1.4 * s, ky + wy * s + 3 * s);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#ffd96a';
+  ctx.fillRect(kx - 5.6 * s, ky - 21.5 * s, 1.2 * s, 1.5 * s);
+  ctx.fillStyle = '#4a3420';
+  ctx.beginPath();
+  ctx.arc(kx, ky - 5 * s, 3.5 * s, Math.PI, 0);
+  ctx.lineTo(kx + 3.5 * s, ky);
+  ctx.lineTo(kx - 3.5 * s, ky);
+  ctx.fill();
+  banner(ctx, kx - 7 * s, ky - kh + 3 * s, 4 * s, 11 * s, col, s);
+  banner(ctx, kx + 7 * s, ky - kh + 3 * s, 4 * s, 11 * s, col, s);
+  // Ecktürmchen
+  for (const ex of [-kw / 2, kw / 2]) {
+    turret(ctx, kx + ex, ky - kh + 6 * s, 2.8 * s, 9 * s, col, s);
+  }
+  // Große Fahne auf dem Bergfried
+  flag(ctx, kx + 2 * s, ky - kh - 3 * s, 18 * s, col, s, true);
+  // Häuser vor der Burg
+  house(ctx, x - 15 * s, y + 19 * s, 8 * s, 6 * s, roof, s);
+  house(ctx, x + 16 * s, y + 20 * s, 8 * s, 6 * s, roof, s);
+}
+
+// Eine Stadt ist eine Burg, wenn sie voll ausgebaut ist (Stufe 5, alle Bauplätze belegt)
+export function isFortress(city) {
+  return city.level >= 5 && (city.buildings?.length || 0) >= 5;
+}
+
 export function drawCity(ctx, city, x, y, H, col) {
   const s = H / 40;
+  const big = isFortress(city);
+  const walled = big || city.buildings?.includes('wall');
   // Pflaster
   const g = ctx.createRadialGradient(x - 6 * s, y, 2, x, y + 4 * s, 26 * s);
   g.addColorStop(0, '#efe2c4');
   g.addColorStop(1, '#bfa77c');
   ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.ellipse(x, y + 6 * s, 27 * s, 17 * s, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y + 6 * s, (big ? 30 : 27) * s, (big ? 18 : 17) * s, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = 'rgba(90,65,35,0.5)';
   ctx.lineWidth = 1.2;
   ctx.stroke();
+  if (walled) cityWall(ctx, x, y, s, col, 'back', big);
   const roof = col.main;
-  if (city.capital) {
+  if (big) {
+    fortress(ctx, x, y, s, col);
+  } else if (city.capital) {
     // Burg: Bergfried mit Türmen
     tower(ctx, x - 15 * s, y + 10 * s, 5.5 * s, 22 * s, roof, s);
     const kw = 22 * s, kh = 24 * s, kx = x - 4 * s, ky = y + 12 * s;
@@ -421,85 +732,52 @@ export function drawCity(ctx, city, x, y, H, col) {
     ctx.lineTo(kx + kw / 2, ky - kh);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = '#e9dfcb';
+    ctx.fillStyle = stone(ctx, kx - kw / 2, kx + kw / 2);
     ctx.fillRect(kx - kw / 2, ky - kh, kw, kh);
     ctx.strokeStyle = 'rgba(60,40,20,0.6)';
     ctx.lineWidth = 0.9 * s;
     ctx.strokeRect(kx - kw / 2, ky - kh, kw, kh);
-    for (let k = 0; k < 4; k++) {
-      ctx.fillStyle = '#e9dfcb';
-      ctx.fillRect(kx - kw / 2 + k * (kw / 3.5), ky - kh - 4 * s, kw / 7, 4 * s);
-      ctx.strokeRect(kx - kw / 2 + k * (kw / 3.5), ky - kh - 4 * s, kw / 7, 4 * s);
-    }
+    merlons(ctx, kx - kw / 2, kx + kw / 2, ky - kh, s, 4);
     ctx.fillStyle = '#4a3420';
     ctx.beginPath();
     ctx.arc(kx, ky - 6 * s, 4 * s, Math.PI, 0);
     ctx.lineTo(kx + 4 * s, ky);
     ctx.lineTo(kx - 4 * s, ky);
     ctx.fill();
-    // Fahne
-    ctx.strokeStyle = '#3a3a3a';
-    ctx.lineWidth = 1.4 * s;
-    ctx.beginPath();
-    ctx.moveTo(kx, ky - kh - 4 * s);
-    ctx.lineTo(kx, ky - kh - 22 * s);
-    ctx.stroke();
-    ctx.fillStyle = col.main;
-    ctx.beginPath();
-    ctx.moveTo(kx, ky - kh - 22 * s);
-    ctx.quadraticCurveTo(kx + 8 * s, ky - kh - 23 * s, kx + 14 * s, ky - kh - 18 * s);
-    ctx.quadraticCurveTo(kx + 8 * s, ky - kh - 15 * s, kx, ky - kh - 13 * s);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = col.dark;
-    ctx.lineWidth = 0.8;
-    ctx.stroke();
+    if (city.level >= 3) banner(ctx, kx - 6 * s, ky - kh + 2 * s, 3.5 * s, 9 * s, col, s);
+    if (city.level >= 4) banner(ctx, kx + 6 * s, ky - kh + 2 * s, 3.5 * s, 9 * s, col, s);
+    flag(ctx, kx, ky - kh - 3 * s, 19 * s, col, s, city.level >= 4);
     tower(ctx, x + 16 * s, y + 14 * s, 5 * s, 18 * s, roof, s);
-    if (city.level >= 3) house(ctx, x - 20 * s, y + 22 * s, 9 * s, 7 * s, roof, s);
-    if (city.level >= 4) house(ctx, x + 4 * s, y + 24 * s, 9 * s, 7 * s, roof, s);
-    if (city.level >= 5) house(ctx, x + 22 * s, y + 24 * s, 8 * s, 6 * s, roof, s);
+    const dy = walled ? -3 * s : 0;
+    if (city.level >= 3) house(ctx, x - 20 * s, y + 22 * s + dy, 9 * s, 7 * s, roof, s);
+    if (city.level >= 4) house(ctx, x + 4 * s, y + 24 * s + dy, 9 * s, 7 * s, roof, s);
+    if (city.level >= 5) house(ctx, x + 22 * s, y + 24 * s + dy, 8 * s, 6 * s, roof, s);
   } else {
+    const dy = walled ? -3 : 0;
     const layouts = {
       1: [[-7, 8, 12], [9, 14, 10]],
       2: [[-10, 4, 11], [10, 6, 11], [-1, 18, 12]],
-      3: [[-13, 2, 10], [4, -2, 12], [16, 10, 10], [-6, 19, 11], [10, 22, 9]],
+      3: [[4, -2, 12], [16, 10, 10], [-6, 19, 11], [10, 22, 9]],
     }[Math.min(3, city.level)];
     if (city.level >= 4) {
-      // Burgstadt / Metropole: Turm in der Mitte
-      tower(ctx, x + 2 * s, y + 6 * s, 5 * s, city.level >= 5 ? 24 * s : 18 * s, roof, s);
-      for (const [dx, dy, w] of [[-16, 8, 10], [18, 10, 10], [-8, 22, 11], [10, 24, 10], ...(city.level >= 5 ? [[-22, 20, 8], [24, 22, 8]] : [])]) {
-        house(ctx, x + dx * s, y + dy * s, w * s, w * 0.75 * s, roof, s);
+      // Burgstadt / Metropole: Turm in der Mitte, Kirche, mehr Häuser
+      chapel(ctx, x - 12 * s, y + 6 * s, roof, s);
+      const top = turret(ctx, x + 6 * s, y + 6 * s, 5 * s, city.level >= 5 ? 22 * s : 17 * s, col, s);
+      flag(ctx, x + 6 * s, top, 8 * s, col, s, city.level >= 5);
+      for (const [hx, hy, w] of [[18, 10, 10], [-8, 22 + dy, 11], [10, 24 + dy, 10], ...(city.level >= 5 ? [[-22, 18 + dy, 8], [24, 22 + dy, 8]] : [])]) {
+        house(ctx, x + hx * s, y + hy * s, w * s, w * 0.75 * s, roof, s);
       }
     } else {
-      for (const [dx, dy, w] of layouts) house(ctx, x + dx * s, y + dy * s, w * s, w * 0.75 * s, roof, s);
+      if (city.level >= 3) chapel(ctx, x - 12 * s, y + 3 * s, roof, s);
+      for (const [hx, hy, w] of layouts) house(ctx, x + hx * s, y + (hy + (hy > 15 ? dy : 0)) * s, w * s, w * 0.75 * s, roof, s);
+      if (city.level >= 2) flag(ctx, x + (city.level >= 3 ? 4 : -10) * s, y + (city.level >= 3 ? -9 : -4) * s, 9 * s, col, s);
     }
   }
-  if (city.buildings?.includes('wall')) {
-    // Steinmauer vorne um die Stadt
-    ctx.lineCap = 'butt';
-    ctx.strokeStyle = '#6f675c';
-    ctx.lineWidth = 6 * s;
-    ctx.beginPath();
-    ctx.ellipse(x, y + 8 * s, 30 * s, 19 * s, 0, 0.1 * Math.PI, 0.9 * Math.PI);
-    ctx.stroke();
-    ctx.strokeStyle = '#b9b0a2';
-    ctx.lineWidth = 4 * s;
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(70,60,50,0.6)';
-    ctx.lineWidth = 0.8 * s;
-    for (let k = 0; k <= 8; k++) {
-      const a = (0.1 + (0.8 * k) / 8) * Math.PI;
-      const px = x + Math.cos(a) * 30 * s, py = y + 8 * s + Math.sin(a) * 19 * s;
-      ctx.beginPath();
-      ctx.moveTo(px, py - 2.5 * s);
-      ctx.lineTo(px, py + 2.5 * s);
-      ctx.stroke();
-    }
-  }
+  if (walled) cityWall(ctx, x, y, s, col, 'front', big);
   // Stufenanzeige
   if (city.level > 1) {
     for (let k = 0; k < city.level; k++) {
-      const px = x - (city.level - 1) * 5 * s + k * 10 * s, py = y + 27 * s;
+      const px = x - (city.level - 1) * 5 * s + k * 10 * s, py = y + 29 * s;
       ctx.fillStyle = '#ffd34d';
       ctx.strokeStyle = '#6b4a00';
       ctx.lineWidth = 1;
