@@ -6,7 +6,7 @@ import {
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
-  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, canTrain, unitCount,
+  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, canTrain, unitCount, canBuild,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -242,7 +242,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
   const options = UNIT_ORDER.filter((k) => !canRecruit(state, pid, ci, k));
   if (!options.length) return null;
   if (!P.smart) {
-    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, catapult: 0.5, mage: 0.5, troll: 3 };
+    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, catapult: 0.5, mage: 0.5, troll: 3, dragon: 3 };
     return weightedPick(options, (k) => w[k], rng);
   }
   const danger = ctx.cityDanger.get(city.idx) || 0;
@@ -260,6 +260,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
     catapult: 1.5 + enemyDef * 0.8,
     mage: ctx.mine.length >= 4 ? 3 : 0.5,
     troll: 50,
+    dragon: 60,
   };
   for (const k of Object.keys(w)) w[k] /= 1 + mineCount(k) * 0.35;
   return weightedPick(options, (k) => w[k], rng);
@@ -294,14 +295,15 @@ function chooseBuilding(state, ctx, pid, ci, inc) {
     mine: 1 + rocks * 2.4 + (inc.ore < inc.wood ? 1 : 0),
     barracks: c.capital || ctx.ownCities.length >= 3 ? 2.2 : 0.3,
     workshop: ctx.ownCities.length >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'barracks')) ? 1.4 : 0.2,
+    dragonlair: c.level >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.6 : 0,
     lair: c.level >= 4 && !ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.5 : 0,
     sanctum: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'sanctum')) ? 1.5 : 0.3,
     wall: (ctx.cityDanger.get(c.idx) || 0) > 3 ? 3 : 0.4,
-    market: ctx.ownCities.some((x) => hasBuilding(x, 'market')) ? 0 : 1.2,
+    market: ctx.ownCities.some((x) => hasBuilding(x, 'market')) ? 0 : ctx.ownCities.length >= 3 ? 2 : 1,
   };
   let best = null;
   for (const [b, v] of Object.entries(score)) {
-    if (hasBuilding(c, b) || v <= 0.5 || !canAfford(res, BUILDINGS[b].cost) || c.level < (BUILDINGS[b].minLevel || 0)) continue;
+    if (v <= 0.5 || canBuild(state, pid, c, b)) continue;
     if (!best || v > best.v) best = { b, v };
   }
   return best && best.b;
@@ -310,6 +312,7 @@ function chooseBuilding(state, ctx, pid, ci, inc) {
 function tradeAction(state, pid) {
   const res = state.players[pid].res;
   const rate = tradeRate(state, pid);
+  if (!rate) return null;
   const sorted = RES.slice().sort((a, b) => res[a] - res[b]);
   const low = sorted[0], high = sorted[2];
   if (res[low] < 4 && res[high] >= rate + 8) return { type: 'trade', give: high, get: low };
@@ -336,9 +339,17 @@ function economyAction(state, ctx, P, pid, rng) {
     if (opts.length) return { type: 'perk', unitId: u.id, perk: opts[Math.floor(rng() * opts.length)] };
   }
   // Troll: wer eine Trollhöhle hat, spart darauf
-  const lair = ctx.ownCities.find((c) => hasBuilding(c, 'lair'));
-  const saveTroll = P.smart && lair && !ctx.mine.some((u) => u.type === 'troll') && totalDanger < 8 && ctx.mine.length >= ctx.ownCities.length;
-  if (saveTroll && !canRecruit(state, pid, cityIdx(lair), 'troll')) return { type: 'recruit', idx: lair.idx, unitType: 'troll' };
+  // Titanen (Drache, Troll): wer die Höhle hat, spart darauf
+  let saveTroll = false;
+  if (P.smart && totalDanger < 8 && ctx.mine.length >= ctx.ownCities.length) {
+    for (const [type, b, want] of [['dragon', 'dragonlair', 1], ['troll', 'lair', 2]]) {
+      const home = ctx.ownCities.find((c) => hasBuilding(c, b));
+      if (!home || ctx.mine.filter((u) => u.type === type).length >= want) continue;
+      if (!canRecruit(state, pid, cityIdx(home), type)) return { type: 'recruit', idx: home.idx, unitType: type };
+      saveTroll = true;
+      break;
+    }
+  }
   if (P.smart) {
     const t = tradeAction(state, pid);
     if (t && rng() < 0.8) return t;
@@ -385,7 +396,7 @@ function economyAction(state, ctx, P, pid, rng) {
   // Forschung, wenn Rohstoffe übrig sind
   if (P.upgrade > 0 && !saveTroll && rng() < P.upgrade) {
     const resSum = res.food + res.wood + res.ore;
-    const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'medic', 'enlight', 'blessing', 'guild'];
+    const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'medic', 'enlight', 'blessing', 'guild'].filter((t) => t !== 'guild' || tradeRate(state, pid));
     if (resSum > (wantArmy ? 70 : 35)) {
       for (const t of prio) {
         if (techAvailable(state, pid, t) && canAfford(res, TECHS[t].cost)) return { type: 'research', tech: t };

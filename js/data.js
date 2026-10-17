@@ -25,7 +25,8 @@ export const UNITS = {
   knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 3, def: 1, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
   tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 2, def: 3, move: 0, range: 2, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
   mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5 }, hp: 10, atk: 1, def: 1, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben bekommen 25 % weniger Schaden, Flächenschaden halbiert. Heilt statt anzugreifen. Höchstens einer pro Stadt.' },
-  troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 7, def: 5, move: 2, range: 1, supply: 3, regen: 3, unique: true, needs: 'lair', desc: 'Ein Titan: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben. Braucht 3 Versorgung und eine Trollhöhle, nur einer pro Reich.' },
+  troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 7, def: 5, move: 2, range: 1, supply: 3, regen: 3, perRealm: 5, needs: 'lair', desc: 'Ein Titan: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben. Braucht 3 Versorgung und eine Trollhöhle, höchstens 5 pro Reich.' },
+  dragon: { name: 'Drache', cost: { food: 50, wood: 30, ore: 70 }, hp: 60, atk: 8, def: 4, move: 4, range: 1, supply: 3, perRealm: 1, flying: true, splash: 0.3, arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und Einheiten hinweg, Feueratem trifft auch Gegner neben dem Ziel. Sehr mächtig, aber Schützen und Türme treffen ihn doppelt. Einer pro Reich.' },
   catapult: { name: 'Katapult', cost: { wood: 8, ore: 6 }, hp: 10, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, splash: 0.5, needs: 'workshop', desc: 'Reichweite 3, nicht nach Bewegung. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Braucht eine Werkstatt.' },
 };
 // Wert einer Einheit für die KI (Rohstoffsumme / 2)
@@ -34,9 +35,9 @@ for (const k of Object.keys(UNITS)) {
   for (const v of Object.values(UNITS[k].cost)) t += v;
   UNITS[k].value = t / 2;
 }
-export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult', 'mage', 'troll'];
+export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult', 'mage', 'troll', 'dragon'];
 // Höchste Zugweite bei voller Entwicklung (gilt auch für Sprünge über eigene Einheiten)
-export const MOVE_CAP = { catapult: 3, rider: 6, knight: 6 };
+export const MOVE_CAP = { catapult: 3, rider: 6, knight: 6, dragon: 6 };
 export const MOVE_CAP_DEFAULT = 4;
 export function moveCap(type) {
   return MOVE_CAP[type] ?? MOVE_CAP_DEFAULT;
@@ -62,7 +63,7 @@ export const PERKS = {
   tough: { name: 'Zäh', icon: '💪', desc: '+25 % Leben und heilt jede Runde 2' },
   swift: { name: 'Flink', icon: '💨', desc: '+1 Bewegung' },
   hunter: { name: 'Jäger', icon: '🎯', desc: '+40 % Angriff gegen Reiter, Ritter und Trolle' },
-  fire: { name: 'Brandgeschosse', icon: '🔥', desc: 'Flächenschaden 75 % statt 50 %' },
+  fire: { name: 'Brandgeschosse', icon: '🔥', desc: 'Flächenschaden +25 Prozentpunkte (Katapult 75 %, Drache 55 %)' },
   greatheal: { name: 'Großheiler', icon: '💚', desc: 'Heilt 3 Leben mehr' },
   wideaura: { name: 'Weite Aura', icon: '🌀', desc: 'Schutzaura reicht 1 Feld weiter' },
   rampage: { name: 'Wüten', icon: '💥', desc: 'Trifft auch Gegner neben dem Ziel mit 30 % Schaden' },
@@ -76,6 +77,7 @@ export const PERK_CHOICES = {
   catapult: [['fire', 'siege'], ['tough', 'swift']],
   mage: [['greatheal', 'wideaura'], ['tough', 'swift']],
   troll: [['rampage', 'tough'], ['siege', 'charge']],
+  dragon: [['fire', 'tough'], ['swift', 'siege']],
 };
 export const PERK_RANKS = [3, 5];
 export const FLANK_BONUS = 0.1;
@@ -108,7 +110,7 @@ export const TECHS = {
   plough: { branch: 'eco', name: 'Pflug', icon: '🌱', cost: { wood: 16 }, req: [], desc: 'Bauernhöfe +2 Nahrung' },
   saw: { branch: 'eco', name: 'Sägewerk', icon: '🪓', cost: { food: 16, ore: 8 }, req: [], desc: 'Holzfäller +2 Holz' },
   mining: { branch: 'eco', name: 'Bergbau', icon: '⛏️', cost: { food: 16, wood: 16 }, req: [], desc: 'Minen +2 Erz' },
-  guild: { branch: 'eco', name: 'Handelsgilde', icon: '💰', cost: { food: 24, wood: 20 }, req: ['plough'], desc: 'Handel überall 2:1' },
+  guild: { branch: 'eco', name: 'Handelsgilde', icon: '💰', cost: { food: 45, wood: 40, ore: 30 }, req: ['plough'], desc: 'Handel 2:1 statt 3:1 (braucht einen Markt)' },
   masonry: { branch: 'eco', name: 'Baukunst', icon: '🏛️', cost: { wood: 24, ore: 16 }, req: ['saw', 'mining'], desc: 'Stadtausbau 25 % günstiger' },
   medic: { branch: 'def', name: 'Heilkunde', icon: '🌿', cost: { food: 28 }, req: [], desc: 'Einheiten heilen 2 mehr' },
   stonework: { branch: 'def', name: 'Steinmetz', icon: '🧱', cost: { wood: 12, ore: 20 }, req: [], desc: 'Türme +6 Leben, Mauern stärker (×2,6)' },
@@ -122,7 +124,7 @@ export const CITY_MAX_LEVEL = 5;
 export const CITY_NAMES = ['', 'Dorf', 'Siedlung', 'Stadt', 'Burgstadt', 'Metropole'];
 export const START_RES = { food: 6, wood: 6, ore: 4 };
 export const TRADE_RATE = 3;
-export const TRADE_RATE_MARKET = 2;
+export const TRADE_RATE_GUILD = 2;
 
 // Gebäude: jede Stadt hat so viele Bauplätze wie ihre Stufe
 export const BUILDINGS = {
@@ -134,9 +136,10 @@ export const BUILDINGS = {
   wall: { art: 'eine', name: 'Mauer', icon: '🧱', cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt ×2,2' },
   sanctum: { art: 'einen', name: 'Turm der Weisen', icon: '🔮', cost: { wood: 6, ore: 6 }, desc: 'Zauberer möglich' },
   lair: { art: 'eine', name: 'Trollhöhle', icon: '🦴', cost: { food: 10, wood: 12, ore: 16 }, minLevel: 4, desc: 'Schwarzer Troll möglich (Stadt ab Stufe 4)' },
-  market: { art: 'einen', name: 'Markt', icon: '⚖️', cost: { food: 6, wood: 6 }, desc: 'Handel 2:1 statt 3:1' },
+  market: { art: 'einen', name: 'Markt', icon: '⚖️', cost: { food: 16, wood: 16, ore: 8 }, desc: 'Erlaubt Handel (3:1, mit Handelsgilde 2:1)' },
+  dragonlair: { art: 'eine', name: 'Drachenhöhle', icon: '🐉', cost: { food: 20, wood: 20, ore: 30 }, minLevel: 4, perRealm: 1, desc: 'Drache möglich (Stadt ab Stufe 4, nur eine im Reich)' },
 };
-export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'sanctum', 'lair', 'wall', 'market'];
+export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'sanctum', 'lair', 'dragonlair', 'wall', 'market'];
 
 // Stadtzentrum liefert von jedem Rohstoff so viel wie die Stufe
 export function cityCenterYield(city) {

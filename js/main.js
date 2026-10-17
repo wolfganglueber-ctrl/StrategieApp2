@@ -5,7 +5,7 @@ import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
   incomeOf, unitCap, unitCount, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
-  perkOptions, canTrain, flankers,
+  perkOptions, canTrain, flankers, canBuild,
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
@@ -558,6 +558,11 @@ function repeatButton(label, onStep) {
 
 function openTrade(preGet) {
   if (!S || !humanTurn() || busy) return;
+  if (!tradeRate(S, S.current)) {
+    sound.play('error');
+    toast('⚖️ Zum Handeln brauchst du einen Markt. Baue ihn in einer Stadt (Reiter „Gebäude“).', 4000);
+    return;
+  }
   let give = null, get = preGet || null, n = 1;
   const draw = () => {
     const p = S.players[S.current];
@@ -599,7 +604,7 @@ function openTrade(preGet) {
 
     openClosable(
       el('h2', {}, 'Handel'),
-      el('p', {}, `Kurs ${rate} : 1${rate === 3 ? ' · mit Markt 2 : 1' : ''}`),
+      el('p', {}, `Kurs ${rate} : 1${rate === 3 ? ' · mit der Handelsgilde 2 : 1' : ''}`),
       row('Gib', give, (k) => { give = k; if (get === k) get = null; }),
       row('Erhalte', get, (k) => { get = k; if (give === k) give = null; }),
       amount,
@@ -1014,7 +1019,7 @@ const RECRUIT_BLOCK = {
   needs: (T) => `braucht ${BUILDINGS[T.needs].name}`,
   cap: () => 'Versorgung voll',
   limit: () => 'höchstens einer pro Stadt',
-  unique: () => 'nur einer pro Reich',
+  unique: (T) => T.perRealm > 1 ? `höchstens ${T.perRealm} pro Reich` : 'nur einer pro Reich',
   space: () => 'kein freies Feld',
   cost: () => null,
 };
@@ -1076,7 +1081,7 @@ function advice(occ) {
   const rate = tradeRate(S, pid);
   const low = RES.slice().sort((a, b) => p.res[a] - p.res[b])[0];
   const high = RES.slice().sort((a, b) => p.res[b] - p.res[a])[0];
-  if (p.res[low] < 4 && p.res[high] >= rate + 4) return { text: `Dir fehlt ${RES_INFO[low].name}. Tausche ${RES_INFO[high].name} – tippe oben auf die Rohstoffleiste.`, trade: low };
+  if (rate && p.res[low] < 4 && p.res[high] >= rate + 4) return { text: `Dir fehlt ${RES_INFO[low].name}. Tausche ${RES_INFO[high].name} – tippe oben auf die Rohstoffleiste.`, trade: low };
   if (canStill.length) return { text: `${canStill.length} Einheit${canStill.length > 1 ? 'en können' : ' kann'} noch handeln (leuchtender Ring).`, unit: canStill[0].id };
   return { text: 'Alles erledigt – beende deinen Zug.' };
 }
@@ -1133,7 +1138,6 @@ function renderCityPanel(panel, ci, occ) {
     panel.append(el('div', { class: 'note', id: 'recruitNote' }, note ? `Rekrutieren nicht möglich: ${note}.` : `Neue Einheiten erscheinen im Stadtgebiet.${ready}`));
   } else {
     const list = el('div', { class: 'build-list' });
-    const full = c.buildings.length >= citySlots(c);
     const nt = towersOfCity(S, ci);
     list.append(el('div', { class: 'build-row tower-row' },
       el('span', { class: 'bicon' }, iconCanvas('tower', p.id, 56, 1)),
@@ -1149,8 +1153,9 @@ function renderCityPanel(panel, ci, occ) {
         el('span', { class: 'bicon' }, B.icon),
         el('div', { class: 'binfo' }, el('b', {}, B.name), el('span', { class: 'muted' }, B.desc)),
         built ? el('span', { class: 'done' }, '✓')
-          : c.level < (B.minLevel || 0) ? el('span', { class: 'lock' }, `🔒 ab Stufe ${B.minLevel}`)
-          : el('button', { class: 'btn small', disabled: full || !canAfford(p.res, B.cost), onclick: () => doBuild(c.idx, b) }, costEl(B.cost, p.res))));
+          : canBuild(S, p.id, c, b) === 'level' ? el('span', { class: 'lock' }, `🔒 ab Stufe ${B.minLevel}`)
+          : canBuild(S, p.id, c, b) === 'realm' ? el('span', { class: 'lock' }, '🔒 schon im Reich')
+          : el('button', { class: 'btn small', disabled: !!canBuild(S, p.id, c, b), onclick: () => doBuild(c.idx, b) }, costEl(B.cost, p.res))));
     }
     panel.append(list);
     if (c.level < CITY_MAX_LEVEL) {
@@ -1530,14 +1535,14 @@ function renderHelp() {
     <h3>Kartennebel</h3>
     <p>Optional: Du siehst nur, was deine Einheiten und Städte sehen. Bereits erkundete Gebiete bleiben sichtbar, aber gegnerische Einheiten darin nicht. Die KI unterliegt denselben Regeln.</p>
     <h3>Handel</h3>
-    <p>Tippe oben auf einen Rohstoff: 3 beliebige Rohstoffe gegen 1 anderen, mit einem Markt 2 gegen 1.</p>
+    <p>Handeln kannst du erst mit einem <b>Markt</b> in einer deiner Städte. Dann tippst du oben auf einen Rohstoff: 3 beliebige Rohstoffe gegen 1 anderen, mit der Forschung <b>Handelsgilde</b> 2 gegen 1.</p>
     <h3>Gelände</h3>
     <p>Alle Felder sind gleich gut begehbar – nur <b>Gebirge</b> und <b>Seen</b> sind unpassierbar. Verteidigungsbonus gibt es nur in Städten.</p>
     <h3>Heilung</h3>
     <p>Einheiten, die eine Runde nichts tun, heilen 2 Lebenspunkte – in der Nähe eigener Städte 4. Zauberer heilen sofort.</p>
     <h3>Einheiten</h3>
     <table><tr><th>Einheit</th><th>❤</th><th>Angr.</th><th>Vert.</th><th>Bew.</th><th>Reichw.</th></tr>${rows}</table>
-    <p>Ritter brauchen eine Kaserne, Katapulte eine Werkstatt, Zauberer einen Turm der Weisen, der Schwarze Troll eine Trollhöhle. Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
+    <p>Ritter brauchen eine Kaserne, Katapulte eine Werkstatt, Zauberer einen Turm der Weisen, der Schwarze Troll eine Trollhöhle, der Drache eine Drachenhöhle. Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
     <h3>Zugweite</h3>
     <p>Auch voll entwickelt ziehen Fußtruppen höchstens 4 Felder, Katapulte 3, Reiter und Ritter 6 – auch wenn sie über eigene Einheiten springen.</p>
     <h3>Ränge und Fähigkeiten ★</h3>
@@ -1548,7 +1553,9 @@ function renderHelp() {
     <h3>Katapult und Flanke</h3>
     <p>Katapulte treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +10 % (höchstens +30 %): Einkesseln lohnt sich.</p>
     <h3>Schwarzer Troll</h3>
-    <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel, braucht 3 Versorgung und eine Trollhöhle (Stadt ab Stufe 4). Nur einer pro Reich.</p>
+    <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel, braucht 3 Versorgung und eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
+    <h3>Drache 🐉</h3>
+    <p>Der mächtigste Titan: Er fliegt über Berge, Seen und Einheiten hinweg (landet aber nur auf freien Feldern), sein Feueratem trifft auch Gegner neben dem Ziel. Schwachstelle: Schützen und Türme treffen ihn doppelt so hart. Er braucht eine Drachenhöhle (Stadt ab Stufe 4, nur eine im Reich), 3 Versorgung, und es gibt nur einen Drachen pro Reich.</p>
     <h3>Geräusche 🔊</h3>
     <p>Kampf, Bewegung und Ereignisse sind zu hören, im Hintergrund je nach Kartenausschnitt Meeresrauschen, plätschernde Seen, Wind über den Bergen, Vögel im Wald und das Treiben der Städte. Alles wird im Gerät erzeugt und funktioniert offline. Lautstärke und Umgebung stellst du im Menü unter Einstellungen ein.</p>
     <h3>Wache halten 💤</h3>

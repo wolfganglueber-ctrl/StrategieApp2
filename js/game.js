@@ -2,7 +2,7 @@
 import { getGeo } from './hex.js';
 import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply,
-  cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_MARKET, TECHS, TOWER_LEVELS,
+  cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
   PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, trainCost,
 } from './data.js';
@@ -128,7 +128,9 @@ export function attackMult(state, att, def, fromIdx = att.idx) {
   let m = 1;
   if (hasPerk(att, 'charge') && (att.moved || fromIdx !== att.idx)) m += 0.3;
   if (hasPerk(att, 'siege') && (cityOn(state, def.idx) || def.type === 'tower')) m += 0.3;
-  if (hasPerk(att, 'hunter') && (CAVALRY.includes(def.type) || def.type === 'troll')) m += 0.4;
+  if (hasPerk(att, 'hunter') && (CAVALRY.includes(def.type) || def.type === 'troll' || def.type === 'dragon')) m += 0.4;
+  // Drachen sind anfällig gegen Pfeile
+  if (UNITS[def.type].arrowWeak && (att.type === 'archer' || att.type === 'tower')) m += 1;
   if (!isStructure(att)) m += FLANK_BONUS * flankers(state, att, def);
   return m;
 }
@@ -145,7 +147,7 @@ export function flankers(state, att, def) {
 
 export function splashOf(u) {
   const base = UNITS[u.type].splash || 0;
-  if (hasPerk(u, 'fire')) return 0.75;
+  if (hasPerk(u, 'fire')) return base + 0.25;
   if (hasPerk(u, 'rampage')) return Math.max(base, 0.3);
   return base;
 }
@@ -282,6 +284,7 @@ export function getMoves(state, u, occ = buildOcc(state), moveOverride) {
   const res = new Map();
   if (!canMove(u) && moveOverride === undefined) return res;
   const maxSteps = moveOverride ?? statsOf(state, u).move;
+  if (UNITS[u.type].flying) return flyMoves(state, u, occ, maxSteps);
   const maxLen = Math.max(maxSteps, moveCap(u.type));
   // Breitensuche über (Feld, verbrauchte Bewegung), geordnet nach Weglänge
   const K = maxSteps + 1;
@@ -310,6 +313,32 @@ export function getMoves(state, u, occ = buildOcc(state), moveOverride) {
   res.pathOf = (to) => {
     const path = [];
     for (let k = res.get(to); k !== -1 && k !== undefined; k = parent.get(k)) path.push(Math.floor(k / K));
+    return path.reverse();
+  };
+  return res;
+}
+
+// Fliegende Einheiten überqueren alles (Berge, Wasser, Einheiten), landen aber nur auf freien, begehbaren Feldern
+function flyMoves(state, u, occ, maxSteps) {
+  const geo = geoOf(state);
+  const res = new Map();
+  const parent = new Map([[u.idx, -1]]);
+  let layer = [u.idx];
+  for (let len = 1; len <= maxSteps && layer.length; len++) {
+    const next = [];
+    for (const i of layer) {
+      for (const j of geo.nb[i]) {
+        if (parent.has(j)) continue;
+        parent.set(j, i);
+        next.push(j);
+        if (!occ[j] && TERRAIN[state.terrain[j]].pass) res.set(j, i);
+      }
+    }
+    layer = next;
+  }
+  res.pathOf = (to) => {
+    const path = [];
+    for (let k = to; k !== -1 && k !== undefined; k = parent.get(k)) path.push(k);
     return path.reverse();
   };
   return res;
@@ -410,9 +439,21 @@ export function spawnSpots(state, ci, occ = buildOcc(state), territory = compute
   return spots;
 }
 
+// Bauen möglich? null oder Grund: 'built', 'slots', 'level', 'realm', 'cost'
+export function canBuild(state, pid, c, b) {
+  const B = BUILDINGS[b];
+  if (hasBuilding(c, b)) return 'built';
+  if (c.level < (B.minLevel || 0)) return 'level';
+  if (B.perRealm && state.cities.filter((x) => x.owner === pid && hasBuilding(x, b)).length >= B.perRealm) return 'realm';
+  if (c.buildings.length >= citySlots(c)) return 'slots';
+  if (!canAfford(state.players[pid].res, B.cost)) return 'cost';
+  return null;
+}
+
+// Handeln geht nur mit einem Markt; die Handelsgilde verbessert den Kurs auf 2:1. Ohne Markt: 0
 export function tradeRate(state, pid) {
-  if (hasTech(state, pid, 'guild')) return TRADE_RATE_MARKET;
-  return state.cities.some((c) => c.owner === pid && hasBuilding(c, 'market')) ? TRADE_RATE_MARKET : TRADE_RATE;
+  if (!state.cities.some((c) => c.owner === pid && hasBuilding(c, 'market'))) return 0;
+  return hasTech(state, pid, 'guild') ? TRADE_RATE_GUILD : TRADE_RATE;
 }
 
 export function canRecruit(state, pid, ci, type) {
@@ -420,7 +461,7 @@ export function canRecruit(state, pid, ci, type) {
   const T = UNITS[type];
   if (!T || !c || c.owner !== pid) return 'invalid';
   if (T.needs && !hasBuilding(c, T.needs)) return 'needs';
-  if (T.unique && state.units.some((u) => u.owner === pid && u.type === type)) return 'unique';
+  if (T.perRealm && state.units.filter((u) => u.owner === pid && u.type === type).length >= T.perRealm) return 'unique';
   if (unitCount(state, pid) + (T.supply || 1) > unitCap(state, pid)) return 'cap';
   if (T.healer && state.units.filter((u) => u.owner === pid && u.type === type).length >= cityCount(state, pid)) return 'limit';
   if (!canAfford(state.players[pid].res, T.cost)) return 'cost';
@@ -707,8 +748,7 @@ export function applyAction(state, a) {
     case 'build': {
       const c = cityOn(state, a.idx);
       const B = BUILDINGS[a.building];
-      if (!c || !B || c.owner !== pid || hasBuilding(c, a.building)) return null;
-      if (c.buildings.length >= citySlots(c) || !canAfford(player.res, B.cost) || c.level < (B.minLevel || 0)) return null;
+      if (!c || !B || c.owner !== pid || canBuild(state, pid, c, a.building)) return null;
       for (const k of RES) player.res[k] -= B.cost[k] || 0;
       c.buildings.push(a.building);
       ev.push({ k: 'build', idx: a.idx, building: a.building });
@@ -717,7 +757,7 @@ export function applyAction(state, a) {
     case 'trade': {
       const rate = tradeRate(state, pid);
       const n = Math.max(1, Math.floor(a.count || 1));
-      if (!RES.includes(a.give) || !RES.includes(a.get) || a.give === a.get || player.res[a.give] < rate * n) return null;
+      if (!rate || !RES.includes(a.give) || !RES.includes(a.get) || a.give === a.get || player.res[a.give] < rate * n) return null;
       player.res[a.give] -= rate * n;
       player.res[a.get] += n;
       ev.push({ k: 'trade', give: a.give, get: a.get, count: n });
