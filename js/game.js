@@ -847,6 +847,14 @@ export function applyAction(state, a) {
       ev.push({ k: 'demolish', idx: u.idx, unit: u.type, snap: snapshotUnit(u) });
       break;
     }
+    case 'disband': {
+      // Eigene Einheit entlassen: gibt Versorgung frei, keine Rückerstattung
+      const u = unitById(state, a.unitId);
+      if (!u || u.owner !== pid || isStructure(u)) return null;
+      state.units = state.units.filter((x) => x !== u);
+      ev.push({ k: 'demolish', idx: u.idx, unit: u.type, snap: snapshotUnit(u), disband: true });
+      break;
+    }
     case 'merge': {
       const u = unitById(state, a.unitId), t = unitById(state, a.targetId);
       if (!u || !t || u.owner !== pid || !canMerge(state, u, t)) return null;

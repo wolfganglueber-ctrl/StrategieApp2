@@ -571,6 +571,12 @@ async function doDemolish(idx, building) {
   if (ok) quickAct({ type: 'demolish', idx, building });
 }
 
+async function doDisband(u) {
+  const name = `${UNITS[u.type].name}${(u.count || 1) > 1 ? ` ×${u.count}` : ''}`;
+  const ok = await confirmDialog(`${name} entlassen?`, 'Die Einheit wird aufgelöst und gibt ihre Versorgung frei. Rohstoffe gibt es dafür nicht zurück.', 'Entlassen', 'Behalten');
+  if (ok) act({ type: 'disband', unitId: u.id }, { after: () => clearSel() });
+}
+
 async function doRaze(u) {
   const ok = await confirmDialog(`${UNITS[u.type].name} abreißen?`, 'Du bekommst die Hälfte der Baukosten zurück.', 'Abreißen', 'Behalten');
   if (ok) act({ type: 'raze', unitId: u.id }, { after: () => clearSel() });
@@ -994,7 +1000,7 @@ async function playEvent(ev, f, isAI, pan = true) {
     case 'demolish':
       R.invalidate(true, ev.idx);
       if (ev.snap) R.ghost({ ...ev.snap }, 500 * Math.max(f, 0.6), 0);
-      R.floatText(ev.idx, `${ev.building ? BUILDINGS[ev.building].name : UNITS[ev.unit].name} abgerissen`, '#fca5a5', 1000 * Math.max(f, 0.6));
+      R.floatText(ev.idx, `${ev.building ? BUILDINGS[ev.building].name : UNITS[ev.unit].name} ${ev.disband ? 'entlassen' : 'abgerissen'}`, '#fca5a5', 1000 * Math.max(f, 0.6));
       if (f > 0) sound.play('fall', { pan: panOf(ev.idx), vol: isAI ? 0.4 : 0.8 });
       break;
     case 'defect':
@@ -1392,6 +1398,7 @@ function renderPanelContent(panel) {
         actions.append(el('button', { class: 'btn small primary', title: `Ausbilden zum ${RANK_NAMES[r + 1]}`, disabled: !!why, onclick: () => act({ type: 'train', unitId: u.id }, { after: () => clearSel() }) },
           `🎓 ${RANK_NAMES[r + 1]} `, costEl(trainCost(u.type, r), S.players[S.current].res)));
       }
+      actions.append(el('button', { class: 'btn small raze', title: 'Einheit auflösen (gibt Versorgung frei)', onclick: () => doDisband(u) }, '🗑 Entlassen'));
       if (mergeTargets(S, u).length) actions.append(el('button', { class: 'btn small merge', onclick: () => { sel.merge = true; refresh(); } }, '🔗 Verband bilden'));
       if (canSplit(S, u)) actions.append(el('button', { class: 'btn small', onclick: () => act({ type: 'split', unitId: u.id }) }, `✂ Aufteilen (${u.count} → ${u.count - 1} + 1)`));
       panel.append(actions);
@@ -1704,7 +1711,7 @@ function renderHelp() {
     <h3>Gebäude</h3>
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
     <h3>Abreißen 🗑</h3>
-    <p>Verbaut? Im Reiter „Gebäude“ hat jedes fertige Gebäude einen 🗑-Knopf: Nach einer Rückfrage wird es abgerissen, der Bauplatz ist wieder frei, und du bekommst die Hälfte der Baukosten zurück. Eigene Türme und Steinwälle reißt du ab, indem du sie antippst.</p>
+    <p>Verbaut? Im Reiter „Gebäude“ hat jedes fertige Gebäude einen 🗑-Knopf: Nach einer Rückfrage wird es abgerissen, der Bauplatz ist wieder frei, und du bekommst die Hälfte der Baukosten zurück. Eigene Türme und Steinwälle reißt du ab, indem du sie antippst. Einheiten, die du nicht mehr brauchst, löst du mit „🗑 Entlassen“ auf – das gibt ihre Versorgung frei, aber keine Rohstoffe zurück.</p>
     <h3>Türme</h3>
     <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt). Türme bewegen sich nicht, greifen aber Gegner in Reichweite an und lassen sich in 3 Stufen ausbauen: tippe den Turm an. Hat ein Turm in deinem Zug noch nicht geschossen, feuert er beim Zugende automatisch auf das lohnendste Ziel.</p>
     <h3>Steinwälle 🧱</h3>
