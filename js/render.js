@@ -2,7 +2,7 @@
 // pro Frame kommen nur Markierungen, Einheiten und Effekte dazu.
 import { hexCenter, pixelToIndex, boardSize, SQRT3, getGeo } from './hex.js';
 import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS } from './data.js';
-import { computeTerritory, statsOf } from './game.js';
+import { computeTerritory, statsOf, inAura } from './game.js';
 import {
   hash, hexPath, mix, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, FIG_BOX,
 } from './art.js';
@@ -529,6 +529,21 @@ export class Renderer {
         ctx.stroke();
       }
     }
+    // Schutzaura: kleines Schild-Symbol
+    if (inAura(this.state, u)) {
+      const bx = x - 15 * s * scale, by = y + 2 * s;
+      ctx.fillStyle = 'rgba(125,211,252,0.95)';
+      ctx.strokeStyle = 'rgba(12,40,70,0.9)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(bx, by - 5 * s);
+      ctx.lineTo(bx + 4 * s, by - 3.5 * s);
+      ctx.quadraticCurveTo(bx + 4 * s, by + 2.5 * s, bx, by + 4.5 * s);
+      ctx.quadraticCurveTo(bx - 4 * s, by + 2.5 * s, bx - 4 * s, by - 3.5 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
     // Lebensbalken unter dem Sockel
     const max = statsOf(this.state, u).hp;
     const ratio = Math.max(0, u.hp / max);
@@ -631,6 +646,25 @@ export class Renderer {
         ctx.beginPath();
         ctx.arc(c.x, c.y, HEX * 0.11, 0, Math.PI * 2);
         ctx.fill();
+      }
+    }
+    if (o.aura) {
+      for (const i of o.aura) {
+        const c = this.center(i);
+        ctx.fillStyle = 'rgba(125,211,252,0.16)';
+        hexPath(ctx, c.x, c.y, HEX - 3);
+        ctx.fill();
+      }
+    }
+    if (o.heals) {
+      for (const i of o.heals) {
+        const c = this.center(i);
+        ctx.fillStyle = `rgba(74,222,128,${0.2 + pulse * 0.12})`;
+        hexPath(ctx, c.x, c.y, HEX - 3);
+        ctx.fill();
+        ctx.strokeStyle = `rgba(74,222,128,${0.7 + pulse * 0.3})`;
+        ctx.lineWidth = 4 + pulse * 2;
+        ctx.stroke();
       }
     }
     if (o.selected != null) {

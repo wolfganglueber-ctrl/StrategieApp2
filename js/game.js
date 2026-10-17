@@ -3,7 +3,7 @@ import { getGeo } from './hex.js';
 import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_MARKET, TECHS, TOWER_LEVELS,
-  TOWER_UPGRADE, TOWERS_PER_CITY, MELEE, FOOT, moveCap,
+  TOWER_UPGRADE, TOWERS_PER_CITY, MELEE, FOOT, moveCap, AURA, HEAL,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -187,7 +187,7 @@ export function canAttack(u) {
 export function canAct(state, u) {
   if (canMove(u)) return true;
   if (!canAttack(u)) return false;
-  return getTargets(state, u, u.idx, buildOcc(state)).length > 0;
+  return getTargets(state, u, u.idx, buildOcc(state)).length > 0 || getHealTargets(state, u).length > 0;
 }
 
 export function unitRange(state, u) {
@@ -261,12 +261,12 @@ export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp
   const aF = A.atk * (attHp / A.hp);
   const dF = D.def * (def.hp / D.hp) * defenseMult(state, def.idx) * (def.shaken ? 0.5 : 1);
   const tot = aF + dF;
-  const dmg = Math.round((aF / tot) * A.atk * 4.5);
+  const dmg = Math.round((aF / tot) * A.atk * 4.5 * (inAura(state, def) ? 1 - AURA.reduce : 1));
   const kill = dmg >= def.hp;
   let counter = 0;
   const geo = geoOf(state);
   if (!kill && !def.shaken && geo.dist(fromIdx, def.idx) <= unitRange(state, def)) {
-    counter = Math.round((dF / tot) * D.def * 4.5);
+    counter = Math.round((dF / tot) * D.def * 4.5 * (inAura(state, att, fromIdx) ? 1 - AURA.reduce : 1));
   }
   return { dmg, counter, kill, die: counter >= attHp };
 }
@@ -346,6 +346,7 @@ export function canRecruit(state, pid, ci, type) {
   if (!T || !c || c.owner !== pid) return 'invalid';
   if (T.needs && !hasBuilding(c, T.needs)) return 'needs';
   if (unitCount(state, pid) >= unitCap(state, pid)) return 'cap';
+  if (T.healer && state.units.filter((u) => u.owner === pid && u.type === type).length >= cityCount(state, pid)) return 'limit';
   if (!canAfford(state.players[pid].res, T.cost)) return 'cost';
   if (!spawnSpots(state, ci).length) return 'space';
   return null;
@@ -446,6 +447,33 @@ export function snapshotUnit(u) {
   return { ...u };
 }
 
+// Schutzaura: steht ein eigener Zauberer in der Nähe (nicht die Einheit selbst)?
+export function auraRadius(state, pid) {
+  return hasTech(state, pid, 'enlight') ? AURA.radius2 : AURA.radius;
+}
+export function inAura(state, u, idx = u.idx) {
+  if (isStructure(u)) return false;
+  const geo = geoOf(state);
+  const r = auraRadius(state, u.owner);
+  for (const m of state.units) {
+    if (m.owner === u.owner && m !== u && UNITS[m.type].healer && geo.dist(m.idx, idx) <= r) return true;
+  }
+  return false;
+}
+
+// Heilen: Zauberer heilt eine benachbarte eigene Einheit (statt anzugreifen)
+export function healAmount(state, u) {
+  return HEAL.base + (hasTech(state, u.owner, 'blessing') ? HEAL.blessing : 0);
+}
+export function needsHeal(state, healer, t) {
+  return t.hp < statsOf(state, t).hp || (t.shaken && hasTech(state, healer.owner, 'blessing'));
+}
+export function getHealTargets(state, u, fromIdx = u.idx) {
+  if (!UNITS[u.type].healer) return [];
+  const geo = geoOf(state);
+  return state.units.filter((t) => t.owner === u.owner && t !== u && !isStructure(t) && geo.dist(fromIdx, t.idx) === 1 && needsHeal(state, u, t));
+}
+
 // Flächenschaden (Katapult): gegnerische Einheiten neben dem Ziel bekommen einen Teil des Schadens
 export function splashDamage(state, att, idx, dmg) {
   const geo = geoOf(state);
@@ -453,7 +481,7 @@ export function splashDamage(state, att, idx, dmg) {
   for (const j of geo.nb[idx]) {
     const o = state.units.find((x) => x.idx === j);
     if (!o || o.owner === att.owner) continue;
-    const d = Math.round(dmg * UNITS[att.type].splash);
+    const d = Math.round(dmg * UNITS[att.type].splash * (inAura(state, o) ? AURA.splash : 1));
     if (d > 0) res.push({ unit: o, dmg: d });
   }
   return res;
@@ -530,6 +558,19 @@ export function applyAction(state, a) {
       }
       if (UNITS[u.type].splash) e.splash = applySplash(state, u, defSnap.idx, r.dmg);
       ev.push(e);
+      break;
+    }
+    case 'heal': {
+      const u = unitById(state, a.unitId);
+      const t = unitById(state, a.targetId);
+      if (!u || !t || u.owner !== pid || !canAttack(u) || !getHealTargets(state, u).includes(t)) return null;
+      const h = Math.min(statsOf(state, t).hp - t.hp, healAmount(state, u));
+      t.hp += h;
+      if (hasTech(state, pid, 'blessing')) t.shaken = false;
+      u.attacked = true;
+      u.moved = true;
+      u.acted = true;
+      ev.push({ k: 'heal', id: t.id, idx: t.idx, amount: h, by: u.id, from: u.idx });
       break;
     }
     case 'recruit': {
@@ -613,5 +654,5 @@ export function applyAction(state, a) {
 
 export function playerHasActions(state, pid) {
   const occ = buildOcc(state);
-  return state.units.some((u) => u.owner === pid && (canMove(u) || (canAttack(u) && getTargets(state, u, u.idx, occ).length > 0)));
+  return state.units.some((u) => u.owner === pid && (canMove(u) || (canAttack(u) && (getTargets(state, u, u.idx, occ).length > 0 || getHealTargets(state, u).length > 0))));
 }

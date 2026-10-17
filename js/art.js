@@ -959,6 +959,78 @@ export function drawFigure(ctx, type, col, level = 1) {
       ctx.restore();
       break;
     }
+    case 'mage': {
+      // Stab mit leuchtender Kugel
+      ctx.strokeStyle = '#5a3d22';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(9, 6);
+      ctx.lineTo(10, -34);
+      ctx.stroke();
+      const glow = ctx.createRadialGradient(10, -37, 0.5, 10, -37, 8);
+      glow.addColorStop(0, 'rgba(255,255,255,1)');
+      glow.addColorStop(0.35, 'rgba(125,211,252,0.95)');
+      glow.addColorStop(1, 'rgba(125,211,252,0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(10, -37, 8, 0, Math.PI * 2);
+      ctx.fill();
+      // Robe in Spielerfarbe
+      ctx.fillStyle = grad(ctx, -8, 8, col.light, col.dark);
+      ctx.beginPath();
+      ctx.moveTo(-8, 6);
+      ctx.lineTo(-4.5, -21);
+      ctx.quadraticCurveTo(0, -23, 4.5, -21);
+      ctx.lineTo(8, 6);
+      ctx.quadraticCurveTo(0, 8, -8, 6);
+      ctx.closePath();
+      ctx.fill();
+      outline(ctx, 0.9);
+      ctx.strokeStyle = '#fde68a';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(0, -20);
+      ctx.lineTo(0, 5);
+      ctx.stroke();
+      // Arm zum Stab
+      ctx.strokeStyle = col.dark;
+      ctx.lineWidth = 2.8;
+      ctx.beginPath();
+      ctx.moveTo(3.5, -16);
+      ctx.lineTo(9, -14);
+      ctx.stroke();
+      // Bart und Kopf
+      ctx.fillStyle = grad(ctx, -4.5, 4.5, '#ffe0c0', '#d39a6a');
+      ctx.beginPath();
+      ctx.arc(0, -25, 4.2, 0, Math.PI * 2);
+      ctx.fill();
+      outline(ctx, 0.8);
+      ctx.fillStyle = '#eef0f2';
+      ctx.beginPath();
+      ctx.moveTo(-3.5, -24);
+      ctx.quadraticCurveTo(0, -12, 3.5, -24);
+      ctx.closePath();
+      ctx.fill();
+      outline(ctx, 0.6);
+      // Spitzhut mit Sternen
+      ctx.fillStyle = grad(ctx, -7, 7, col.main, col.dark);
+      ctx.beginPath();
+      ctx.moveTo(-7.5, -27);
+      ctx.quadraticCurveTo(0, -29.5, 7.5, -27);
+      ctx.lineTo(2, -32);
+      ctx.quadraticCurveTo(1, -40, -4, -45);
+      ctx.quadraticCurveTo(-2, -38, -3, -32);
+      ctx.closePath();
+      ctx.fill();
+      outline(ctx, 0.8);
+      ctx.fillStyle = '#fde68a';
+      ctx.beginPath();
+      ctx.arc(-1, -31, 1.1, 0, Math.PI * 2);
+      ctx.arc(1.5, -35.5, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
     case 'catapult': {
       const wood = '#8a5a2b', woodD = '#5c3b1b';
       // Räder hinten

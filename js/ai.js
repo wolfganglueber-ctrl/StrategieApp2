@@ -5,7 +5,7 @@ import {
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
-  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage,
+  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -144,6 +144,13 @@ function positionScore(state, ctx, P, u, idx, hp, pid) {
     for (const j of ctx.geo.nb[idx]) { const o = ctx.occ[j]; if (o && o.owner === pid && o !== u) n++; }
     s -= n * 0.35;
   }
+  // Zauberer stehen gern bei eigenen Truppen (Schutzaura), aber nicht an vorderster Front
+  if (UNITS[u.type].healer) {
+    let n = 0;
+    for (const j of ctx.geo.nb[idx]) { const o = ctx.occ[j]; if (o && o.owner === pid && o !== u && o.type !== 'tower') n++; }
+    s += Math.min(3, n) * 0.6;
+    if (de === 1) s -= 1.5;
+  }
   // Fernkämpfer bleiben gern auf Distanz
   if (T.range > 1 && de === 1) s -= 1.5 * (P.smart ? 1 : 0);
   // Gelände-Bonus
@@ -201,6 +208,19 @@ function evaluateUnit(state, ctx, P, u, pid, rng) {
       }
     }
   }
+  if (UNITS[u.type].healer && canAttack(u)) {
+    const hf = [u.idx, ...moves.keys()];
+    for (const f of hf) {
+      for (const t of getHealTargets(state, u, f)) {
+        const max = ctx.st(t).hp;
+        const h = Math.min(max - t.hp, healAmount(state, u));
+        const gain = (h / max) * UNITS[t.type].value * 1.4 + (t.shaken ? 1 : 0) + 0.3;
+        const acts = f !== u.idx ? [{ type: 'move', unitId: u.id, to: f }] : [];
+        acts.push({ type: 'heal', unitId: u.id, targetId: t.id });
+        options.push({ score: gain + positionScore(state, ctx, P, u, f, u.hp, pid), actions: acts });
+      }
+    }
+  }
   for (const o of options) o.score += (rng() - 0.5) * P.noise;
   return { options, stay: options[0].score };
 }
@@ -217,7 +237,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
   const options = UNIT_ORDER.filter((k) => !canRecruit(state, pid, ci, k));
   if (!options.length) return null;
   if (!P.smart) {
-    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, catapult: 0.5 };
+    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, catapult: 0.5, mage: 0.5 };
     return weightedPick(options, (k) => w[k], rng);
   }
   const danger = ctx.cityDanger.get(city.idx) || 0;
@@ -233,6 +253,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
     defender: danger > 4 ? 3 : 0.6,
     knight: 4,
     catapult: 1.5 + enemyDef * 0.8,
+    mage: ctx.mine.length >= 4 ? 3 : 0.5,
   };
   for (const k of Object.keys(w)) w[k] /= 1 + mineCount(k) * 0.35;
   return weightedPick(options, (k) => w[k], rng);
@@ -267,6 +288,7 @@ function chooseBuilding(state, ctx, pid, ci, inc) {
     mine: 1 + rocks * 2.4 + (inc.ore < inc.wood ? 1 : 0),
     barracks: c.capital || ctx.ownCities.length >= 3 ? 2.2 : 0.3,
     workshop: ctx.ownCities.length >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'barracks')) ? 1.4 : 0.2,
+    sanctum: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'sanctum')) ? 1.5 : 0.3,
     wall: (ctx.cityDanger.get(c.idx) || 0) > 3 ? 3 : 0.4,
     market: ctx.ownCities.some((x) => hasBuilding(x, 'market')) ? 0 : 1.2,
   };
@@ -341,7 +363,7 @@ function economyAction(state, ctx, P, pid, rng) {
   // Forschung, wenn Rohstoffe übrig sind
   if (P.upgrade > 0 && rng() < P.upgrade) {
     const resSum = res.food + res.wood + res.ore;
-    const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'medic', 'guild'];
+    const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'medic', 'enlight', 'blessing', 'guild'];
     if (resSum > (wantArmy ? 70 : 35)) {
       for (const t of prio) {
         if (techAvailable(state, pid, t) && canAfford(res, TECHS[t].cost)) return { type: 'research', tech: t };
@@ -397,7 +419,7 @@ export function planAction(state, rng = Math.random) {
     if (!best || gain > best.gain) best = { gain, action: top.actions[0], u };
   }
   if (best) {
-    if (best.action.type === 'attack') memory.done.add(best.u.id);
+    if (best.action.type === 'attack' || best.action.type === 'heal') memory.done.add(best.u.id);
     return best.action;
   }
   if (memory.econ++ < 40) {

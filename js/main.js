@@ -2,7 +2,7 @@
 import { Renderer } from './render.js';
 import { attachInput } from './input.js';
 import {
-  createGame, applyAction, cloneState, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
+  createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
   incomeOf, unitCap, unitCount, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
 } from './game.js';
@@ -263,6 +263,10 @@ function unitTargets(u, occ) {
   return curVis ? t.filter((x) => curVis[x.idx]) : t;
 }
 
+function unitHeals(u) {
+  return canAttack(u) ? getHealTargets(S, u) : [];
+}
+
 function refresh() {
   if (!S) return;
   updateVis();
@@ -272,7 +276,7 @@ function refresh() {
   if (humanTurn() && !busy) {
     for (const u of S.units) {
       if (u.owner !== S.current) continue;
-      if (!canMove(u) && unitTargets(u, occ).length === 0) o.exhausted.add(u.id);
+      if (!canMove(u) && unitTargets(u, occ).length === 0 && !unitHeals(u).length) o.exhausted.add(u.id);
       else o.ready.add(u.id);
     }
   }
@@ -282,6 +286,11 @@ function refresh() {
     if (humanTurn() && u.owner === S.current) {
       if (canMove(u)) o.moves = new Set(getMoves(S, u, occ).keys());
       if (u.type === 'tower') o.moves = null;
+      if (UNITS[u.type].healer) {
+        const geo = getGeoOf();
+        o.aura = new Set(geo.within(u.idx, auraRadius(S, u.owner)));
+        if (canAttack(u)) o.heals = new Set(getHealTargets(S, u).map((x) => x.idx));
+      }
       const t = unitTargets(u, occ);
       if (t.length) {
         o.targets = new Map();
@@ -355,6 +364,7 @@ function onTap(sx, sy) {
   }
   if (selU && selU.owner === S.current) {
     if (u && u.owner !== S.current && unitTargets(selU, occ).includes(u)) { doAttack(selU, u); return; }
+    if (u && u.owner === S.current && unitHeals(selU).includes(u)) { doHeal(selU, u); return; }
     if (!u && canMove(selU) && getMoves(S, selU, occ).has(i)) { doMove(selU, i); return; }
   }
   if (u && u.owner === S.current) {
@@ -387,6 +397,8 @@ function unitStatsText(u, isPreview) {
 function unitNotes(u) {
   const notes = [UNITS[u.type].desc];
   if (u.shaken) notes.push('⭐ Erschüttert: halbe Verteidigung, kein Gegenschlag.');
+  if (inAura(S, u)) notes.push('🛡 Schutzaura: 25 % weniger Schaden, Flächenschaden halbiert.');
+  if (UNITS[u.type].healer) notes.push(`Heilt ${healAmount(S, u)} Leben.`);
   return notes.join(' ');
 }
 
@@ -463,6 +475,10 @@ function doMove(u, to) {
 function doAttack(u, t) {
   vibrate(30);
   act({ type: 'attack', unitId: u.id, targetId: t.id }, { undoable: false, after: () => clearSel() });
+}
+
+function doHeal(u, t) {
+  act({ type: 'heal', unitId: u.id, targetId: t.id }, { after: () => clearSel() });
 }
 
 function doRecruit(idx, type) {
@@ -598,7 +614,7 @@ function undo() {
 function nextUnit() {
   if (busy || !humanTurn()) return;
   const occ = buildOcc(S);
-  const ready = S.units.filter((u) => u.owner === S.current && (canMove(u) || unitTargets(u, occ).length > 0));
+  const ready = S.units.filter((u) => u.owner === S.current && (canMove(u) || unitTargets(u, occ).length > 0 || unitHeals(u).length > 0));
   if (!ready.length) { toast('Alle Einheiten haben gehandelt.'); return; }
   ready.sort((a, b) => a.idx - b.idx);
   const cur = ready.findIndex((u) => u.id === sel.unitId);
@@ -758,7 +774,12 @@ async function playEvent(ev, f, isAI, pan = true) {
       break;
     }
     case 'heal':
+      if (ev.by != null && f > 0) {
+        if (isAI === true) await sleep(R.ensureVisible(ev.idx, 200 * f));
+        R.ring(ev.idx, '#86efac', 500 * f);
+      }
       R.floatText(ev.idx, `+${ev.amount}`, '#86efac', 800 * Math.max(f, 0.6));
+      if (ev.by != null) await pause(isAI ? 260 : 160);
       break;
     case 'eliminated':
       toast(`${S.players[ev.pid].name} wurde besiegt!`);
@@ -887,6 +908,7 @@ let cityTab = 'units';
 const RECRUIT_BLOCK = {
   needs: (T) => `braucht ${BUILDINGS[T.needs].name}`,
   cap: () => 'Versorgung voll',
+  limit: () => 'höchstens einer pro Stadt',
   space: () => 'kein freies Feld',
   cost: () => null,
 };
@@ -1072,8 +1094,9 @@ function renderPanel() {
   if (u) {
     const targets = unitTargets(u, occ);
     let status;
-    if (canMove(u)) status = targets.length ? 'Ziehen oder Ziel antippen' : 'Helles Feld = ziehen';
+    if (canMove(u)) status = targets.length ? 'Ziehen oder Ziel antippen' : unitHeals(u).length ? 'Ziehen oder Grün = heilen' : 'Helles Feld = ziehen';
     else if (targets.length) status = 'Rotes Ziel = angreifen';
+    else if (unitHeals(u).length) status = 'Grüne Einheit = heilen';
     else status = u.type === 'tower' ? 'Kein Ziel in Reichweite' : 'Fertig für diese Runde';
     panel.append(unitCard(u, status));
     if (u.type !== 'tower' && u.owner === S.current) {

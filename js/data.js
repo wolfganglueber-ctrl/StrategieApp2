@@ -24,6 +24,7 @@ export const UNITS = {
   defender: { name: 'Wächter', cost: { food: 3, ore: 5 }, hp: 15, atk: 1, def: 3, move: 1, range: 1, desc: 'Starke Verteidigung, schwacher Angriff.' },
   knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 3, def: 1, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
   tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 2, def: 3, move: 0, range: 2, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
+  mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5 }, hp: 10, atk: 1, def: 1, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben bekommen 25 % weniger Schaden, Flächenschaden halbiert. Heilt statt anzugreifen. Höchstens einer pro Stadt.' },
   catapult: { name: 'Katapult', cost: { wood: 8, ore: 6 }, hp: 10, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, splash: 0.5, needs: 'workshop', desc: 'Reichweite 3, nicht nach Bewegung. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Braucht eine Werkstatt.' },
 };
 // Wert einer Einheit für die KI (Rohstoffsumme / 2)
@@ -32,7 +33,7 @@ for (const k of Object.keys(UNITS)) {
   for (const v of Object.values(UNITS[k].cost)) t += v;
   UNITS[k].value = t / 2;
 }
-export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult'];
+export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult', 'mage'];
 // Höchste Zugweite bei voller Entwicklung (gilt auch für Sprünge über eigene Einheiten)
 export const MOVE_CAP = { catapult: 3, rider: 6, knight: 6 };
 export const MOVE_CAP_DEFAULT = 4;
@@ -40,7 +41,10 @@ export function moveCap(type) {
   return MOVE_CAP[type] ?? MOVE_CAP_DEFAULT;
 }
 export const MELEE = ['warrior', 'rider', 'defender', 'knight'];
-export const FOOT = ['warrior', 'archer', 'defender'];
+export const FOOT = ['warrior', 'archer', 'defender', 'mage'];
+// Zauberer: Schutzaura und Heilen
+export const AURA = { radius: 1, radius2: 2, reduce: 0.25, splash: 0.5 };
+export const HEAL = { base: 4, blessing: 2 };
 
 // Türme: Ausbaustufen 1–3
 export const TOWER_LEVELS = [null,
@@ -68,6 +72,8 @@ export const TECHS = {
   masonry: { branch: 'eco', name: 'Baukunst', icon: '🏛️', cost: { wood: 24, ore: 16 }, req: ['saw', 'mining'], desc: 'Stadtausbau 25 % günstiger' },
   medic: { branch: 'def', name: 'Heilkunde', icon: '🌿', cost: { food: 28 }, req: [], desc: 'Einheiten heilen 2 mehr' },
   stonework: { branch: 'def', name: 'Steinmetz', icon: '🧱', cost: { wood: 12, ore: 20 }, req: [], desc: 'Türme +6 Leben, Mauern stärker (×2,6)' },
+  enlight: { branch: 'def', name: 'Erleuchtung', icon: '✨', cost: { food: 20, ore: 18 }, req: ['medic'], desc: 'Schutzaura der Zauberer reicht 2 Felder weit' },
+  blessing: { branch: 'def', name: 'Segen', icon: '🙏', cost: { food: 24, wood: 14 }, req: ['medic'], desc: 'Zauberer heilen 2 mehr und beenden die Erschütterung' },
   towers2: { branch: 'def', name: 'Turmbaukunst', icon: '🗼', cost: { wood: 20, ore: 28 }, req: ['stonework'], mod: { tower: { range: 1, atk: 1 } }, desc: 'Türme +1 Reichweite, +1 Angriff' },
 };
 export const TECH_ORDER = Object.keys(TECHS);
@@ -86,9 +92,10 @@ export const BUILDINGS = {
   barracks: { art: 'eine', name: 'Kaserne', icon: '🛡️', cost: { wood: 6, ore: 4 }, desc: 'Ritter möglich, neue Einheiten können sofort ziehen' },
   workshop: { art: 'eine', name: 'Werkstatt', icon: '⚙️', cost: { wood: 8, ore: 4 }, desc: 'Katapulte möglich' },
   wall: { art: 'eine', name: 'Mauer', icon: '🧱', cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt ×2,2' },
+  sanctum: { art: 'einen', name: 'Turm der Weisen', icon: '🔮', cost: { wood: 6, ore: 6 }, desc: 'Zauberer möglich' },
   market: { art: 'einen', name: 'Markt', icon: '⚖️', cost: { food: 6, wood: 6 }, desc: 'Handel 2:1 statt 3:1' },
 };
-export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'wall', 'market'];
+export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'sanctum', 'wall', 'market'];
 
 // Stadtzentrum liefert von jedem Rohstoff so viel wie die Stufe
 export function cityCenterYield(city) {
