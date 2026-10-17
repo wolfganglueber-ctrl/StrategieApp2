@@ -718,7 +718,7 @@ function aiEventView(ev, f) {
 }
 
 // ---------------------------------------------------------------- Klänge
-const MOVE_SOUND = { rider: 'hooves', knight: 'hooves', catapult: 'wheels', troll: 'stomp', mage: 'glide' };
+const MOVE_SOUND = { rider: 'hooves', knight: 'hooves', catapult: 'wheels', troll: 'stomp', mage: 'glide', dragon: 'wings' };
 
 // Stereo-Position eines Feldes: links/rechts am Bildschirm
 function panOf(idx) {
@@ -733,7 +733,8 @@ function attackSounds(ev, hitSec, ranged, vol) {
   if (att.type === 'catapult') sound.play('catapult', { pan: pa, vol });
   else if (ranged) sound.play('bow', { pan: pa, vol });
   else if (att.type === 'troll' && Math.random() < 0.6) sound.play('roar', { pan: pa, vol });
-  const hitSound = att.type === 'catapult' ? 'boom' : ranged ? 'thunk' : att.type === 'troll' ? 'smash' : att.type === 'mage' ? 'hit' : 'clash';
+  else if (att.type === 'dragon') sound.play('breath', { pan: pa, vol });
+  const hitSound = att.type === 'catapult' ? 'boom' : ranged ? 'thunk' : att.type === 'troll' ? 'smash' : att.type === 'mage' || att.type === 'dragon' ? 'hit' : 'clash';
   sound.play(hitSound, { pan: pd, vol, delay: hitSec });
   if (ev.counter > 0 && !ranged) sound.play('clash', { pan: pa, vol: vol * 0.6, delay: hitSec + 0.2 });
   if (ev.killed || ev.splash?.some((h) => h.killed)) sound.play('fall', { pan: pd, vol, delay: hitSec + 0.15 });

@@ -221,14 +221,13 @@ class SoundEngine {
     }
     // Vögel im Wald (und etwas auf Wiesen)
     if (m.forest > 0.05 && due('bird', 2.5, 9) && Math.random() < 0.4 + m.forest) this.bird(this.forest, t);
-    // Stadt: Schmied, gelegentlich Glocke
-    if (m.city > 0.05) {
-      if (due('smith', 3, 10) && Math.random() < m.city * 1.5) {
-        const k = 2 + Math.floor(Math.random() * 3);
-        for (let i = 0; i < k; i++) this.metal(this.city, t + i * 0.42, 1500 + Math.random() * 300, 0.07, 0.35, Math.random() * 0.8 - 0.4);
-      }
-      if (due('bell', 25, 60) && Math.random() < m.city * 2) {
-        for (let i = 0; i < 3; i++) this.bell(this.city, t + i * 1.6, 220, 0.12);
+    // Stadt: ab und zu ein entfernter Schmiedeschlag, unregelmäßig
+    if (m.city > 0.05 && due('smith', 5, 14) && Math.random() < m.city * 1.2) {
+      let tt = t;
+      const k = 1 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < k; i++) {
+        this.clank(this.city, tt, 0.05, Math.random() * 0.8 - 0.4);
+        tt += 0.35 + Math.random() * 0.5;
       }
     }
   }
@@ -292,6 +291,63 @@ class SoundEngine {
     this.noise(dest, t, { type: 'highpass', f: 3000, dur: 0.03, vol: vol * 0.8, pan });
   }
 
+  // Gezupfte Saite (Karplus-Strong) – klingt natürlich statt nach Synthesizer
+  pluckBuffer(f, dur, damp) {
+    const key = f + ':' + dur + ':' + damp;
+    this.cache ||= new Map();
+    let buf = this.cache.get(key);
+    if (buf) return buf;
+    const c = this.ctx, sr = c.sampleRate, n = Math.floor(sr * dur);
+    buf = c.createBuffer(1, n, sr);
+    const d = buf.getChannelData(0);
+    const P = Math.max(2, Math.round(sr / f));
+    const line = new Float32Array(P);
+    for (let i = 0; i < P; i++) line[i] = Math.random() * 2 - 1;
+    let idx = 0, prev = 0;
+    for (let i = 0; i < n; i++) {
+      const v = line[idx];
+      const nv = damp * 0.5 * (v + prev);
+      prev = v;
+      line[idx] = nv;
+      d[i] = v * 0.6;
+      idx = (idx + 1) % P;
+    }
+    this.cache.set(key, buf);
+    return buf;
+  }
+
+  pluck(dest, t, { f, dur = 0.5, damp = 0.996, vol = 0.3, pan = 0, lp = 4000, verb }) {
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.pluckBuffer(f, dur, damp);
+    const fl = this.ctx.createBiquadFilter();
+    fl.type = 'lowpass';
+    fl.frequency.value = lp;
+    src.connect(fl).connect(this.env(dest, t, vol, 0.002, dur, pan, verb));
+    src.start(t);
+    src.stop(t + dur + 0.05);
+  }
+
+  // Viele kleine Rauschkörner: Geröll, Splitter, Knistern
+  grains(dest, t, { n = 12, spread = 0.5, fmin = 500, fmax = 3000, vol = 0.08, pan = 0, decay = true }) {
+    for (let i = 0; i < n; i++) {
+      const r = Math.random();
+      const dt = (decay ? r * r : r) * spread;
+      this.noise(dest, t + dt, { type: 'bandpass', f: fmin + Math.random() * (fmax - fmin), q: 2 + Math.random() * 4, dur: 0.02 + Math.random() * 0.05, vol: vol * (decay ? 1 - dt / (spread * 1.3) : 1) * (0.5 + Math.random() * 0.5), pan: pan + Math.random() * 0.3 - 0.15, verb: 0.2 });
+    }
+  }
+
+  // Dumpfer Schlag mit Körper (ohne Tonhöhengleiten)
+  thump(dest, t, { f = 60, vol = 0.4, dur = 0.4, pan = 0, verb = 0.3 }) {
+    for (const [r, a] of [[1, 1], [1.47, 0.5], [2.09, 0.25]]) this.tone(dest, t, { f: f * r, dur: dur / r, vol: vol * a, attack: 0.006, pan, verb });
+  }
+
+  // Metallisches Klirren mit Rauschanteil (Schmied, Rüstung)
+  clank(dest, t, vol, pan = 0) {
+    this.noise(dest, t, { type: 'bandpass', f: 2600 + Math.random() * 1200, q: 6, dur: 0.12, vol: vol * 1.6, pan, verb: 0.3 });
+    this.noise(dest, t, { type: 'highpass', f: 4000, dur: 0.03, vol: vol, pan });
+    this.tone(dest, t, { f: 1700 + Math.random() * 400, dur: 0.18, vol: vol * 0.35, pan });
+  }
+
   bell(dest, t, base, vol) {
     for (const [r, a, d] of [[1, 1, 3], [2, 0.5, 2.2], [2.4, 0.4, 2], [3, 0.3, 1.6], [4.2, 0.2, 1]]) {
       this.tone(dest, t, { f: base * r, dur: d, vol: vol * a, attack: 0.004 });
@@ -334,6 +390,7 @@ class SoundEngine {
       case 'hooves':
       case 'wheels':
       case 'stomp':
+      case 'wings':
       case 'glide': {
         const steps = Math.min(8, opts.steps || 2), dt = (opts.stepMs || 120) / 1000;
         for (let i = 0; i < steps; i++) {
@@ -346,8 +403,13 @@ class SoundEngine {
             this.tone(d, ti, { type: 'sawtooth', f: 70 + Math.random() * 20, f2: 55, dur: dt * 0.9, vol: 0.035 * v, pan, verb: 0.1 });
             this.noise(d, ti, { buf: this.brown, type: 'lowpass', f: 300, dur: dt, vol: 0.12 * v, pan, verb: 0 });
           } else if (name === 'stomp') {
-            this.tone(d, ti, { f: 60, f2: 32, dur: 0.25, vol: 0.3 * v, pan, verb: 0.3 });
+            this.thump(d, ti, { f: 42, vol: 0.3 * v, dur: 0.3, pan, verb: 0.3 });
             this.noise(d, ti, { buf: this.brown, type: 'lowpass', f: 180, dur: 0.2, vol: 0.3 * v, pan, verb: 0.2 });
+          } else if (name === 'wings') {
+            if (i % 2 === 0) {
+              this.noise(d, ti, { buf: this.pink, type: 'lowpass', f: 500, dur: dt * 1.4, vol: 0.55 * v, attack: dt * 0.5, pan, verb: 0.3 });
+              this.thump(d, ti + dt * 0.5, { f: 40, vol: 0.12 * v, dur: 0.25, pan, verb: 0.2 });
+            }
           } else {
             this.noise(d, ti, { type: 'bandpass', f: 900, f2: 1600, q: 0.7, dur: dt * 0.8, vol: 0.15 * v, pan, verb: 0.2 });
           }
@@ -355,43 +417,61 @@ class SoundEngine {
         break;
       }
       case 'clash':
-        this.metal(d, t, 700 + Math.random() * 250, 0.16 * v, 0.5, pan);
-        this.metal(d, t + 0.05, 950 + Math.random() * 250, 0.08 * v, 0.3, pan);
-        this.noise(d, t, { type: 'bandpass', f: 2500, q: 0.8, dur: 0.12, vol: 0.25 * v, pan });
+        this.clank(d, t, 0.12 * v, pan);
+        this.metal(d, t, 1100 + Math.random() * 400, 0.06 * v, 0.35, pan);
+        this.noise(d, t + 0.03, { type: 'bandpass', f: 3500, f2: 2000, q: 1.5, dur: 0.18, vol: 0.14 * v, pan });
+        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 600, dur: 0.1, vol: 0.3 * v, pan });
         break;
       case 'hit':
-        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 500, dur: 0.12, vol: 0.6 * v, pan });
-        this.tone(d, t, { f: 140, f2: 60, dur: 0.12, vol: 0.25 * v, pan });
+        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 700, dur: 0.14, vol: 0.7 * v, pan, verb: 0.2 });
+        this.thump(d, t, { f: 95, vol: 0.18 * v, dur: 0.15, pan, verb: 0.1 });
+        this.grains(d, t, { n: 3, spread: 0.06, fmin: 1500, fmax: 3500, vol: 0.06 * v, pan });
         break;
       case 'bow':
-        this.tone(d, t, { type: 'triangle', f: 190, f2: 120, dur: 0.14, vol: 0.25 * v, pan, verb: 0.1 });
-        this.noise(d, t + 0.03, { type: 'bandpass', f: 2200, f2: 700, q: 1.5, dur: 0.3, vol: 0.25 * v, pan });
+        // Sehne: gezupfte, schnell gedämpfte Saite + Luftzug des Pfeils
+        this.pluck(d, t, { f: 98, dur: 0.35, damp: 0.985, vol: 0.5 * v, pan, lp: 2500, verb: 0.15 });
+        this.noise(d, t + 0.01, { type: 'highpass', f: 2500, dur: 0.03, vol: 0.12 * v, pan });
+        this.noise(d, t + 0.04, { buf: this.pink, type: 'bandpass', f: 1600, f2: 900, q: 1.2, dur: 0.28, vol: 0.18 * v, attack: 0.04, pan });
         break;
       case 'thunk':
-        this.noise(d, t, { type: 'lowpass', f: 900, dur: 0.05, vol: 0.5 * v, pan, verb: 0.1 });
-        this.tone(d, t, { f: 320, f2: 120, dur: 0.07, vol: 0.18 * v, pan, verb: 0.1 });
+        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 1400, dur: 0.06, vol: 0.6 * v, pan, verb: 0.15 });
+        this.pluck(d, t, { f: 210, dur: 0.12, damp: 0.96, vol: 0.25 * v, pan, lp: 1800 });
         break;
       case 'catapult':
-        this.tone(d, t, { type: 'sawtooth', f: 85, f2: 45, dur: 0.35, vol: 0.15 * v, pan, verb: 0.1 });
-        this.noise(d, t + 0.2, { type: 'bandpass', f: 350, f2: 1400, q: 0.9, dur: 0.45, vol: 0.5 * v, pan });
+        // Knarzendes Holz (Ratsche), Schlag des Wurfarms, dann der Luftzug des Steins
+        for (let i = 0; i < 7; i++) this.noise(d, t + i * 0.035, { type: 'bandpass', f: 380 + Math.random() * 160, q: 9, dur: 0.03, vol: 0.22 * v, pan, verb: 0.1 });
+        this.noise(d, t + 0.27, { buf: this.brown, type: 'lowpass', f: 1500, dur: 0.1, vol: 0.7 * v, pan, verb: 0.3 });
+        this.pluck(d, t + 0.27, { f: 73, dur: 0.4, damp: 0.975, vol: 0.45 * v, pan, lp: 900, verb: 0.3 });
+        this.noise(d, t + 0.32, { buf: this.pink, type: 'bandpass', f: 300, f2: 700, q: 1.1, dur: 0.6, vol: 0.32 * v, attack: 0.15, pan: pan + 0.1 });
         break;
       case 'boom':
-        this.tone(d, t, { f: 75, f2: 32, dur: 0.7, vol: 0.55 * v, pan, verb: 0.5 });
-        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 400, f2: 120, dur: 0.7, vol: 0.6 * v, pan, verb: 0.4 });
-        for (let i = 0; i < 5; i++) this.noise(d, t + 0.12 + Math.random() * 0.4, { type: 'bandpass', f: 600 + Math.random() * 1600, q: 3, dur: 0.05, vol: 0.08 * v, pan: pan + Math.random() * 0.4 - 0.2 });
+        // Einschlag: tiefer Körper, Erdstoß, dann rieselndes Geröll
+        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 1200, f2: 150, dur: 0.9, vol: 0.9 * v, attack: 0.004, pan, verb: 0.6 });
+        this.thump(d, t, { f: 48, vol: 0.45 * v, dur: 0.7, pan, verb: 0.4 });
+        this.noise(d, t, { type: 'bandpass', f: 1800, q: 0.8, dur: 0.08, vol: 0.3 * v, pan });
+        this.grains(d, t + 0.05, { n: 26, spread: 0.9, fmin: 700, fmax: 4000, vol: 0.12 * v, pan });
         break;
       case 'fall':
-        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 350, dur: 0.3, vol: 0.6 * v, pan, verb: 0.3 });
-        this.tone(d, t, { type: 'triangle', f: 170, f2: 70, dur: 0.35, vol: 0.12 * v, pan });
-        this.metal(d, t + 0.12, 1800, 0.03 * v, 0.2, pan);
+        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 450, dur: 0.35, vol: 0.75 * v, pan, verb: 0.3 });
+        this.thump(d, t, { f: 70, vol: 0.15 * v, dur: 0.3, pan });
+        this.clank(d, t + 0.1, 0.035 * v, pan);
+        this.grains(d, t + 0.05, { n: 5, spread: 0.25, fmin: 2000, fmax: 5000, vol: 0.04 * v, pan });
         break;
       case 'roar':
-        for (const f of [82, 123]) this.tone(d, t, { type: 'sawtooth', f, f2: f * 0.75, dur: 0.9, vol: 0.09 * v, attack: 0.08, pan, verb: 0.5 });
-        this.noise(d, t, { buf: this.pink, type: 'bandpass', f: 600, f2: 300, q: 2, dur: 0.9, vol: 0.35 * v, attack: 0.08, pan, verb: 0.4 });
+        // Brüllen: Rauschen durch Mund-Formanten, darunter ein kehliges Grollen
+        for (const [f, a] of [[420, 1], [850, 0.7], [2300, 0.25]]) this.noise(d, t, { buf: this.pink, type: 'bandpass', f, f2: f * 0.8, q: 4, dur: 1.0, vol: 0.5 * a * v, attack: 0.12, pan, verb: 0.5 });
+        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 220, dur: 1.0, vol: 0.5 * v, attack: 0.1, pan, verb: 0.3 });
         break;
       case 'smash':
         this.play('hit', { pan, vol: v * 1.3, delay: opts.delay });
-        this.tone(d, t, { f: 55, f2: 30, dur: 0.4, vol: 0.5 * v, pan, verb: 0.4 });
+        this.thump(d, t, { f: 45, vol: 0.4 * v, dur: 0.5, pan, verb: 0.4 });
+        this.grains(d, t + 0.03, { n: 8, spread: 0.4, fmin: 600, fmax: 2500, vol: 0.07 * v, pan });
+        break;
+      case 'breath':
+        // Feueratem: fauchendes, knisterndes Rauschen
+        this.noise(d, t, { buf: this.pink, type: 'bandpass', f: 500, f2: 1800, q: 0.7, dur: 0.9, vol: 0.6 * v, attack: 0.15, pan, verb: 0.4 });
+        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 300, dur: 0.9, vol: 0.4 * v, attack: 0.1, pan });
+        this.grains(d, t + 0.1, { n: 22, spread: 0.9, fmin: 2500, fmax: 7000, vol: 0.06 * v, pan, decay: false });
         break;
       case 'heal':
         [880, 1109, 1319, 1760].forEach((f, i) => this.tone(d, t + i * 0.08, { f, dur: 0.6, vol: 0.07 * v, attack: 0.01, pan, verb: 0.6 }));
@@ -399,7 +479,7 @@ class SoundEngine {
         break;
       case 'drum':
         for (let i = 0; i < 2; i++) {
-          this.tone(d, t + i * 0.16, { f: 130, f2: 60, dur: 0.2, vol: 0.22 * v, pan, verb: 0.3 });
+          this.thump(d, t + i * 0.16, { f: 78, vol: 0.25 * v, dur: 0.25, pan, verb: 0.3 });
           this.noise(d, t + i * 0.16, { buf: this.brown, type: 'lowpass', f: 600, dur: 0.08, vol: 0.2 * v, pan });
         }
         break;

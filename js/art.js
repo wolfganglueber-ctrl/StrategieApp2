@@ -517,20 +517,20 @@ function turret(ctx, x, y, r, h, col, s, roof = true) {
   return roof ? top - 2 * s - r * 2.6 : top - 5 * s;
 }
 
-// Stadtmauer als Ring; erst die hintere Hälfte (vor den Häusern zeichnen), dann die vordere
+// Dicke Stadtmauer als Ring mit Wehrgang; erst die hintere Hälfte (vor den Häusern), dann die vordere
 function cityWall(ctx, x, y, s, col, half, big) {
-  const cx = x, cy = y + 7 * s, rx = (big ? 33 : 31) * s, ry = (big ? 20 : 19) * s;
-  const wh = (big ? 11 : 8.5) * s;
+  const cx = x, cy = y + 7 * s, rx = 33 * s, ry = 20.5 * s;
+  const wh = (big ? 14 : 12) * s, thick = 5 * s;
   const a0 = half === 'back' ? Math.PI : 0, a1 = half === 'back' ? Math.PI * 2 : Math.PI;
-  const N = 16;
-  const pt = (a) => [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry];
-  const gateA = Math.PI / 2, gateHalf = 0.16;
+  const N = 18;
+  const pt = (a, inset = 0) => [cx + Math.cos(a) * (rx - inset), cy + Math.sin(a) * (ry - inset * 0.62)];
   for (let k = 0; k < N; k++) {
     const aa = a0 + ((a1 - a0) * k) / N, ab = a0 + ((a1 - a0) * (k + 1)) / N;
-    const [x0, y0] = pt(aa), [x1, y1] = pt(ab);
-    // Mauerfläche: vorne die Außenseite, hinten die Innenseite (im Schatten)
-    const light = half === 'back' ? -0.25 : -0.05 - 0.25 * Math.max(0, Math.cos(aa + Math.PI / 4));
-    ctx.fillStyle = shade('#d8ccb2', light);
+    // Hinten sieht man die Innenseite der Mauer, vorne die Außenseite
+    const inset = half === 'back' ? thick : 0;
+    const [x0, y0] = pt(aa, inset), [x1, y1] = pt(ab, inset);
+    const light = half === 'back' ? -0.3 : -0.02 - 0.3 * Math.max(0, Math.cos(aa + Math.PI / 4));
+    ctx.fillStyle = shade('#d6c9ad', light);
     ctx.beginPath();
     ctx.moveTo(x0, y0);
     ctx.lineTo(x1, y1);
@@ -538,74 +538,100 @@ function cityWall(ctx, x, y, s, col, half, big) {
     ctx.lineTo(x0, y0 - wh);
     ctx.closePath();
     ctx.fill();
+    // Mauerwerk: Lagen und versetzte Fugen
     ctx.strokeStyle = 'rgba(70,55,35,0.35)';
     ctx.lineWidth = 0.5 * s;
     ctx.stroke();
-    // Steinlage
-    ctx.beginPath();
-    ctx.moveTo(x0, y0 - wh * 0.5);
-    ctx.lineTo(x1, y1 - wh * 0.5);
-    ctx.stroke();
-    // Wehrgang oben
-    ctx.strokeStyle = '#f1e9d6';
-    ctx.lineWidth = 2.2 * s;
-    ctx.beginPath();
-    ctx.moveTo(x0, y0 - wh);
-    ctx.lineTo(x1, y1 - wh);
-    ctx.stroke();
-    // Zinnen
-    if (k % 1 === 0) {
-      const mx = (x0 + x1) / 2, my = (y0 + y1) / 2 - wh;
-      ctx.fillStyle = shade('#e9e0cc', light * 0.6);
-      ctx.fillRect(mx - 1.3 * s, my - 3 * s, 2.6 * s, 3 * s);
-      ctx.strokeStyle = 'rgba(60,45,25,0.55)';
-      ctx.lineWidth = 0.5 * s;
-      ctx.strokeRect(mx - 1.3 * s, my - 3 * s, 2.6 * s, 3 * s);
+    for (let r = 1; r < 4; r++) {
+      const f = r / 4;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0 - wh * f);
+      ctx.lineTo(x1, y1 - wh * f);
+      ctx.stroke();
+      const m = (k + r) % 2 ? 0.33 : 0.66;
+      const mx = x0 + (x1 - x0) * m, my = y0 + (y1 - y0) * m;
+      ctx.beginPath();
+      ctx.moveTo(mx, my - wh * f);
+      ctx.lineTo(mx, my - wh * (f - 0.25));
+      ctx.stroke();
     }
+    // Sockel aus dunklerem Stein
+    ctx.fillStyle = 'rgba(60,45,30,0.25)';
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.lineTo(x1, y1 - 2 * s);
+    ctx.lineTo(x0, y0 - 2 * s);
+    ctx.closePath();
+    ctx.fill();
+    // Wehrgang: breite, helle Oberseite der Mauer
+    const [ox0, oy0] = pt(aa, 0), [ox1, oy1] = pt(ab, 0), [ix0, iy0] = pt(aa, thick), [ix1, iy1] = pt(ab, thick);
+    ctx.fillStyle = shade('#efe6d2', half === 'back' ? -0.08 : 0);
+    ctx.beginPath();
+    ctx.moveTo(ox0, oy0 - wh);
+    ctx.lineTo(ox1, oy1 - wh);
+    ctx.lineTo(ix1, iy1 - wh);
+    ctx.lineTo(ix0, iy0 - wh);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(70,55,35,0.4)';
+    ctx.stroke();
+    // Zinnen an der Außenkante
+    const mx = (ox0 + ox1) / 2, my = (oy0 + oy1) / 2 - wh;
+    ctx.fillStyle = shade('#e6dcc6', light * 0.5);
+    ctx.fillRect(mx - 1.6 * s, my - 3.5 * s, 3.2 * s, 3.5 * s);
+    ctx.strokeStyle = 'rgba(60,45,25,0.6)';
+    ctx.lineWidth = 0.5 * s;
+    ctx.strokeRect(mx - 1.6 * s, my - 3.5 * s, 3.2 * s, 3.5 * s);
   }
-  ctx.strokeStyle = 'rgba(50,38,25,0.6)';
-  ctx.lineWidth = 0.9 * s;
+  ctx.strokeStyle = 'rgba(50,38,25,0.7)';
+  ctx.lineWidth = 1 * s;
   ctx.beginPath();
   ctx.ellipse(cx, cy, rx, ry, 0, a0, a1);
   ctx.stroke();
-  const tr = (big ? 4.6 : 3.8) * s, th = wh + (big ? 9 : 6) * s;
+  const tr = 5.2 * s, th = wh + 8 * s;
   if (half === 'back') {
     for (const a of [Math.PI * 1.22, Math.PI * 1.78]) {
       const [tx, ty] = pt(a);
-      turret(ctx, tx, ty, tr, big ? th + 6 * s : th, col, s, big);
+      turret(ctx, tx, ty, tr, th, col, s, true);
     }
   } else {
     // Seitentürme und Torhaus
     for (const a of [Math.PI * 0.02, Math.PI * 0.98]) {
       const [tx, ty] = pt(a);
-      turret(ctx, tx, ty, tr, th, col, s, big);
+      turret(ctx, tx, ty, tr, th, col, s, true);
     }
-    const [gx, gy] = pt(gateA);
-    const gw = (big ? 12 : 10) * s, gh = wh + (big ? 7 : 5) * s;
+    const [gx, gy] = pt(Math.PI / 2);
+    const gw = 14 * s, gh = wh + 7 * s;
     ctx.fillStyle = stone(ctx, gx - gw / 2, gx + gw / 2);
     ctx.fillRect(gx - gw / 2, gy - gh, gw, gh);
     ctx.strokeStyle = 'rgba(60,40,20,0.6)';
     ctx.lineWidth = 0.7 * s;
     ctx.strokeRect(gx - gw / 2, gy - gh, gw, gh);
-    merlons(ctx, gx - gw / 2, gx + gw / 2, gy - gh, s, 3);
+    merlons(ctx, gx - gw / 2, gx + gw / 2, gy - gh, s, 4);
     ctx.fillStyle = '#2b2118';
     ctx.beginPath();
-    ctx.arc(gx, gy - 4 * s, 3 * s, Math.PI, 0);
-    ctx.lineTo(gx + 3 * s, gy);
-    ctx.lineTo(gx - 3 * s, gy);
+    ctx.arc(gx, gy - 5 * s, 3.5 * s, Math.PI, 0);
+    ctx.lineTo(gx + 3.5 * s, gy);
+    ctx.lineTo(gx - 3.5 * s, gy);
     ctx.fill();
     // Fallgitter
-    ctx.strokeStyle = 'rgba(160,140,100,0.7)';
-    ctx.lineWidth = 0.5 * s;
+    ctx.strokeStyle = 'rgba(170,150,110,0.75)';
+    ctx.lineWidth = 0.6 * s;
     for (let k = -2; k <= 2; k++) {
       ctx.beginPath();
-      ctx.moveTo(gx + k * 1.2 * s, gy - 6.5 * s);
-      ctx.lineTo(gx + k * 1.2 * s, gy);
+      ctx.moveTo(gx + k * 1.4 * s, gy - 8 * s);
+      ctx.lineTo(gx + k * 1.4 * s, gy);
       ctx.stroke();
     }
-    if (big) banner(ctx, gx, gy - gh + 1.5 * s, 4 * s, 6 * s, col, s);
+    for (const yy of [-6, -3]) {
+      ctx.beginPath();
+      ctx.moveTo(gx - 3.4 * s, gy + yy * s);
+      ctx.lineTo(gx + 3.4 * s, gy + yy * s);
+      ctx.stroke();
+    }
+    banner(ctx, gx, gy - gh + 1.5 * s, 4.5 * s, 7 * s, col, s);
   }
-  void gateHalf;
 }
 
 // Kleine Kirche mit Glockenturm
@@ -638,8 +664,13 @@ function chapel(ctx, x, y, roof, s) {
 }
 
 // Burg: großer Bergfried mit Ecktürmchen, flankiert von Rundtürmen
-function fortress(ctx, x, y, s, col) {
+function fortress(ctx, x, y, s, col, walled) {
   const roof = col.main;
+  // Ohne Stadtmauer flankieren zwei Rundtürme den Bergfried
+  if (!walled) {
+    turret(ctx, x - 18 * s, y - 1 * s, 4.5 * s, 22 * s, col, s);
+    turret(ctx, x + 19 * s, y + 1 * s, 4.5 * s, 20 * s, col, s);
+  }
   // Bergfried
   const kw = 20 * s, kh = 30 * s, kx = x + 1 * s, ky = y + 9 * s, dep = 7 * s;
   shadowEllipse(ctx, kx + 6 * s, ky + 1.5 * s, kw * 0.8, 4 * s, 0.35);
@@ -704,7 +735,7 @@ export function isFortress(city) {
 export function drawCity(ctx, city, x, y, H, col) {
   const s = H / 40;
   const big = isFortress(city);
-  const walled = big || city.buildings?.includes('wall');
+  const walled = !!city.buildings?.includes('wall');
   // Pflaster
   const g = ctx.createRadialGradient(x - 6 * s, y, 2, x, y + 4 * s, 26 * s);
   g.addColorStop(0, '#efe2c4');
@@ -719,7 +750,7 @@ export function drawCity(ctx, city, x, y, H, col) {
   if (walled) cityWall(ctx, x, y, s, col, 'back', big);
   const roof = col.main;
   if (big) {
-    fortress(ctx, x, y, s, col);
+    fortress(ctx, x, y, s, col, walled);
   } else if (city.capital) {
     // Burg: Bergfried mit Türmen
     tower(ctx, x - 15 * s, y + 10 * s, 5.5 * s, 22 * s, roof, s);
