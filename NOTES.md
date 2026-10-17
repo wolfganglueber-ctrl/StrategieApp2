@@ -1,11 +1,11 @@
 # Stand
 Spiel-Link: https://claude.ai/artifact/DSHgsarxYi3z7aj65QHMEA (wird bei /fertig aktualisiert)
 
-Version 0.8 (Branch `ccr-8aa711c1-0bv1jz`), spielbar im Browser/als PWA.
+Version 0.9 (Branch `ccr-8aa711c1-0bv1jz`), spielbar im Browser/als PWA.
 - Hexkarte mit Wiese, Wald, Hügel, Gebirge, See; 7 Kartengrößen bis 44×58 (Episch), 5 Landschaftstypen, fairer Generator mit teilbarem Karten-Code.
-- Rohstoffe Nahrung/Holz/Erz aus dem Stadtgebiet; Handel 3:1 (Markt/Handelsgilde 2:1) mit Mengenregler.
+- Rohstoffe Nahrung/Holz/Erz aus dem Stadtgebiet; Handeln nur mit Markt (3:1), Handelsgilde (teuer) 2:1, Mengenregler.
 - Städte mit 5 Stufen (Dorf bis Metropole), Bauplätze für 9 Gebäude, Türme mit 3 Ausbaustufen.
-- 8 Einheiten: Krieger, Schütze, Reiter, Wächter, Ritter, Katapult (Flächenschaden 50 % auf Nachbarn), Zauberer (Schutzaura −25 %, Heilen), Schwarzer Troll (Titan, Trollhöhle ab Stufe 4, 3 Versorgung, einer pro Reich).
+- 9 Einheiten: Krieger, Schütze, Reiter, Wächter, Ritter, Katapult (Flächenschaden 50 % auf Nachbarn), Zauberer (Schutzaura −25 %, Heilen), Schwarzer Troll (Titan, Trollhöhle ab Stufe 4, 3 Versorgung, bis 5 pro Reich), Drache (Drachenhöhle einmal pro Reich, ein Drache; fliegt über Berge/Seen/Einheiten, Feueratem 30 % Flächenschaden, Schützen und Türme treffen ihn doppelt).
 - Zugweite gedeckelt: Fußtruppen 4, Katapult 3, Reiter/Ritter 6 (inkl. Sprünge über eigene Einheiten).
 - Ränge 1–5 (Erfahrung oder Ausbilden mit Kaserne), Fähigkeiten bei Rang 3 und 5 (je 2 zur Wahl), Flankenbonus +10 % je Nachbar, „Wache halten“.
 - Versorgung knapper: Dorf 1, Siedlung 2, Stadt 2, Burgstadt 3, Metropole 4 (Ø ~9 statt ~12 Einheiten je Spieler auf Groß).
@@ -13,15 +13,16 @@ Version 0.8 (Branch `ccr-8aa711c1-0bv1jz`), spielbar im Browser/als PWA.
 - KI in 5 Stufen (baut, forscht, handelt, Türme, Zauberer heilen, Ausbilden, Fähigkeiten, spart auf Troll); Stufen sauber gestaffelt (4 vs 3: 16:4, 5 vs 4: 15:5).
 - Kampagne mit 50 Leveln in 5 Welten, Freies Spiel, Speicherstand (Version 5), Rückgängig.
 - Bedienung: Angriff mit einem Tipp und Schadensvorschau, Gruppen, Einheiten-Info, 💡-Tipp-Knopf, Heilziele grün, Fähigkeitswahl im Panel.
-- Städte (js/art.js `drawCity`): umlaufende Stadtmauer mit Zinnen, Wehrtürmen und Torhaus (hinterer Teil hinter, vorderer vor den Häusern); Fahnen, Banner, Kirche ab Stufe 3; Stufe 5 mit 5/5 Gebäuden wird zur Burg (Bergfried, Ecktürmchen, große Fahne, Burgmauer). Vorschau: `.preview/cities.html` (nicht eingecheckt) über `npm start` öffnen.
-- Geräusche (js/audio.js): alles per Web Audio erzeugt, keine Dateien, offline. Effekte für Bewegung (Schritte, Hufe, Räder, Troll), Kampf (Klingen, Bogen, Katapult, Fall), Heilen, Bauen, Rekrutieren, Eroberung, Ränge, Sieg/Niederlage; Umgebung je nach Kartenausschnitt (Meer, Bach/See, Wind, Vögel, Stadt mit Schmied und Glocke). Einstellbar: Geräusche An/Aus, Umgebung Aus/Leise/Normal/Laut.
+- Städte (js/art.js `drawCity`): dicke umlaufende Stadtmauer (nur wenn gebaut) mit Wehrgang, Zinnen, Wehrtürmen und Torhaus (hinterer Teil hinter, vorderer vor den Häusern); Fahnen, Banner, Kirche ab Stufe 3; Stufe 5 mit 5/5 Gebäuden wird zur Burg (Bergfried, Ecktürmchen, große Fahne, Burgmauer). Vorschau: `.preview/cities.html` (nicht eingecheckt) über `npm start` öffnen.
+- Figuren neu gezeichnet (js/art.js): Stahlglanz, Kettenhemd, Wappenröcke/Umhänge in Spielerfarbe, Gesichter, Pferde mit Schabracke, Drache. Vorschau: `.preview/units.html`.
+- Geräusche (js/audio.js): alles per Web Audio erzeugt, keine Dateien, offline. Effekte für Bewegung (Schritte, Hufe, Räder, Troll, Drachenflügel), Kampf (Klingen, Bogen per Saitenmodell, Katapult mit Holzknarzen und Geröll-Einschlag, Feueratem, Fall), Heilen, Bauen, Rekrutieren, Eroberung, Ränge, Sieg/Niederlage; Umgebung je nach Kartenausschnitt (Meer, Bach/See, Wind, Vögel, Stadt mit Schmied; keine Glocke mehr). Einstellbar: Geräusche An/Aus, Umgebung Aus/Leise/Normal/Laut.
 - Tests (`npm test`) laufen grün; `node tools/stats.mjs [spiele] [stufe] [größe]` zählt Einheiten und Fähigkeiten in KI-Partien.
 
 # Offene Aufgaben
-- Wolfgang testet Version 0.8 (Burg-Grafik, Zauberer, Ränge, Troll, Flächenschaden, Zugweite, Geräusche) und gibt Rückmeldung, v. a. zur Lautstärke und zum Klang auf dem Handy.
+- Wolfgang testet Version 0.9 (Drache, neue Figuren, dicke Mauer, natürlichere Geräusche, Markt-Pflicht, Burg-Grafik, Zauberer, Ränge, Troll, Flächenschaden, Zugweite, Geräusche) und gibt Rückmeldung, v. a. zur Lautstärke und zum Klang auf dem Handy.
 - Balancing beobachten: Troll (70 Leben, Angriff 7, Verteidigung 5) ist in Städten mit Mauer kaum zu knacken; ggf. abschwächen.
 - KI nutzt Heilen noch selten (~2–4 Mal pro Partie); Gewichtung ggf. erhöhen.
 - Schadensvorschau zeigt den Flächenschaden des Katapults noch nicht auf den Nachbarfeldern.
 
 # Nächster Schritt
-Rückmeldung zu Version 0.8 einholen, danach Balancing (Troll, Heilen) und Flächenschaden in der Vorschau.
+Rückmeldung zu Version 0.9 einholen, danach Balancing (Troll, Heilen) und Flächenschaden in der Vorschau.
