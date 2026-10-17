@@ -146,12 +146,6 @@ function groupUnits() {
   return (sel.group || []).map((id) => unitById(S, id)).filter((u) => u && u.owner === S.current);
 }
 
-function startGroup(u) {
-  clearSel();
-  sel.group = [u.id];
-  refresh();
-}
-
 function toggleGroupMember(u) {
   if (UNITS[u.type].structure) return;
   const g = sel.group || [];
@@ -160,7 +154,16 @@ function toggleGroupMember(u) {
   refresh();
 }
 
-function addNearbyToGroup() {
+// Gruppe aus allen eigenen Einheiten in der Nähe bilden (optional nur gleicher Typ)
+function groupNearby(u, sameType) {
+  clearSel();
+  sel.group = [u.id];
+  addNearbyToGroup(sameType ? u.type : null);
+  const n = groupUnits().length;
+  if (n <= 1) toast(sameType ? `Keine weiteren ${UNITS[u.type].name} in der Nähe.` : 'Keine weiteren Einheiten in der Nähe.');
+}
+
+function addNearbyToGroup(onlyType = null) {
   const geo = getGeoOf();
   const members = groupUnits();
   // Zusammenhängender Trupp: Einheiten im Abstand ≤ 2 zueinander, höchstens 20
@@ -170,7 +173,7 @@ function addNearbyToGroup() {
     const m = front.shift();
     for (const x of S.units) {
       if (ids.size >= 20) break;
-      if (x.owner !== S.current || ids.has(x.id) || UNITS[x.type].structure) continue;
+      if (x.owner !== S.current || ids.has(x.id) || UNITS[x.type].structure || (onlyType && x.type !== onlyType)) continue;
       if (!canMove(x) && !canAttack(x)) continue;
       if (geo.dist(m.idx, x.idx) <= 2) { ids.add(x.id); front.push(x); }
     }
@@ -1292,14 +1295,14 @@ function renderPanel() {
     const row = el('div', { class: 'group-row' });
     for (const m of members) row.append(el('button', { class: 'gm', title: UNITS[m.type].name, onclick: () => toggleGroupMember(m) }, iconCanvas(m.type, m.owner, 38)));
     panel.append(el('div', { class: 'city-head' },
-      el('span', { class: 'title' }, `👥 Gemeinsam angreifen · ${members.length} Einheit${members.length === 1 ? '' : 'en'}`),
+      el('span', { class: 'title' }, `👥 Gruppe · ${members.length} Einheit${members.length === 1 ? '' : 'en'} · gemeinsam ziehen & angreifen`),
       el('span', { class: 'group-btns' },
-        el('button', { class: 'btn small', onclick: addNearbyToGroup }, '+ Umgebung'),
+        el('button', { class: 'btn small', onclick: () => addNearbyToGroup() }, '+ Umgebung'),
         el('button', { class: 'btn small' + (groupApproach ? ' active' : ''), title: 'Mitglieder rücken zum Angriff heran', onclick: () => { groupApproach = !groupApproach; refresh(); } }, groupApproach ? '⚔ Heranrücken an' : '⚔ Nur aus Stand'),
         el('button', { class: 'btn small', onclick: () => { clearSel(); refresh(); } }, 'Auflösen'))));
     panel.append(row);
     panel.append(el('div', { class: 'note' }, groupApproach
-      ? 'Gegner antippen = alle greifen nacheinander an, rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt – danach gleich den nächsten Gegner antippen · Zielfeld = alle ziehen · eigene Einheit = hinzufügen/entfernen · „Auflösen“ beendet die Gruppe'
+      ? 'Gegner antippen = alle greifen nacheinander an (rücken dafür heran) · helles Feld = alle ziehen · eigene Einheit = hinzufügen/entfernen · anderes leeres Feld = Gruppe auflösen'
       : 'Gegner antippen = alle, die ihn von ihrem Feld aus erreichen, greifen an · Zielfeld = alle ziehen · eigene Einheit = hinzufügen/entfernen'));
     return;
   }
@@ -1329,7 +1332,8 @@ function renderPanel() {
       const why = canTrain(S, u);
       const r = u.rank || 1;
       const actions = el('div', { class: 'unit-actions' },
-        el('button', { class: 'btn small', onclick: () => startGroup(u) }, '👥 Gemeinsam angreifen'),
+        el('button', { class: 'btn small', title: 'Alle eigenen Einheiten in der Nähe ziehen und greifen gemeinsam an', onclick: () => groupNearby(u, false) }, '👥 Alle in der Nähe'),
+        el('button', { class: 'btn small', title: `Alle ${UNITS[u.type].name} in der Nähe ziehen und greifen gemeinsam an`, onclick: () => groupNearby(u, true) }, `👥 Alle ${UNITS[u.type].name}`),
         el('button', { class: 'btn small' + (u.sentry ? ' active' : ''), onclick: () => act({ type: 'sentry', unitId: u.id }, { after: () => { if (unitById(S, u.id)?.sentry) clearSel(); } }) }, u.sentry ? '💤 Wache beenden' : '💤 Wache halten'));
       if (r < MAX_RANK && (why === null || why === 'cost' || why === 'acted')) {
         actions.append(el('button', { class: 'btn small primary', title: `Ausbilden zum ${RANK_NAMES[r + 1]}`, disabled: !!why, onclick: () => act({ type: 'train', unitId: u.id }, { after: () => clearSel() }) },
@@ -1627,7 +1631,7 @@ function renderHelp() {
     Du kannst pro Runde beliebig viele Einheiten rekrutieren (begrenzt durch Rohstoffe und Versorgung). Sie erscheinen auf freien Feldern im Stadtgebiet und handeln ab der nächsten Runde – mit Kaserne sofort.
     Einheiten, die noch etwas tun können, haben einen leuchtenden Ring.</p>
     <h3>Gemeinsam angreifen 👥</h3>
-    <p>Wähle eine Einheit und tippe auf „👥 Gemeinsam angreifen“ (am PC: Shift + Klick). Weitere eigene Einheiten fügst du per Tipp hinzu, „+ Umgebung“ nimmt alle in der Nähe auf.
+    <p>Wähle eine Einheit und tippe auf „👥 Alle in der Nähe“ (alle eigenen Einheiten im Umkreis) oder „👥 Alle Ritter“ usw. (nur gleiche Einheiten im Umkreis); am PC geht auch Shift + Klick. Danach ist der Gruppenmodus aktiv. Weitere eigene Einheiten fügst du per Tipp hinzu oder nimmst sie wieder heraus.
     Ein Tipp auf einen Gegner: Alle greifen nacheinander an und rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt. Die Gruppe bleibt danach gewählt – tippe einfach den nächsten Gegner an. Ein Tipp auf ein hell markiertes Feld bewegt die Gruppe, ein Tipp auf ein anderes leeres Feld (oder „Auflösen“) beendet sie; „Nur aus Stand“ verzichtet aufs Heranrücken.</p>
     <h3>Verbände 🔗</h3>
     <p>Bis zu 3 gleiche Einheiten (Krieger, Schützen, Reiter, Wächter, Ritter, Katapulte) lassen sich zu einem Verband zusammenlegen – dann ziehst du sie mit einem Tipp. Wähle eine Einheit, tippe „🔗 Verband bilden“ und dann eine violett markierte gleiche Einheit direkt daneben; das Spiel fragt vorher nach. Beide dürfen in dieser Runde noch nichts getan haben, das Zusammenlegen verbraucht ihren Zug.
