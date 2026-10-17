@@ -315,7 +315,10 @@ function refresh() {
     for (const u of S.units) {
       if (u.owner !== S.current || u.type === 'barrier') continue;
       if (!canMove(u) && unitTargets(u, occ).length === 0 && !unitHeals(u).length) o.exhausted.add(u.id);
-      else if (!u.sentry) o.ready.add(u.id);
+      else if (!u.sentry) {
+        o.ready.add(u.id);
+        if (u.moved) (o.partial ||= new Set()).add(u.id); // schon gezogen, kann aber noch angreifen
+      }
     }
   }
   const u = sel.unitId != null ? unitById(S, sel.unitId) : null;
@@ -403,8 +406,8 @@ function onTap(sx, sy) {
     if (u && u.owner === S.current) { toggleGroupMember(u); return; }
     if (u && groupAttackers(u, occ).length) { doGroupAttack(u); return; }
     if (!u && groupMoves(occ).has(i)) { doGroupMove(i); return; }
-    clearSel();
-    refresh();
+    // Die Gruppe bleibt gewählt, bis man sie auflöst
+    if (u) toast('Niemand aus der Gruppe erreicht dieses Ziel.');
     return;
   }
   const selU = sel.unitId != null ? unitById(S, sel.unitId) : null;
@@ -1246,14 +1249,14 @@ function renderPanel() {
     const row = el('div', { class: 'group-row' });
     for (const m of members) row.append(el('button', { class: 'gm', title: UNITS[m.type].name, onclick: () => toggleGroupMember(m) }, iconCanvas(m.type, m.owner, 38)));
     panel.append(el('div', { class: 'city-head' },
-      el('span', { class: 'title' }, `👥 Gruppe · ${members.length} Einheit${members.length === 1 ? '' : 'en'}`),
+      el('span', { class: 'title' }, `👥 Gemeinsam angreifen · ${members.length} Einheit${members.length === 1 ? '' : 'en'}`),
       el('span', { class: 'group-btns' },
         el('button', { class: 'btn small', onclick: addNearbyToGroup }, '+ Umgebung'),
         el('button', { class: 'btn small' + (groupApproach ? ' active' : ''), title: 'Mitglieder rücken zum Angriff heran', onclick: () => { groupApproach = !groupApproach; refresh(); } }, groupApproach ? '⚔ Heranrücken an' : '⚔ Nur aus Stand'),
         el('button', { class: 'btn small', onclick: () => { clearSel(); refresh(); } }, 'Auflösen'))));
     panel.append(row);
     panel.append(el('div', { class: 'note' }, groupApproach
-      ? 'Gegner antippen = alle greifen nacheinander an, rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt · Zielfeld = alle ziehen · eigene Einheit = hinzufügen/entfernen'
+      ? 'Gegner antippen = alle greifen nacheinander an, rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt – danach gleich den nächsten Gegner antippen · Zielfeld = alle ziehen · eigene Einheit = hinzufügen/entfernen · „Auflösen“ beendet die Gruppe'
       : 'Gegner antippen = alle, die ihn von ihrem Feld aus erreichen, greifen an · Zielfeld = alle ziehen · eigene Einheit = hinzufügen/entfernen'));
     return;
   }
@@ -1283,7 +1286,7 @@ function renderPanel() {
       const why = canTrain(S, u);
       const r = u.rank || 1;
       const actions = el('div', { class: 'unit-actions' },
-        el('button', { class: 'btn small', onclick: () => startGroup(u) }, '👥 Gruppe'),
+        el('button', { class: 'btn small', onclick: () => startGroup(u) }, '👥 Gemeinsam angreifen'),
         el('button', { class: 'btn small' + (u.sentry ? ' active' : ''), onclick: () => act({ type: 'sentry', unitId: u.id }, { after: () => { if (unitById(S, u.id)?.sentry) clearSel(); } }) }, u.sentry ? '💤 Wache beenden' : '💤 Wache halten'));
       if (r < MAX_RANK && (why === null || why === 'cost' || why === 'acted')) {
         actions.append(el('button', { class: 'btn small primary', title: `Ausbilden zum ${RANK_NAMES[r + 1]}`, disabled: !!why, onclick: () => act({ type: 'train', unitId: u.id }, { after: () => clearSel() }) },
@@ -1578,9 +1581,9 @@ function renderHelp() {
     <p>Jede Einheit darf pro Runde einmal ziehen und einmal angreifen (erst ziehen, dann angreifen). Über eigene Einheiten springst du hinweg – das kostet keine Bewegung.
     Du kannst pro Runde beliebig viele Einheiten rekrutieren (begrenzt durch Rohstoffe und Versorgung). Sie erscheinen auf freien Feldern im Stadtgebiet und handeln ab der nächsten Runde – mit Kaserne sofort.
     Einheiten, die noch etwas tun können, haben einen leuchtenden Ring.</p>
-    <h3>Gruppen 👥</h3>
-    <p>Wähle eine Einheit und tippe auf „👥 Gruppe“ (am PC: Shift + Klick). Weitere eigene Einheiten fügst du per Tipp hinzu, „+ Umgebung“ nimmt alle in der Nähe auf.
-    Ein Tipp auf ein Zielfeld bewegt die ganze Gruppe dorthin, ein Tipp auf einen Gegner startet einen Gruppenangriff – Fernkämpfer schießen zuerst.</p>
+    <h3>Gemeinsam angreifen 👥</h3>
+    <p>Wähle eine Einheit und tippe auf „👥 Gemeinsam angreifen“ (am PC: Shift + Klick). Weitere eigene Einheiten fügst du per Tipp hinzu, „+ Umgebung“ nimmt alle in der Nähe auf.
+    Ein Tipp auf einen Gegner: Alle greifen nacheinander an und rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt. Die Gruppe bleibt danach gewählt – tippe einfach den nächsten Gegner an. Ein Tipp auf ein freies Feld bewegt die Gruppe. „Auflösen“ beendet sie; „Nur aus Stand“ verzichtet aufs Heranrücken.</p>
     <h3>Angreifen</h3>
     <p>Wählst du eine Einheit, zeigen rote Felder alle Ziele. Die Blase über dem Ziel nennt den Schaden (↩ = Gegenschlag, ✖ = Ziel wird besiegt). Ein Tipp auf das Ziel greift an.
     Nahkämpfer rücken nach einem Sieg auf das Feld vor.<br>
@@ -1593,7 +1596,7 @@ function renderHelp() {
     <h3>Türme</h3>
     <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt). Türme bewegen sich nicht, greifen aber Gegner in Reichweite an und lassen sich in 3 Stufen ausbauen: tippe den Turm an.</p>
     <h3>Steinwälle 🧱</h3>
-    <p>Im Reiter „Gebäude“ einer Stadt setzt du Steinwälle auf freie Felder bis 2 Felder um die Stadt (bis zu 6 pro Stadt). Sie sind sehr stabil (30 Leben, Verteidigung 6), greifen nicht an, versperren aber den Weg: Gegner müssen sie umgehen oder mühsam einreißen – ideal, um Angreifer in die Reichweite deiner Türme und Schützen zu lenken. Nebeneinander gesetzte Wallstücke verbinden sich zu einer Mauer. Katapulte und Belagerer sind gegen sie besonders wirksam.</p>
+    <p>Im Reiter „Gebäude“ einer Stadt setzt du Steinwälle auf freie Felder bis 2 Felder um die Stadt (bis zu 6 pro Stadt). Sie sind sehr stabil (50 Leben, Verteidigung 6), greifen nicht an, versperren aber den Weg: Gegner müssen sie umgehen oder mühsam einreißen – ideal, um Angreifer in die Reichweite deiner Türme und Schützen zu lenken. Nebeneinander gesetzte Wallstücke verbinden sich zu einer Mauer. Katapulte und Belagerer sind gegen sie besonders wirksam.</p>
     <h3>Forschung 🔬</h3>
     <p>Oben rechts öffnest du den Entwicklungsbaum. Jede Forschung gilt für dein ganzes Reich: ${TECH_ORDER.map((t) => `${TECHS[t].icon} ${TECHS[t].name} (${TECHS[t].desc})`).join(', ')}.</p>
     <h3>Kartennebel</h3>
@@ -1619,7 +1622,7 @@ function renderHelp() {
     <h3>Schwarzer Troll</h3>
     <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel, braucht 3 Versorgung und eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
     <h3>Drache 🐉</h3>
-    <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), sein Feueratem trifft auch Gegner neben dem Ziel, und er heilt jede Runde 6 Leben. Er ist ein Endgegner: etwa fünfmal so stark wie früher, aber zehnmal so teuer – bei Rang 3 und 5 wählst du jeweils aus drei Fähigkeiten. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (Stadt ab Stufe 4, nur eine im Reich), 3 Versorgung, und es gibt nur einen Drachen pro Reich.</p>
+    <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), sein Feueratem trifft auch Gegner neben dem Ziel, und er heilt jede Runde 6 Leben. Er ist ein Endgegner: etwa fünfmal so stark wie früher, aber zehnmal so teuer – bei Rang 3 und 5 wählst du jeweils aus drei Fähigkeiten. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (in jeder Stadt baubar, aber nur eine im Reich – ein kleiner Drache auf dem Stadtturm zeigt, wo sie steht), 3 Versorgung, und es gibt nur einen Drachen pro Reich.</p>
     <h3>Geräusche 🔊</h3>
     <p>Kampf, Bewegung und Ereignisse sind zu hören, im Hintergrund je nach Kartenausschnitt Meeresrauschen, plätschernde Seen, Wind über den Bergen, Vögel im Wald und das Treiben der Städte. Alles wird im Gerät erzeugt und funktioniert offline. Lautstärke und Umgebung stellst du im Menü unter Einstellungen ein.</p>
     <h3>Wache halten 💤</h3>

@@ -295,7 +295,7 @@ function chooseBuilding(state, ctx, pid, ci, inc) {
     mine: 1 + rocks * 2.4 + (inc.ore < inc.wood ? 1 : 0),
     barracks: c.capital || ctx.ownCities.length >= 3 ? 2.2 : 0.3,
     workshop: ctx.ownCities.length >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'barracks')) ? 1.4 : 0.2,
-    dragonlair: c.level >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.6 : 0,
+    dragonlair: c.level >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.6 : 0, // KI baut sie spät
     lair: c.level >= 4 && !ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.5 : 0,
     sanctum: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'sanctum')) ? 1.5 : 0.3,
     wall: (ctx.cityDanger.get(c.idx) || 0) > 3 ? 3 : 0.4,

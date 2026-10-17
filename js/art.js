@@ -727,6 +727,70 @@ function fortress(ctx, x, y, s, col, walled) {
   house(ctx, x + 16 * s, y + 20 * s, 8 * s, 6 * s, roof, s);
 }
 
+// Kleiner Drache, der auf einem Turm sitzt (Füße bei x, y)
+function miniDragon(ctx, x, y, s, col) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+  const body = '#5a1f1a', dark = '#260c09';
+  // Flügel in Spielerfarbe, halb gespreizt
+  for (const [wx, sx] of [[-1, -1], [1, 1]]) {
+    ctx.fillStyle = sx < 0 ? col.dark : col.main;
+    ctx.beginPath();
+    ctx.moveTo(wx, -6);
+    ctx.lineTo(wx + sx * 7, -15);
+    ctx.quadraticCurveTo(wx + sx * 6, -11, wx + sx * 9, -9);
+    ctx.quadraticCurveTo(wx + sx * 5, -8, wx + sx * 6, -4);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.5);
+  }
+  // Schwanz hängt über die Kante
+  ctx.strokeStyle = dark;
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-3, -2);
+  ctx.quadraticCurveTo(-7, 1, -6, 6);
+  ctx.stroke();
+  // Körper und Hals
+  ctx.fillStyle = grad(ctx, -4, 5, '#8a3a2c', body);
+  ctx.beginPath();
+  ctx.ellipse(0, -3, 4, 3, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+  outline(ctx, 0.5);
+  ctx.beginPath();
+  ctx.moveTo(2, -5);
+  ctx.quadraticCurveTo(4, -10, 6, -11);
+  ctx.lineTo(7.5, -9.5);
+  ctx.quadraticCurveTo(5, -8, 4, -3);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.4);
+  // Kopf mit Horn, Auge und Glut
+  ctx.beginPath();
+  ctx.ellipse(7.5, -11, 2.6, 1.6, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  outline(ctx, 0.4);
+  ctx.fillStyle = '#e8e0d0';
+  ctx.beginPath();
+  ctx.moveTo(6.5, -12.2);
+  ctx.lineTo(5, -14.5);
+  ctx.lineTo(7.4, -12.5);
+  ctx.fill();
+  ctx.fillStyle = '#ffd23f';
+  ctx.fillRect(7.6, -11.7, 0.9, 0.7);
+  ctx.fillStyle = 'rgba(255,140,40,0.85)';
+  ctx.beginPath();
+  ctx.arc(10.6, -10.4, 1.2, 0, Math.PI * 2);
+  ctx.fill();
+  // Krallen
+  ctx.fillStyle = dark;
+  ctx.fillRect(-2.5, -0.8, 1.4, 1.2);
+  ctx.fillRect(1.5, -0.8, 1.4, 1.2);
+  ctx.restore();
+}
+
 // Eine Stadt ist eine Burg, wenn sie voll ausgebaut ist (Stufe 5, alle Bauplätze belegt)
 export function isFortress(city) {
   return city.level >= 5 && (city.buildings?.length || 0) >= 5;
@@ -736,6 +800,7 @@ export function drawCity(ctx, city, x, y, H, col) {
   const s = H / 40;
   const big = isFortress(city);
   const walled = !!city.buildings?.includes('wall');
+  let perch = null; // Sitzplatz für den kleinen Drachen (Drachenhöhle)
   // Pflaster
   const g = ctx.createRadialGradient(x - 6 * s, y, 2, x, y + 4 * s, 26 * s);
   g.addColorStop(0, '#efe2c4');
@@ -751,6 +816,7 @@ export function drawCity(ctx, city, x, y, H, col) {
   const roof = col.main;
   if (big) {
     fortress(ctx, x, y, s, col, walled);
+    perch = [x - 5 * s, y - 24 * s];
   } else if (city.capital) {
     // Burg: Bergfried mit Türmen
     tower(ctx, x - 15 * s, y + 10 * s, 5.5 * s, 22 * s, roof, s);
@@ -778,6 +844,7 @@ export function drawCity(ctx, city, x, y, H, col) {
     if (city.level >= 3) banner(ctx, kx - 6 * s, ky - kh + 2 * s, 3.5 * s, 9 * s, col, s);
     if (city.level >= 4) banner(ctx, kx + 6 * s, ky - kh + 2 * s, 3.5 * s, 9 * s, col, s);
     flag(ctx, kx, ky - kh - 3 * s, 19 * s, col, s, city.level >= 4);
+    perch = [kx + 6 * s, ky - kh - 3 * s];
     tower(ctx, x + 16 * s, y + 14 * s, 5 * s, 18 * s, roof, s);
     const dy = walled ? -3 * s : 0;
     if (city.level >= 3) house(ctx, x - 20 * s, y + 22 * s + dy, 9 * s, 7 * s, roof, s);
@@ -793,18 +860,38 @@ export function drawCity(ctx, city, x, y, H, col) {
     if (city.level >= 4) {
       // Burgstadt / Metropole: Turm in der Mitte, Kirche, mehr Häuser
       chapel(ctx, x - 12 * s, y + 6 * s, roof, s);
-      const top = turret(ctx, x + 6 * s, y + 6 * s, 5 * s, city.level >= 5 ? 22 * s : 17 * s, col, s);
+      const th = city.level >= 5 ? 22 * s : 17 * s;
+      const top = turret(ctx, x + 6 * s, y + 6 * s, 5 * s, th, col, s);
+      perch = [x + 6 * s, y + 6 * s - th - 2 * s];
       flag(ctx, x + 6 * s, top, 8 * s, col, s, city.level >= 5);
       for (const [hx, hy, w] of [[18, 10, 10], [-8, 22 + dy, 11], [10, 24 + dy, 10], ...(city.level >= 5 ? [[-22, 18 + dy, 8], [24, 22 + dy, 8]] : [])]) {
         house(ctx, x + hx * s, y + hy * s, w * s, w * 0.75 * s, roof, s);
       }
     } else {
-      if (city.level >= 3) chapel(ctx, x - 12 * s, y + 3 * s, roof, s);
+      if (city.level >= 3) { chapel(ctx, x - 12 * s, y + 3 * s, roof, s); perch = [x - 18 * s, y - 12 * s]; }
       for (const [hx, hy, w] of layouts) house(ctx, x + hx * s, y + (hy + (hy > 15 ? dy : 0)) * s, w * s, w * 0.75 * s, roof, s);
       if (city.level >= 2) flag(ctx, x + (city.level >= 3 ? 4 : -10) * s, y + (city.level >= 3 ? -9 : -4) * s, 9 * s, col, s);
     }
   }
   if (walled) cityWall(ctx, x, y, s, col, 'front', big);
+  if (city.buildings?.includes('dragonlair')) {
+    // Ohne Turm: ein Drachenfels in der Stadt
+    if (!perch) {
+      const rx = x + 13 * s, ry = y + 8 * s;
+      ctx.fillStyle = grad(ctx, rx - 6 * s, rx + 6 * s, '#9a948a', '#4e4a44');
+      ctx.beginPath();
+      ctx.moveTo(rx - 7 * s, ry);
+      ctx.lineTo(rx - 4 * s, ry - 10 * s);
+      ctx.lineTo(rx - 1 * s, ry - 13 * s);
+      ctx.lineTo(rx + 3 * s, ry - 11 * s);
+      ctx.lineTo(rx + 7 * s, ry);
+      ctx.closePath();
+      ctx.fill();
+      outline(ctx, 0.8);
+      perch = [rx, ry - 12 * s];
+    }
+    miniDragon(ctx, perch[0], perch[1], s, col);
+  }
   // Stufenanzeige
   if (city.level > 1) {
     for (let k = 0; k < city.level; k++) {

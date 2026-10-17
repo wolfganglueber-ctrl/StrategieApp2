@@ -469,7 +469,7 @@ export class Renderer {
     if (sp) return sp;
     const base = PLAYER_COLORS[owner] || NEUTRAL_COLOR;
     const col = exhausted
-      ? { main: mix(base.main, GREY, 0.55), dark: mix(base.dark, '#4a4844', 0.55), light: mix(base.light, '#c9c6c0', 0.55) }
+      ? { main: mix(base.main, GREY, 0.75), dark: mix(base.dark, '#4a4844', 0.75), light: mix(base.light, '#c9c6c0', 0.75) }
       : base;
     const B = FIG_BOX;
     const cv = document.createElement('canvas');
@@ -480,7 +480,7 @@ export class Renderer {
     drawFigure(ctx, type, col, level);
     if (exhausted) {
       ctx.globalCompositeOperation = 'source-atop';
-      ctx.fillStyle = 'rgba(70,70,70,0.35)';
+      ctx.fillStyle = 'rgba(60,60,60,0.5)';
       ctx.fillRect(-B.left, -B.top, B.left + B.right, B.top + B.bottom);
     }
     sp = { cv, k };
@@ -492,12 +492,16 @@ export class Renderer {
     const s = (HEX / 40) * FIG;
     y += 4;
     if (ready) {
+      // Gelb: ganzer Zug offen · Orange gestrichelt: schon gezogen, Angriff noch möglich
       const p = 0.5 + 0.5 * Math.sin(now / 260);
-      ctx.strokeStyle = `rgba(255,236,120,${0.55 + p * 0.45})`;
+      const partial = ready === 'partial';
+      ctx.strokeStyle = partial ? `rgba(251,146,60,${0.6 + p * 0.4})` : `rgba(255,236,120,${0.55 + p * 0.45})`;
       ctx.lineWidth = 3 + p * 1.5;
+      if (partial) ctx.setLineDash([5 * s, 4 * s]);
       ctx.beginPath();
       ctx.ellipse(x, y + 7 * s, 19 * s, 7.5 * s, 0, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.setLineDash([]);
     }
     if (flash > 0) {
       const g = ctx.createRadialGradient(x, y - 10 * s, 2, x, y - 10 * s, 26 * s);
@@ -509,7 +513,9 @@ export class Renderer {
     const sp = this.sprite(u.type, u.owner, exhausted, u.level);
     const B = FIG_BOX;
     const w = (B.left + B.right) * s * scale, h = (B.top + B.bottom) * s * scale;
+    if (exhausted) ctx.globalAlpha *= 0.8;
     ctx.drawImage(sp.cv, x - B.left * s * scale, y - B.top * s * scale + (1 - scale) * 6 * s, w, h);
+    if (exhausted) ctx.globalAlpha /= 0.8;
     if (u.shaken) {
       // Erschüttert: kreisende Sterne über dem Kopf
       const t = now / 300;
@@ -764,7 +770,7 @@ export class Renderer {
       const c = pos || this.center(u.idx);
       if (c.x < vr.x0 - HEX || c.x > vr.x1 + HEX || c.y < vr.y0 - HEX * 2 || c.y > vr.y1 + HEX * 2) continue;
       const exhausted = !!o.exhausted?.has(u.id);
-      const ready = !pos && !!o.ready?.has(u.id) && u.idx !== o.selected && !o.selectedSet?.has(u.idx);
+      const ready = !pos && !!o.ready?.has(u.id) && u.idx !== o.selected && !o.selectedSet?.has(u.idx) && (o.partial?.has(u.id) ? 'partial' : true);
       this.drawUnit(ctx, u, c.x, c.y, pos?.s ?? 1, exhausted, pos?.flash || 0, ready, now);
     }
 
