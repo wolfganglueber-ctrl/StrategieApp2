@@ -132,12 +132,13 @@ function placeCities(rng, geo, terrain, players, villageDensity) {
 
   const target = Math.max(players * 2, Math.round(land.length / villageDensity));
   const cand = rng.shuffle(land.slice());
-  for (const minD of [3, 2]) {
+  // Städte haben 2 Felder Gebiet: mit Abstand 4 stoßen die Gebiete aneinander, ohne sich stark zu überlappen
+  for (const minD of [4, 3]) {
     for (const i of cand) {
       if (cities.length >= target + players) break;
       if (cities.some((c) => geo.dist(c.idx, i) < minD)) continue;
       // nicht direkt neben eine Hauptstadt quetschen
-      if (caps.some((c) => geo.dist(c, i) < 2)) continue;
+      if (caps.some((c) => geo.dist(c, i) < 3)) continue;
       cities.push({ idx: i, owner: -1, level: 1, capital: false });
     }
   }
@@ -160,7 +161,7 @@ function placeCities(rng, geo, terrain, players, villageDensity) {
   return { cities, imbalance };
 }
 
-export function generateMap({ seed, cols, rows, players, biome = 'mixed', villageDensity = 10 }) {
+export function generateMap({ seed, cols, rows, players, biome = 'mixed', villageDensity = 18 }) {
   const bio = BIOMES[biome] || BIOMES.mixed;
   const geo = getGeo(cols, rows);
   let best = null;

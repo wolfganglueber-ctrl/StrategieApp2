@@ -147,10 +147,11 @@ export function cityCenterYield(city) {
 }
 // Versorgung: wie viele Einheiten eine Stadt unterhält (bewusst knapp: wenige, aber wertvolle Einheiten)
 export function citySupply(city) {
-  return [0, 1, 2, 2, 3, 4][city.level];
+  return [0, 2, 2, 3, 4, 5][city.level];
 }
-export function cityRadius(city) {
-  return city.level >= 4 ? 2 : 1;
+// Jede Stadt besitzt 2 Felder Gebiet um sich herum
+export function cityRadius() {
+  return 2;
 }
 export function citySlots(city) {
   return city.level;

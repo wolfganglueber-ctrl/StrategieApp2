@@ -1162,7 +1162,7 @@ function renderCityPanel(panel, ci, occ) {
     if (c.level < CITY_MAX_LEVEL) {
       const cost = upgradeCostOf(S, c);
       panel.append(el('div', { class: 'upgrade-row' },
-        el('span', { class: 'muted' }, `Ausbau zur ${CITY_NAMES[c.level + 1]}: +1 Bauplatz, +1 auf alle Rohstoffe, mehr Versorgung${c.level + 1 === 4 ? ', größeres Gebiet' : ''}`),
+        el('span', { class: 'muted' }, `Ausbau zur ${CITY_NAMES[c.level + 1]}: +1 Bauplatz, +1 auf alle Rohstoffe, mehr Versorgung`),
         el('button', { class: 'btn small primary', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost, p.res))));
     } else {
       panel.append(el('div', { class: 'note' }, 'Höchste Ausbaustufe erreicht.'));
@@ -1510,7 +1510,7 @@ function renderHelp() {
     <h3>So baust du dein Reich auf</h3>
     <p><b>1. Ausbreiten:</b> Besetze mit Reitern und Kriegern früh neutrale Dörfer – jedes bringt Gebiet und Rohstoffe.<br>
     <b>2. Wirtschaft:</b> Baue Gebäude passend zum Gebiet: eine <b>Mine</b> bei Hügeln und Bergen, einen <b>Holzfäller</b> bei Wäldern, einen <b>Bauernhof</b> sonst.<br>
-    <b>3. Wachsen:</b> Baue Städte aus (bis Stufe 5): mehr Bauplätze, mehr Ertrag, mehr Versorgung, ab Stufe 4 ein größeres Gebiet.<br>
+    <b>3. Wachsen:</b> Baue Städte aus (bis Stufe 5): mehr Bauplätze, mehr Ertrag, mehr Versorgung. Jede Stadt besitzt 2 Felder Gebiet rundherum – eroberte Nachbarstädte bilden ein zusammenhängendes Reich.<br>
     <b>4. Armee:</b> Eine <b>Kaserne</b> in Frontstädten lässt neue Einheiten sofort ziehen und ermöglicht Ritter. Fehlt ein Rohstoff, tippe oben auf die Rohstoffleiste und handle.<br>
     <b>5. Angriff:</b> Erst die Fernkämpfer schießen lassen, dann mit Nahkämpfern zuschlagen.</p>
     <h3>Ablauf einer Runde</h3>
@@ -1526,7 +1526,7 @@ function renderHelp() {
     <b>Erschüttert ⭐:</b> Wer von einem Fernkämpfer getroffen wird, hat bis zu seinem nächsten Zug nur halbe Verteidigung und schlägt nicht zurück.</p>
     <h3>Städte</h3>
     <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden.
-    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz und +1 auf alle Rohstoffe. Die Versorgung (Dorf 1, Siedlung 2, Stadt 2, Burgstadt 3, Metropole 4) begrenzt, wie viele Einheiten du haben kannst – lieber wenige, gut ausgebildete Einheiten als viele.</p>
+    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz und +1 auf alle Rohstoffe. Die Versorgung (Dorf 2, Siedlung 2, Stadt 3, Burgstadt 4, Metropole 5) begrenzt, wie viele Einheiten du haben kannst – lieber wenige, gut ausgebildete Einheiten als viele.</p>
     <h3>Gebäude</h3>
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
     <h3>Türme</h3>
