@@ -29,7 +29,7 @@ export const UNITS = {
   dragon: { name: 'Drache', cost: { food: 500, wood: 300, ore: 700 }, hp: 300, atk: 12, def: 10, move: 5, range: 1, supply: 3, regen: 6, perRealm: 1, flying: true, splash: 0.4, arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten, Feueratem trifft auch Gegner neben dem Ziel, heilt jede Runde 6 Leben. Ein Endgegner – extrem mächtig und extrem teuer; Schützen und Türme treffen ihn härter (+60 %). Bei Rang 3 und 5 je drei Fähigkeiten zur Wahl. Einer pro Reich.' },
   barrier: { name: 'Steinwall', cost: { wood: 6, ore: 14 }, hp: 50, atk: 0, def: 6, move: 0, range: 0, structure: true, desc: 'Sehr stabiles Wallstück, blockiert den Weg. Im Stadtgebiet setzen; benachbarte Wallstücke verbinden sich zu einer Mauer und lenken den Gegner.' },
   basilisk: { name: 'Basilisk', cost: { food: 18, wood: 8, ore: 16 }, hp: 28, atk: 3, def: 3, move: 3, range: 2, supply: 2, perRealm: 2, petrify: true, needs: 'nest', desc: 'Versteinernder Blick aus 2 Feldern: Das Ziel setzt seinen nächsten Zug aus und schlägt nicht zurück (Troll und Drache sind immun). Höchstens 2 pro Reich.' },
-  catapult: { name: 'Katapult', cost: { wood: 8, ore: 6 }, hp: 10, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, splash: 0.5, needs: 'workshop', desc: 'Reichweite 3, nicht nach Bewegung. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Braucht eine Werkstatt.' },
+  catapult: { name: 'Katapult', cost: { wood: 12, ore: 10 }, hp: 12, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, splash: 0.5, fieldMult: 0.6, upkeep: { food: 1, wood: 1 }, needs: 'workshop', desc: 'Belagerungswaffe mit Reichweite 3, nicht nach Bewegung. Gegen Städte, Türme und Wälle voller Schaden, gegen Truppen im Feld nur 60 %. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Unterhalt 1 Nahrung + 1 Holz. Braucht eine Werkstatt.' },
 };
 // Wert einer Einheit für die KI (Rohstoffsumme / 2), danach Kaufpreise verdoppeln:
 // Einheiten sollen im Verhältnis zum Ertrag teuer sein (halb so viele wie früher)
@@ -94,6 +94,12 @@ export const REGIMENT_MAX = 3;
 export const REGIMENT_TYPES = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult'];
 
 // Zauberer: Schutzaura und Heilen
+// Unterhalt pro Runde: jede Einheit isst (Nahrung je Versorgungspunkt), Katapulte brauchen zusätzlich Holz
+export function upkeepOf(type) {
+  const T = UNITS[type];
+  if (T.structure) return {};
+  return T.upkeep || { food: T.supply || 1 };
+}
 export const AURA = { radius: 1, radius2: 2, reduce: 0.25, splash: 0.5 };
 export const HEAL = { base: 4, blessing: 2, range: 3 };
 

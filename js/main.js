@@ -3,7 +3,7 @@ import { Renderer } from './render.js';
 import { attachInput } from './input.js';
 import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
-  incomeOf, unitCount, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
+  incomeOf, unitCount, upkeepTotal, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, canTrain, flankers, canBuild, mergeTargets, canSplit,
 } from './game.js';
@@ -1083,7 +1083,9 @@ function updateHud() {
   const bar = $('resBar');
   bar.innerHTML = '';
   for (const k of RES) {
-    bar.append(el('button', { class: 'pill', title: `${RES_INFO[k].name} – tippen zum Handeln`, onclick: () => openTrade(k) }, icon(k), el('b', {}, human.res[k]), el('small', {}, `+${inc[k]}`)));
+    const up = upkeepTotal(S, human.id)[k];
+    bar.append(el('button', { class: 'pill', title: `${RES_INFO[k].name}: Ertrag pro Runde nach Abzug von ${up} Unterhalt für die Armee – tippen zum Handeln`, onclick: () => openTrade(k) },
+      icon(k), el('b', {}, human.res[k]), el('small', { class: inc[k] < 0 ? 'neg' : '' }, inc[k] < 0 ? `${inc[k]}` : `+${inc[k]}`)));
   }
   $('unitText').textContent = `${unitCount(S, human.id)}`;
   const nAvail = TECH_ORDER.filter((t) => techAvailable(S, human.id, t) && canAfford(human.res, TECHS[t].cost)).length;
@@ -1718,7 +1720,7 @@ function renderHelp() {
     <b>5. Angriff:</b> Erst die Fernkämpfer schießen lassen, dann mit Nahkämpfern zuschlagen.</p>
     <h3>Ablauf einer Runde</h3>
     <p>Jede Einheit darf pro Runde einmal ziehen und einmal angreifen (erst ziehen, dann angreifen). Über eigene Einheiten springst du hinweg – das kostet keine Bewegung.
-    Du kannst pro Runde beliebig viele Einheiten rekrutieren (begrenzt nur durch Rohstoffe). Sie erscheinen auf freien Feldern im Stadtgebiet und handeln ab der nächsten Runde – mit Kaserne sofort.
+    Du kannst pro Runde beliebig viele Einheiten rekrutieren (begrenzt nur durch Rohstoffe). Sie erscheinen auf freien Feldern im Stadtgebiet und handeln ab der nächsten Runde – mit Kaserne sofort. Jede Einheit kostet aber <b>Unterhalt</b>: 1 Nahrung pro Runde (Basilisk 2, Troll und Drache 3, Katapult 1 Nahrung + 1 Holz). Der Ertrag oben zeigt schon den Betrag nach Abzug – wird er rot, schrumpfen deine Vorräte.
     Einheiten, die noch etwas tun können, haben einen leuchtenden Ring.</p>
     <h3>Gemeinsam angreifen 👥</h3>
     <p>Wähle eine Einheit und tippe auf „👥 Alle in der Nähe“ (alle eigenen Einheiten im Umkreis) oder „👥 Alle Ritter“ usw. (nur gleiche Einheiten im Umkreis); am PC geht auch Shift + Klick. Danach ist der Gruppenmodus aktiv. Weitere eigene Einheiten fügst du per Tipp hinzu oder nimmst sie wieder heraus.
@@ -1762,7 +1764,7 @@ function renderHelp() {
     <h3>Zauberer 🔮</h3>
     <p>Eigene Einheiten neben einem Zauberer (blaues Schild-Symbol) bekommen 25 % weniger Schaden, Flächenschaden halbiert. Statt anzugreifen heilt der Zauberer eine eigene Einheit bis 3 Felder entfernt (grün markiert antippen). Höchstens ein Zauberer pro Stadt.</p>
     <h3>Katapult und Flanke</h3>
-    <p>Katapulte treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +10 % (höchstens +30 %): Einkesseln lohnt sich.</p>
+    <p>Katapulte sind Belagerungswaffen: Gegen Städte, Türme und Wälle machen sie vollen Schaden, gegen Truppen im offenen Feld nur 60 %. Sie treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Gegenmittel: Reiter und Ritter, denn Katapulte haben keine Verteidigung und können nach einer Bewegung nicht schießen. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +10 % (höchstens +30 %): Einkesseln lohnt sich.</p>
     <h3>Schwarzer Troll</h3>
     <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel und braucht eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
     <h3>Basilisk 🦎</h3>

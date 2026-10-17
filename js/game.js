@@ -1,7 +1,7 @@
 // Spielregeln und Spielzustand. Komplett ohne DOM, damit auch Simulationen in Node laufen.
 import { getGeo } from './hex.js';
 import {
-  TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply,
+  TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
   PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, trainCost, REGIMENT_MAX, REGIMENT_TYPES,
@@ -138,6 +138,8 @@ export function attackMult(state, att, def, fromIdx = att.idx) {
   // Drachen sind anfällig gegen Pfeile
   if (UNITS[def.type].arrowWeak && (att.type === 'archer' || att.type === 'tower')) m += 0.6;
   if (!isStructure(att)) m += FLANK_BONUS * flankers(state, att, def);
+  // Belagerungswaffen: gegen Truppen im offenen Feld schwächer
+  if (UNITS[att.type].fieldMult && !isStructure(def) && !cityOn(state, def.idx)) m *= UNITS[att.type].fieldMult;
   return m;
 }
 
@@ -415,7 +417,20 @@ export function incomeOf(state, pid, territory = computeTerritory(state)) {
   });
   const bonus = state.players[pid].incomeBonus || 0;
   if (bonus) for (const k of RES) inc[k] = Math.round(inc[k] * (1 + bonus));
+  // Unterhalt der Armee wird vom Ertrag abgezogen (kann negativ werden)
+  const up = upkeepTotal(state, pid);
+  for (const k of RES) inc[k] -= up[k];
   return inc;
+}
+
+export function upkeepTotal(state, pid) {
+  const up = { food: 0, wood: 0, ore: 0 };
+  for (const u of state.units) {
+    if (u.owner !== pid) continue;
+    const c = upkeepOf(u.type);
+    for (const k in c) up[k] += c[k] * (u.count || 1);
+  }
+  return up;
 }
 
 // Ertrag einer Stadt: Gebiet + Zentrum + Gebäude
@@ -587,7 +602,7 @@ export function startTurn(state) {
   }
   const inc = incomeOf(state, pid);
   const p = state.players[pid];
-  for (const k of RES) p.res[k] += inc[k];
+  for (const k of RES) p.res[k] = Math.max(0, p.res[k] + inc[k]);
   ev.push({ k: 'income', pid, amount: inc });
   checkOver(state);
   updateExplored(state);

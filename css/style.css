@@ -302,3 +302,5 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .unit-actions .btn.merge { border-color: rgba(192, 132, 252, 0.7); background: rgba(168, 85, 247, 0.18); }
 .built-actions { display: inline-flex; align-items: center; gap: 4px; }
 .btn.raze { padding: 5px 8px; background: rgba(239, 68, 68, 0.12); border-color: rgba(248, 113, 113, 0.45); }
+
+.pill small.neg { color: #f87171; }

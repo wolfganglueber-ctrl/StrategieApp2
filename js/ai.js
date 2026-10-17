@@ -244,6 +244,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
   if (!options.length) return null;
   if (!P.smart) {
     const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, catapult: 0.5, mage: 0.5, basilisk: 1, troll: 3, dragon: 3 };
+    if (ctx.mine.filter((u) => u.type === 'catapult').length >= Math.max(1, Math.floor(ctx.mine.filter((u) => !UNITS[u.type].structure).length / 4))) w.catapult = 0;
     return weightedPick(options, (k) => w[k], rng);
   }
   const danger = ctx.cityDanger.get(city.idx) || 0;
@@ -258,7 +259,8 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
     rider: neutralLeft > 0 ? 3.5 : 1.2,
     defender: danger > 4 ? 3 : 0.6,
     knight: 4,
-    catapult: 1.5 + enemyDef * 0.8,
+    // Katapulte nur als Beimischung (höchstens jede vierte Einheit)
+    catapult: mineCount('catapult') >= Math.max(1, Math.floor(ctx.mine.filter((u) => !UNITS[u.type].structure).length / 4)) ? 0 : 1.5 + Math.min(enemyDef, 4) * 0.4,
     mage: ctx.mine.length >= 4 ? 3 : 0.5,
     basilisk: ctx.mine.length >= 5 ? 3 : 0.6,
     troll: 50,
@@ -271,7 +273,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
 function weightedPick(list, wf, rng) {
   let tot = 0;
   for (const k of list) tot += Math.max(0, wf(k));
-  if (tot <= 0) return list[0];
+  if (tot <= 0) return null; // nichts Gewolltes bezahlbar: lieber sparen
   let r = rng() * tot;
   for (const k of list) {
     r -= Math.max(0, wf(k));
