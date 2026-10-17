@@ -24,7 +24,7 @@ export const UNITS = {
   defender: { name: 'Wächter', cost: { food: 3, ore: 5 }, hp: 15, atk: 1, def: 3, move: 1, range: 1, desc: 'Starke Verteidigung, schwacher Angriff.' },
   knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 3, def: 1, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
   tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 2, def: 3, move: 0, range: 2, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
-  catapult: { name: 'Katapult', cost: { wood: 8, ore: 6 }, hp: 10, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, needs: 'workshop', desc: 'Reichweite 3, nicht nach Bewegung. Braucht eine Werkstatt.' },
+  catapult: { name: 'Katapult', cost: { wood: 8, ore: 6 }, hp: 10, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, splash: 0.5, needs: 'workshop', desc: 'Reichweite 3, nicht nach Bewegung. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Braucht eine Werkstatt.' },
 };
 // Wert einer Einheit für die KI (Rohstoffsumme / 2)
 for (const k of Object.keys(UNITS)) {
@@ -33,6 +33,12 @@ for (const k of Object.keys(UNITS)) {
   UNITS[k].value = t / 2;
 }
 export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult'];
+// Höchste Zugweite bei voller Entwicklung (gilt auch für Sprünge über eigene Einheiten)
+export const MOVE_CAP = { catapult: 3, rider: 6, knight: 6 };
+export const MOVE_CAP_DEFAULT = 4;
+export function moveCap(type) {
+  return MOVE_CAP[type] ?? MOVE_CAP_DEFAULT;
+}
 export const MELEE = ['warrior', 'rider', 'defender', 'knight'];
 export const FOOT = ['warrior', 'archer', 'defender'];
 

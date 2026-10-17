@@ -711,6 +711,11 @@ async function playEvent(ev, f, isAI, pan = true) {
         R.floatText(def.idx, `−${ev.dmg}`, '#fecaca', 900 * f, hit);
         if (ev.shaken) R.floatText(def.idx, 'erschüttert!', '#fde68a', 1100 * f, hit + 350 * f);
         if (ev.counter > 0) R.floatText(att.idx, `−${ev.counter}`, '#fecaca', 900 * f, hit + 200 * f);
+        for (const h of ev.splash || []) {
+          if (h.killed) R.ghost({ ...h.snap, hp: 0 }, hit + 420 * f, hit / (hit + 420 * f));
+          else R.shake(h.id, h.idx, 300 * f, hit);
+          R.floatText(h.idx, `−${h.dmg}`, '#fdba74', 900 * f, hit + 80 * f);
+        }
         await sleep(hit);
         vibrate(ev.killed ? 40 : 15);
         await sleep(L - hit);

@@ -3,7 +3,7 @@ import { getGeo } from './hex.js';
 import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_MARKET, TECHS, TOWER_LEVELS,
-  TOWER_UPGRADE, TOWERS_PER_CITY, MELEE, FOOT,
+  TOWER_UPGRADE, TOWERS_PER_CITY, MELEE, FOOT, moveCap,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -102,6 +102,7 @@ export function statsOf(state, u) {
       }
     }
   }
+  st.move = Math.min(st.move, moveCap(u.type));
   return st;
 }
 
@@ -200,49 +201,48 @@ export function defenseMult(state, idx) {
 }
 
 // Erreichbare Zielfelder: Map ziel -> vorgänger (für Pfade).
-// Eigene Einheiten können durchquert werden, gegnerische nicht.
+// Eigene Einheiten können durchquert werden, gegnerische nicht. Felder mit eigenen Einheiten kosten
+// keine Bewegung (man springt darüber), zählen aber für die Zugweite (moveCap).
 export function getMoves(state, u, occ = buildOcc(state), moveOverride) {
   const geo = geoOf(state);
-  const parent = new Map();
-  if (!canMove(u) && moveOverride === undefined) return parent;
-  const maxSteps = moveOverride ?? statsOf(state, u).move;
-  // 0-1-Breitensuche: Felder mit eigenen Einheiten kosten keine Bewegung (man springt darüber)
-  const steps = new Map([[u.idx, 0]]);
-  const front = [], back = [u.idx];
-  let head = 0;
-  while (front.length || head < back.length) {
-    const i = front.length ? front.pop() : back[head++];
-    const s = steps.get(i);
-    for (const j of geo.nb[i]) {
-      if (j === u.idx || !TERRAIN[state.terrain[j]].pass) continue;
-      const o = occ[j];
-      if (o && o.owner !== u.owner) continue;
-      const cost = o ? 0 : 1;
-      const ns = s + cost;
-      if (ns > maxSteps || (o && ns >= maxSteps)) continue;
-      if (steps.has(j) && steps.get(j) <= ns) continue;
-      steps.set(j, ns);
-      parent.set(j, i);
-      if (cost === 0) front.push(j);
-      else back.push(j);
-    }
-  }
   const res = new Map();
-  for (const [j, p] of parent) if (!occ[j]) res.set(j, p);
-  // Vorgänger auch für übersprungene (besetzte) Felder behalten, für Pfadrekonstruktion
-  res.parents = parent;
+  if (!canMove(u) && moveOverride === undefined) return res;
+  const maxSteps = moveOverride ?? statsOf(state, u).move;
+  const maxLen = Math.max(maxSteps, moveCap(u.type));
+  // Breitensuche über (Feld, verbrauchte Bewegung), geordnet nach Weglänge
+  const K = maxSteps + 1;
+  const parent = new Map([[u.idx * K, -1]]);
+  let layer = [u.idx * K];
+  for (let len = 1; len <= maxLen && layer.length; len++) {
+    const next = [];
+    for (const key of layer) {
+      const i = Math.floor(key / K), s = key % K;
+      for (const j of geo.nb[i]) {
+        if (j === u.idx || !TERRAIN[state.terrain[j]].pass) continue;
+        const o = occ[j];
+        if (o && o.owner !== u.owner) continue;
+        const ns = s + (o ? 0 : 1);
+        if (ns > maxSteps || (o && ns >= maxSteps)) continue;
+        const nk = j * K + ns;
+        if (parent.has(nk)) continue;
+        parent.set(nk, key);
+        next.push(nk);
+        if (!o && !res.has(j)) res.set(j, nk);
+      }
+    }
+    layer = next;
+  }
+  // Pfad zu einem Ziel (inkl. übersprungener Felder)
+  res.pathOf = (to) => {
+    const path = [];
+    for (let k = res.get(to); k !== -1 && k !== undefined; k = parent.get(k)) path.push(Math.floor(k / K));
+    return path.reverse();
+  };
   return res;
 }
 
 export function pathTo(moves, from, to) {
-  const par = moves.parents || moves;
-  const path = [to];
-  let c = to;
-  while (c !== from && par.has(c)) {
-    c = par.get(c);
-    path.push(c);
-  }
-  return path.reverse();
+  return moves.pathOf(to);
 }
 
 export function getTargets(state, u, fromIdx, occ = buildOcc(state)) {
@@ -446,6 +446,35 @@ export function snapshotUnit(u) {
   return { ...u };
 }
 
+// Flächenschaden (Katapult): gegnerische Einheiten neben dem Ziel bekommen einen Teil des Schadens
+export function splashDamage(state, att, idx, dmg) {
+  const geo = geoOf(state);
+  const res = [];
+  for (const j of geo.nb[idx]) {
+    const o = state.units.find((x) => x.idx === j);
+    if (!o || o.owner === att.owner) continue;
+    const d = Math.round(dmg * UNITS[att.type].splash);
+    if (d > 0) res.push({ unit: o, dmg: d });
+  }
+  return res;
+}
+
+function applySplash(state, att, idx, dmg) {
+  const out = [];
+  for (const { unit, dmg: d } of splashDamage(state, att, idx, dmg)) {
+    const hit = { id: unit.id, idx: unit.idx, dmg: d, killed: false, snap: snapshotUnit(unit) };
+    unit.hp -= d;
+    if (unit.hp <= 0) {
+      hit.killed = true;
+      state.units = state.units.filter((x) => x !== unit);
+      state.stats.kills[att.owner]++;
+      state.stats.losses[unit.owner]++;
+    }
+    out.push(hit);
+  }
+  return out;
+}
+
 // Führt eine Aktion aus und gibt Ereignisse für Animationen zurück. Ungültige Aktionen → null.
 export function applyAction(state, a) {
   if (state.over) return null;
@@ -499,6 +528,7 @@ export function applyAction(state, a) {
           state.stats.losses[pid]++;
         }
       }
+      if (UNITS[u.type].splash) e.splash = applySplash(state, u, defSnap.idx, r.dmg);
       ev.push(e);
       break;
     }

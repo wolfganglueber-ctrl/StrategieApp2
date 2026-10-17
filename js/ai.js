@@ -5,7 +5,7 @@ import {
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
-  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity,
+  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -96,7 +96,8 @@ function buildContext(state, pid, P) {
   if (P.smart) aggr *= 1 + Math.min(0.8, Math.max(0, state.turn - 25) * 0.02);
   const territory = memory.territory;
   const alive = new Set(state.units);
-  return { geo, occ, enemies, mine, distCity, distEnemy, threat, cityDanger, ownCities, targetCities, armyValue, myArmy, enemyArmy, aggr, territory, st, alive };
+  const splashThreat = enemies.some((e) => UNITS[e.type].splash);
+  return { splashThreat, geo, occ, enemies, mine, distCity, distEnemy, threat, cityDanger, ownCities, targetCities, armyValue, myArmy, enemyArmy, aggr, territory, st, alive };
 }
 
 function expectedDamage(state, ctx, u, idx, hp) {
@@ -137,6 +138,12 @@ function positionScore(state, ctx, P, u, idx, hp, pid) {
     if (exp >= hp) s -= risk * unitValue({ type: u.type, hp }, T.hp) * 1.1;
     else s -= risk * (exp / T.hp) * value * 0.6;
   }
+  // Gegen Katapulte nicht zusammenballen (Flächenschaden)
+  if (P.smart && ctx.splashThreat && ctx.threat[idx]?.some((e) => UNITS[e.type].splash)) {
+    let n = 0;
+    for (const j of ctx.geo.nb[idx]) { const o = ctx.occ[j]; if (o && o.owner === pid && o !== u) n++; }
+    s -= n * 0.35;
+  }
   // Fernkämpfer bleiben gern auf Distanz
   if (T.range > 1 && de === 1) s -= 1.5 * (P.smart ? 1 : 0);
   // Gelände-Bonus
@@ -155,6 +162,12 @@ function attackScore(state, ctx, P, u, t, from) {
   const tc = cityOn(state, t.idx);
   if (tc && tc.owner === u.owner) gain += r.kill ? 8 : 3; // Besetzer aus eigener Stadt werfen
   if (tc && tc.capital && tc.owner === u.owner) gain += r.kill ? 6 : 2;
+  if (UNITS[u.type].splash) {
+    for (const h of splashDamage(state, u, t.idx, r.dmg)) {
+      const hv = UNITS[h.unit.type].value;
+      gain += (Math.min(h.dmg, h.unit.hp) / ctx.st(h.unit).hp) * hv * 1.2 + (h.dmg >= h.unit.hp ? hv + 3 : 0);
+    }
+  }
   let loss = (Math.min(r.counter, u.hp) / UT.hp) * uv;
   if (r.die) loss += uv + 2;
   return { score: gain - loss * P.lossW, r };
