@@ -574,16 +574,28 @@ async function doMerge(u, t) {
   act({ type: 'merge', unitId: u.id, targetId: t.id }, { after: () => clearSel() });
 }
 
+// Sofort-Aktionen im Stadtmenü: kein Warten auf Animationen, schnelles Klicken kommt an
+function quickAct(action) {
+  if (busy) return;
+  const snap = cloneState(S);
+  const ev = applyAction(S, action);
+  if (!ev) { sound.play('error'); toast('Das geht nicht.'); return; }
+  undoStack.push(snap);
+  if (undoStack.length > 30) undoStack.shift();
+  refresh();
+  play(ev, 1, false); // Animation läuft nebenher
+}
+
 function doRecruit(idx, type) {
-  act({ type: 'recruit', idx, unitType: type });
+  quickAct({ type: 'recruit', idx, unitType: type });
 }
 
 function doUpgrade(idx) {
-  act({ type: 'upgrade', idx });
+  quickAct({ type: 'upgrade', idx });
 }
 
 function doBuild(idx, building) {
-  act({ type: 'build', idx, building });
+  quickAct({ type: 'build', idx, building });
 }
 
 let techBranch = 'mil';
@@ -1267,8 +1279,28 @@ function renderCityPanel(panel, ci, occ) {
   }
 }
 
+// Scroll-Position des Panels und der Gebäudeliste über Neuaufbauten hinweg behalten
+let panelScroll = { key: '', top: 0, list: 0 };
+function panelKey() {
+  return sel.cityIdx != null ? `city:${sel.cityIdx}:${cityTab}` : sel.unitId != null ? `unit:${sel.unitId}` : '';
+}
+
 function renderPanel() {
   const panel = $('panel');
+  const key = panelKey();
+  if (panelScroll.key === key && key) {
+    panelScroll.top = panel.scrollTop;
+    panelScroll.list = panel.querySelector('.build-list')?.scrollTop || 0;
+  } else panelScroll = { key, top: 0, list: 0 };
+  renderPanelContent(panel);
+  if (key) {
+    panel.scrollTop = panelScroll.top;
+    const list = panel.querySelector('.build-list');
+    if (list) list.scrollTop = panelScroll.list;
+  }
+}
+
+function renderPanelContent(panel) {
   panel.innerHTML = '';
   if (!S || !humanTurn()) return;
   const occ = buildOcc(S);
