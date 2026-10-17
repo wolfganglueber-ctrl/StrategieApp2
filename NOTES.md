@@ -1,7 +1,7 @@
 # Stand
 Spiel-Link: https://claude.ai/artifact/DSHgsarxYi3z7aj65QHMEA (wird bei /fertig aktualisiert)
 
-Version 0.20 (Branch `ccr-8aa711c1-0bv1jz`), spielbar im Browser/als PWA.
+Version 0.21 (Branch `ccr-8aa711c1-0bv1jz`), spielbar im Browser/als PWA.
 - Jede Stadt hat 2 Felder Gebiet; Dörfer mit Abstand ≥ 4 (Episch ~111 statt 193 Städte), Gebiete bilden zusammenhängende Reiche. Wald kostet 2 Bewegung (erster Schritt immer möglich).
 - Einheiten kosten das Doppelte (UNIT_PRICE in data.js; KI-Wert bleibt auf alter Basis), Ausbilden 20 % je Rang.
 - Steinwälle (6 Holz, 14 Erz): bis 6 pro Stadt im Umkreis von 2 Feldern (nicht auf fremdem Gebiet), 50 Leben, blockieren den Weg, verbinden sich optisch zur Mauer; KI setzt sie bei bedrohten Städten.
@@ -14,6 +14,7 @@ Version 0.20 (Branch `ccr-8aa711c1-0bv1jz`), spielbar im Browser/als PWA.
 - Zugweite gedeckelt: Fußtruppen 4, Katapult 3, Reiter/Ritter 6 (inkl. Sprünge über eigene Einheiten).
 - Ränge 1–5 (Erfahrung oder Ausbilden mit Kaserne), Fähigkeiten bei Rang 3 und 5 (je 2 zur Wahl), Flankenbonus +10 % je Nachbar, „Wache halten“.
 - Kein Einheitenlimit mehr für Spieler (0.20, Wunsch Wolfgang). `unitCap` (Versorgung Dorf 2 … Metropole 5) ist nur noch Richtmaß der KI: sie rekrutiert bis 1× (Stufe 5: 1,4×, `armyCap`) plus 2 bei Gefahr. Sim: 4 vs 3 = 8:8 (M), 5 vs 4 = 11:1.
+- 0.21: Markt nur einmal pro Reich (perRealm, sonst ausgegraut); Zauberer greifen im Gruppenangriff nicht mit an (ziehen nur mit); Turmfeuer am Zugende mit Banner „Deine Türme feuern“ und Mindest-Animation, abschaltbar (Einstellung `towerAuto`, Aktion `end` mit `volley: false`); Einheiten mit wählbarer Fähigkeit oder möglichem Ausbilden schimmern, blinken und tragen ⬆ (`overlay.upgrade`).
 - Forschungsfenster bleibt beim Erforschen offen (quickAct, Scroll-Position bleibt).
 - Entwicklungsbaum mit 17 Forschungen (neu: Erleuchtung, Segen).
 - KI in 5 Stufen (baut, forscht, handelt, Türme, Zauberer heilen, Ausbilden, Fähigkeiten, spart auf Troll); Stufe 4 in 0.19 entschärft (mehr Rauschen/Fehler, weniger Ausbau): 4 vs 3 ≈ 13:11 (L), 10:6 (M); 5 vs 4: 13:3.
@@ -30,10 +31,10 @@ Version 0.20 (Branch `ccr-8aa711c1-0bv1jz`), spielbar im Browser/als PWA.
 - Tests (`npm test`) laufen grün; `node tools/stats.mjs [spiele] [stufe] [größe]` zählt Einheiten und Fähigkeiten in KI-Partien.
 
 # Offene Aufgaben
-- Wolfgang testet Version 0.20 (kein Einheitenlimit, Forschung ohne Neuladen, Basilisk, Schatten/3D-Grafik, schwächere Stufe 4, Einheiten entlassen, Türme wechseln bei Eroberung, Abreißen, schnelles Kaufen, Scroll-Position im Stadtmenü, Gruppenknöpfe „Alle in der Nähe“/„Alle <Typ>“, Verbände, automatisches Turmfeuer, Zugstatus-Ringe, Drache auf dem Turm, Gruppe bleibt gewählt, Gruppenangriff, Drache als Endgegner, Heilen auf 3 Felder, doppelte Einheitenpreise, stärkerer Drache, Städte mit 2 Feldern Gebiet, Steinwälle, Wald, neuer Troll und Türme, Drache, neue Figuren, dicke Mauer, natürlichere Geräusche, Markt-Pflicht, Burg-Grafik, Zauberer, Ränge, Troll, Flächenschaden, Zugweite, Geräusche) und gibt Rückmeldung, v. a. zur Lautstärke und zum Klang auf dem Handy.
+- Wolfgang testet Version 0.21 (Markt einmal pro Reich, Zauberer nicht im Gruppenangriff, Turmfeuer animiert/abschaltbar, Schimmern bei Aufwertung, kein Einheitenlimit, Forschung ohne Neuladen, Basilisk, Schatten/3D-Grafik, schwächere Stufe 4, Einheiten entlassen, Türme wechseln bei Eroberung, Abreißen, schnelles Kaufen, Scroll-Position im Stadtmenü, Gruppenknöpfe „Alle in der Nähe“/„Alle <Typ>“, Verbände, automatisches Turmfeuer, Zugstatus-Ringe, Drache auf dem Turm, Gruppe bleibt gewählt, Gruppenangriff, Drache als Endgegner, Heilen auf 3 Felder, doppelte Einheitenpreise, stärkerer Drache, Städte mit 2 Feldern Gebiet, Steinwälle, Wald, neuer Troll und Türme, Drache, neue Figuren, dicke Mauer, natürlichere Geräusche, Markt-Pflicht, Burg-Grafik, Zauberer, Ränge, Troll, Flächenschaden, Zugweite, Geräusche) und gibt Rückmeldung, v. a. zur Lautstärke und zum Klang auf dem Handy.
 - Balancing beobachten: Troll (70 Leben, Angriff 7, Verteidigung 5) ist in Städten mit Mauer kaum zu knacken; ggf. abschwächen.
 - KI nutzt Heilen noch selten (~2–4 Mal pro Partie); Gewichtung ggf. erhöhen.
 - Schadensvorschau zeigt den Flächenschaden des Katapults noch nicht auf den Nachbarfeldern.
 
 # Nächster Schritt
-Rückmeldung zu Version 0.20 einholen (ist Stufe 4 jetzt schlagbar? Wird das Spiel ohne Limit zu langsam bei vielen Einheiten?); danach ggf. Marschbefehl (automatisches Ziehen über mehrere Runden), danach Balancing (Troll, Heilen) und Flächenschaden in der Vorschau.
+Rückmeldung zu Version 0.21 einholen (ist Stufe 4 jetzt schlagbar? Wird das Spiel ohne Limit zu langsam bei vielen Einheiten?); danach ggf. Marschbefehl (automatisches Ziehen über mehrere Runden), danach Balancing (Troll, Heilen) und Flächenschaden in der Vorschau.

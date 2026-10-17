@@ -197,6 +197,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .build-list { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; max-height: 34vh; overflow-y: auto; }
 .build-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
 .build-row.built { background: rgba(34, 197, 94, 0.12); }
+.build-row.realm { opacity: 0.45; }
 .bicon { font-size: 20px; width: 28px; text-align: center; flex: none; }
 .binfo { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 13px; line-height: 1.25; }
 .binfo .muted { font-size: 11.5px; }

@@ -211,8 +211,10 @@ function attackSpot(u, target, occ) {
 }
 
 // Angreifer für ein Ziel: erst Fernkämpfer, dann wer schon steht, dann wer heranrücken muss
+// Zauberer ziehen mit der Gruppe, greifen aber nicht automatisch mit an
 function groupAttackers(target, occ) {
   return groupUnits()
+    .filter((u) => !UNITS[u.type].healer)
     .map((u) => ({ u, spot: attackSpot(u, target, occ) }))
     .filter((x) => x.spot != null)
     .sort((a, b) => statsOf(S, b.u).range - statsOf(S, a.u).range || (a.spot !== a.u.idx) - (b.spot !== b.u.idx))
@@ -322,6 +324,8 @@ function refresh() {
         o.ready.add(u.id);
         if (u.moved) (o.partial ||= new Set()).add(u.id); // schon gezogen, kann aber noch angreifen
       }
+      // Fähigkeit wählbar oder Ausbilden möglich: Einheit schimmert
+      if (perkOptions(u).length || !canTrain(S, u)) (o.upgrade ||= new Set()).add(u.id);
     }
   }
   const u = sel.unitId != null ? unitById(S, sel.unitId) : null;
@@ -768,12 +772,17 @@ async function onEndTurn() {
   undoStack = [];
   clearSel();
   busy = true;
-  const ev = applyAction(S, { type: 'end' });
+  const ev = applyAction(S, { type: 'end', volley: settings.towerAuto !== false });
   refresh();
+  let volley = false;
   for (const e of ev) {
-    const pr = aiEventView(e, speedFactor());
+    if (e.auto && !volley) { volley = true; showBanner('🏰 Deine Türme feuern', PLAYER_COLORS[humanId()].main); }
+    if (volley && !e.auto) { volley = false; hideBanner(); }
+    const pr = aiEventView(e, e.auto ? Math.max(speedFactor(), 0.8) : speedFactor());
     await playEvent(e, pr.f, true, pr.pan);
+    if (e.auto && e.k === 'attack') await sleep(250);
   }
+  if (volley) hideBanner();
   busy = false;
   if (S.over) return gameOver();
   if (!S.players[S.current].human) await runAI();
@@ -1298,7 +1307,8 @@ function renderCityPanel(panel, ci, occ) {
     for (const b of BUILDING_ORDER) {
       const B = BUILDINGS[b];
       const built = hasBuilding(c, b);
-      list.append(el('div', { class: 'build-row' + (built ? ' built' : '') },
+      const realm = !built && canBuild(S, p.id, c, b) === 'realm';
+      list.append(el('div', { class: 'build-row' + (built ? ' built' : realm ? ' realm' : '') },
         el('span', { class: 'bicon' }, B.icon),
         el('div', { class: 'binfo' }, el('b', {}, B.name), el('span', { class: 'muted' }, B.desc)),
         built ? el('span', { class: 'built-actions' }, el('span', { class: 'done' }, '✓'),
@@ -1612,6 +1622,8 @@ function openSettings(onClose) {
     toggle('vibrate'),
     el('label', {}, 'Zugende bestätigen'),
     toggle('confirmEnd'),
+    el('label', {}, 'Türme schießen am Zugende automatisch'),
+    seg([[true, 'An'], [false, 'Aus']], settings.towerAuto !== false, (v) => { settings.towerAuto = v; store.saveSettings(settings); }),
     el('label', {}, 'Alle Level freischalten (Testmodus)'),
     toggle('unlockAll'),
     el('label', {}, 'Kartennebel in der Kampagne'),
@@ -1710,7 +1722,7 @@ function renderHelp() {
     Einheiten, die noch etwas tun können, haben einen leuchtenden Ring.</p>
     <h3>Gemeinsam angreifen 👥</h3>
     <p>Wähle eine Einheit und tippe auf „👥 Alle in der Nähe“ (alle eigenen Einheiten im Umkreis) oder „👥 Alle Ritter“ usw. (nur gleiche Einheiten im Umkreis); am PC geht auch Shift + Klick. Danach ist der Gruppenmodus aktiv. Weitere eigene Einheiten fügst du per Tipp hinzu oder nimmst sie wieder heraus.
-    Ein Tipp auf einen Gegner: Alle greifen nacheinander an und rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt. Die Gruppe bleibt danach gewählt – tippe einfach den nächsten Gegner an. Ein Tipp auf ein hell markiertes Feld bewegt die Gruppe, ein Tipp auf ein anderes leeres Feld (oder „Auflösen“) beendet sie; „Nur aus Stand“ verzichtet aufs Heranrücken.</p>
+    Ein Tipp auf einen Gegner: Alle greifen nacheinander an und rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt. Zauberer ziehen mit, greifen aber nicht automatisch an (sie heilen lieber). Die Gruppe bleibt danach gewählt – tippe einfach den nächsten Gegner an. Ein Tipp auf ein hell markiertes Feld bewegt die Gruppe, ein Tipp auf ein anderes leeres Feld (oder „Auflösen“) beendet sie; „Nur aus Stand“ verzichtet aufs Heranrücken.</p>
     <h3>Verbände 🔗</h3>
     <p>Bis zu 3 gleiche Einheiten (Krieger, Schützen, Reiter, Wächter, Ritter, Katapulte) lassen sich zu einem Verband zusammenlegen – dann ziehst du sie mit einem Tipp. Wähle eine Einheit, tippe „🔗 Verband bilden“ und dann eine violett markierte gleiche Einheit direkt daneben; das Spiel fragt vorher nach. Beide dürfen in dieser Runde noch nichts getan haben, das Zusammenlegen verbraucht ihren Zug.
     Ein Verband hat die Lebenspunkte aller Mitglieder und teilt entsprechend mehr Schaden aus; je angeschlagener er ist, desto weniger Figuren stehen auf dem Sockel. Er übernimmt den besten Rang. Aber Vorsicht: Katapulte, Drachenfeuer und „Wüten“ treffen Verbände härter (+25 % je weiterem Mitglied). Mit „✂ Aufteilen“ löst du eine Einheit wieder heraus.</p>
@@ -1726,7 +1738,7 @@ function renderHelp() {
     <h3>Abreißen 🗑</h3>
     <p>Verbaut? Im Reiter „Gebäude“ hat jedes fertige Gebäude einen 🗑-Knopf: Nach einer Rückfrage wird es abgerissen, der Bauplatz ist wieder frei, und du bekommst die Hälfte der Baukosten zurück. Eigene Türme und Steinwälle reißt du ab, indem du sie antippst. Einheiten, die du nicht mehr brauchst, löst du mit „🗑 Entlassen“ auf – Rohstoffe gibt es dafür nicht zurück.</p>
     <h3>Türme</h3>
-    <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt). Türme bewegen sich nicht, greifen aber Gegner in Reichweite an und lassen sich in 3 Stufen ausbauen: tippe den Turm an. Hat ein Turm in deinem Zug noch nicht geschossen, feuert er beim Zugende automatisch auf das lohnendste Ziel.</p>
+    <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt). Türme bewegen sich nicht, greifen aber Gegner in Reichweite an und lassen sich in 3 Stufen ausbauen: tippe den Turm an. Hat ein Turm in deinem Zug noch nicht geschossen, feuert er beim Zugende automatisch auf das lohnendste Ziel (sichtbar animiert; in den Einstellungen abschaltbar).</p>
     <h3>Steinwälle 🧱</h3>
     <p>Im Reiter „Gebäude“ einer Stadt setzt du Steinwälle auf freie Felder bis 2 Felder um die Stadt (bis zu 6 pro Stadt). Sie sind sehr stabil (50 Leben, Verteidigung 6), greifen nicht an, versperren aber den Weg: Gegner müssen sie umgehen oder mühsam einreißen – ideal, um Angreifer in die Reichweite deiner Türme und Schützen zu lenken. Nebeneinander gesetzte Wallstücke verbinden sich zu einer Mauer. Katapulte und Belagerer sind gegen sie besonders wirksam.</p>
     <h3>Forschung 🔬</h3>
@@ -1734,7 +1746,7 @@ function renderHelp() {
     <h3>Kartennebel</h3>
     <p>Optional: Du siehst nur, was deine Einheiten und Städte sehen. Bereits erkundete Gebiete bleiben sichtbar, aber gegnerische Einheiten darin nicht. Die KI unterliegt denselben Regeln.</p>
     <h3>Handel</h3>
-    <p>Handeln kannst du erst mit einem <b>Markt</b> in einer deiner Städte. Dann tippst du oben auf einen Rohstoff: 3 beliebige Rohstoffe gegen 1 anderen, mit der Forschung <b>Handelsgilde</b> 2 gegen 1.</p>
+    <p>Handeln kannst du erst mit einem <b>Markt</b> in einer deiner Städte (einer pro Reich genügt – in den anderen Städten ist er ausgegraut). Dann tippst du oben auf einen Rohstoff: 3 beliebige Rohstoffe gegen 1 anderen, mit der Forschung <b>Handelsgilde</b> 2 gegen 1.</p>
     <h3>Gelände</h3>
     <p><b>Gebirge</b> und <b>Seen</b> sind unpassierbar (nur der Drache fliegt darüber). Ein <b>Wald</b>feld zu betreten kostet 2 Bewegung statt 1 – ein einzelner Schritt in den Wald geht aber immer. Verteidigungsbonus gibt es nur in Städten.</p>
     <h3>Heilung</h3>
@@ -1746,7 +1758,7 @@ function renderHelp() {
     <p>Auch voll entwickelt ziehen Fußtruppen höchstens 4 Felder, Katapulte 3, Reiter und Ritter 6 – auch wenn sie über eigene Einheiten springen.</p>
     <h3>Ränge und Fähigkeiten ★</h3>
     <p>Einheiten sammeln Erfahrung: +1 pro Angriff, +1 pro Sieg, +1 wenn sie einen Angriff überleben. Ränge: ${RANK_NAMES.slice(1).join(' → ')}. Jeder Rang gibt +15 % Leben und +10 % Angriff und Verteidigung, Reiter und Ritter ab Veteran +1 Bewegung, alle Helden +1 Bewegung.
-    Steht eine Einheit zu Zugbeginn in einer eigenen Stadt mit Kaserne, kannst du sie gegen Rohstoffe <b>ausbilden</b> (Rang +1). Bei Veteran und Held wählst du eine Fähigkeit (goldener Schimmer am Sockel); gewählte Fähigkeiten erscheinen als kleines Abzeichen neben der Figur: ${Object.values(PERKS).map((p) => `${p.icon} ${p.name} (${p.desc})`).join(', ')}.</p>
+    Steht eine Einheit zu Zugbeginn in einer eigenen Stadt mit Kaserne, kannst du sie gegen Rohstoffe <b>ausbilden</b> (Rang +1). Einheiten, die ausgebildet werden können oder eine Fähigkeit wählen dürfen (bei Veteran und Held), schimmern golden, blinken auf und tragen ein ⬆; gewählte Fähigkeiten erscheinen als kleines Abzeichen neben der Figur: ${Object.values(PERKS).map((p) => `${p.icon} ${p.name} (${p.desc})`).join(', ')}.</p>
     <h3>Zauberer 🔮</h3>
     <p>Eigene Einheiten neben einem Zauberer (blaues Schild-Symbol) bekommen 25 % weniger Schaden, Flächenschaden halbiert. Statt anzugreifen heilt der Zauberer eine eigene Einheit bis 3 Felder entfernt (grün markiert antippen). Höchstens ein Zauberer pro Stadt.</p>
     <h3>Katapult und Flanke</h3>

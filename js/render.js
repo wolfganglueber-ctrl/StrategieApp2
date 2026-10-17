@@ -652,14 +652,40 @@ export class Renderer {
         ctx.stroke();
       }
     }
-    // Fähigkeit wählbar: goldener Schimmer am Sockel
-    if (u.pick) {
-      const p = 0.5 + 0.5 * Math.sin(now / 300);
-      ctx.strokeStyle = `rgba(253,224,71,${0.35 + p * 0.4})`;
-      ctx.lineWidth = 2 + p * 2;
+    // Fähigkeit wählbar oder Ausbilden möglich: goldener Schimmer, Aufblinken und aufsteigende Funken
+    if (this.overlay.upgrade?.has(u.id)) {
+      const p = 0.5 + 0.5 * Math.sin(now / 260);
+      ctx.strokeStyle = `rgba(253,224,71,${0.4 + p * 0.5})`;
+      ctx.lineWidth = 2 + p * 2.5;
       ctx.beginPath();
       ctx.ellipse(x, y + 7 * s, 22 * s, 9 * s, 0, 0, Math.PI * 2);
       ctx.stroke();
+      // Figur blinkt hell auf
+      const blink = Math.max(0, Math.sin(now / 420)) ** 3;
+      if (blink > 0.02) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha *= blink * 0.45;
+        ctx.drawImage(sp.cv, x - B.left * s * scale, y - B.top * s * scale, (B.left + B.right) * s * scale, (B.top + B.bottom) * s * scale);
+        ctx.restore();
+      }
+      for (let k = 0; k < 5; k++) {
+        const ph = ((now / 1400 + k / 5) % 1);
+        const px = x + Math.sin(k * 2.3 + now / 700) * 13 * s, py = y + 4 * s - ph * 44 * s * scale;
+        ctx.fillStyle = `rgba(255,236,140,${(1 - ph) * 0.9})`;
+        ctx.beginPath();
+        ctx.arc(px, py, (1.6 - ph) * 1.3 * s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const bx = x - 15 * s * scale, by = y - 36 * s * scale;
+      ctx.font = `800 ${11 * s}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = `rgba(80,50,0,${0.5 + p * 0.4})`;
+      ctx.strokeText('⬆', bx, by);
+      ctx.fillStyle = `rgba(253,224,71,${0.6 + p * 0.4})`;
+      ctx.fillText('⬆', bx, by);
     }
     // Wache
     if (u.sentry) {
@@ -723,7 +749,7 @@ export class Renderer {
       }
       this.dirty = true;
     }
-    const pulsing = this.overlay.targets?.size || this.overlay.ready?.size || this.state?.units.some((u) => u.shaken || u.pick);
+    const pulsing = this.overlay.targets?.size || this.overlay.ready?.size || this.overlay.upgrade?.size || this.state?.units.some((u) => u.shaken);
     if (!this.dirty && pulsing && now - (this.lastDraw || 0) > 40) this.dirty = true; // Pulsieren mit ~25 fps
     if (!this.dirty) return;
     this.lastDraw = now;

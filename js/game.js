@@ -894,7 +894,7 @@ export function applyAction(state, a) {
     }
     case 'end': {
       // Türme, die noch nicht geschossen haben, feuern am Zugende selbst
-      const pre = towerVolley(state, pid);
+      const pre = a.volley === false ? [] : towerVolley(state, pid);
       // Ausgesetzter Zug ist vorbei: die Versteinerung löst sich
       for (const u of state.units) if (u.owner === pid) u.stoneNow = false;
       return pre.concat(endTurn(state));
