@@ -3,7 +3,7 @@ import { getGeo } from './hex.js';
 import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
-  TOWER_UPGRADE, TOWERS_PER_CITY, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
+  TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
   PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, trainCost,
 } from './data.js';
 import { generateMap } from './mapgen.js';
@@ -97,7 +97,7 @@ export function statsOf(state, u) {
       const mod = TECHS[t].mod;
       if (!mod) continue;
       for (const [grp, m] of Object.entries(mod)) {
-        const hit = grp === u.type || grp === 'all' && u.type !== 'tower' || grp === 'melee' && MELEE.includes(u.type) || grp === 'foot' && FOOT.includes(u.type);
+        const hit = grp === u.type || grp === 'all' && !UNITS[u.type].structure || grp === 'melee' && MELEE.includes(u.type) || grp === 'foot' && FOOT.includes(u.type);
         if (!hit) continue;
         for (const [k, v] of Object.entries(m)) st[k] += v;
       }
@@ -127,7 +127,7 @@ export function hasPerk(u, p) {
 export function attackMult(state, att, def, fromIdx = att.idx) {
   let m = 1;
   if (hasPerk(att, 'charge') && (att.moved || fromIdx !== att.idx)) m += 0.3;
-  if (hasPerk(att, 'siege') && (cityOn(state, def.idx) || def.type === 'tower')) m += 0.3;
+  if (hasPerk(att, 'siege') && (cityOn(state, def.idx) || isStructure(def))) m += 0.3;
   if (hasPerk(att, 'hunter') && (CAVALRY.includes(def.type) || def.type === 'troll' || def.type === 'dragon')) m += 0.4;
   // Drachen sind anfällig gegen Pfeile
   if (UNITS[def.type].arrowWeak && (att.type === 'archer' || att.type === 'tower')) m += 1;
@@ -211,17 +211,18 @@ export function updateExplored(state) {
   }
 }
 
-export function towersOfCity(state, ci, territory = computeTerritory(state)) {
-  return state.units.filter((u) => u.type === 'tower' && territory[u.idx] === ci).length;
+export function towersOfCity(state, ci, territory = computeTerritory(state), type = 'tower') {
+  return state.units.filter((u) => u.type === type && territory[u.idx] === ci).length;
 }
 
-export function canBuildTower(state, pid, idx, territory = computeTerritory(state)) {
+// Turm oder Steinwall auf ein Feld im eigenen Stadtgebiet setzen
+export function canBuildTower(state, pid, idx, territory = computeTerritory(state), type = 'tower') {
   const ci = territory[idx];
   if (ci < 0 || state.cities[ci].owner !== pid) return 'territory';
   if (state.cityAt[idx] >= 0 || !TERRAIN[state.terrain[idx]].pass) return 'tile';
   if (state.units.some((u) => u.idx === idx)) return 'occupied';
-  if (towersOfCity(state, ci, territory) >= TOWERS_PER_CITY) return 'limit';
-  if (!canAfford(state.players[pid].res, UNITS.tower.cost)) return 'cost';
+  if (towersOfCity(state, ci, territory, type) >= STRUCTURE_LIMIT[type]) return 'limit';
+  if (!canAfford(state.players[pid].res, UNITS[type].cost)) return 'cost';
   return null;
 }
 
@@ -255,7 +256,7 @@ export function cityOn(state, idx) {
 }
 
 export function canMove(u) {
-  return !u.moved && !u.attacked && u.type !== 'tower';
+  return !u.moved && !u.attacked && !UNITS[u.type].structure;
 }
 export function canAttack(u) {
   return !u.attacked && !(UNITS[u.type].noMoveAttack && u.moved);
@@ -278,7 +279,7 @@ export function defenseMult(state, idx) {
 
 // Erreichbare Zielfelder: Map ziel -> vorgänger (für Pfade).
 // Eigene Einheiten können durchquert werden, gegnerische nicht. Felder mit eigenen Einheiten kosten
-// keine Bewegung (man springt darüber), zählen aber für die Zugweite (moveCap).
+// keine Bewegung (man springt darüber), zählen aber für die Zugweite (moveCap). Wald kostet 2.
 export function getMoves(state, u, occ = buildOcc(state), moveOverride) {
   const geo = geoOf(state);
   const res = new Map();
@@ -298,7 +299,9 @@ export function getMoves(state, u, occ = buildOcc(state), moveOverride) {
         if (j === u.idx || !TERRAIN[state.terrain[j]].pass) continue;
         const o = occ[j];
         if (o && o.owner !== u.owner) continue;
-        const ns = s + (o ? 0 : 1);
+        // Wald kostet 1 Bewegung mehr; ein erster Schritt ist aber immer möglich
+        let ns = s + (o ? 0 : state.terrain[j] === 'forest' ? 2 : 1);
+        if (ns > maxSteps && s === 0 && !o) ns = maxSteps;
         if (ns > maxSteps || (o && ns >= maxSteps)) continue;
         const nk = j * K + ns;
         if (parent.has(nk)) continue;
@@ -478,7 +481,7 @@ export function unitCap(state, pid) {
 
 export function unitCount(state, pid) {
   let n = 0;
-  for (const u of state.units) if (u.owner === pid && u.type !== 'tower') n += UNITS[u.type].supply || 1;
+  for (const u of state.units) if (u.owner === pid && !UNITS[u.type].structure) n += UNITS[u.type].supply || 1;
   return n;
 }
 
@@ -668,12 +671,12 @@ export function applyAction(state, a) {
         state.units = state.units.filter((x) => x !== t);
         state.stats.kills[pid]++;
         state.stats.losses[t.owner]++;
-        if (UNITS[u.type].range === 1 && u.type !== 'tower') {
+        if (UNITS[u.type].range === 1 && !isStructure(u)) {
           e.advance = t.idx;
           u.idx = t.idx;
         }
       } else {
-        if (statsOf(state, u).range > 1 && t.type !== 'tower') { t.shaken = true; e.shaken = true; }
+        if (statsOf(state, u).range > 1 && !isStructure(t)) { t.shaken = true; e.shaken = true; }
       }
       if (!e.killed && r.counter > 0) {
         u.hp -= r.counter;
@@ -774,9 +777,10 @@ export function applyAction(state, a) {
       break;
     }
     case 'tower': {
-      if (canBuildTower(state, pid, a.idx)) return null;
-      for (const k of RES) player.res[k] -= UNITS.tower.cost[k] || 0;
-      const u = spawnUnit(state, 'tower', pid, a.idx, false);
+      const type = a.unitType === 'barrier' ? 'barrier' : 'tower';
+      if (canBuildTower(state, pid, a.idx, undefined, type)) return null;
+      for (const k of RES) player.res[k] -= UNITS[type].cost[k] || 0;
+      const u = spawnUnit(state, type, pid, a.idx, false);
       ev.push({ k: 'recruit', id: u.id, idx: a.idx });
       break;
     }

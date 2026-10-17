@@ -27,6 +27,7 @@ export const UNITS = {
   mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5 }, hp: 10, atk: 1, def: 1, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben bekommen 25 % weniger Schaden, Flächenschaden halbiert. Heilt statt anzugreifen. Höchstens einer pro Stadt.' },
   troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 7, def: 5, move: 2, range: 1, supply: 3, regen: 3, perRealm: 5, needs: 'lair', desc: 'Ein Titan: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben. Braucht 3 Versorgung und eine Trollhöhle, höchstens 5 pro Reich.' },
   dragon: { name: 'Drache', cost: { food: 50, wood: 30, ore: 70 }, hp: 60, atk: 8, def: 4, move: 4, range: 1, supply: 3, perRealm: 1, flying: true, splash: 0.3, arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und Einheiten hinweg, Feueratem trifft auch Gegner neben dem Ziel. Sehr mächtig, aber Schützen und Türme treffen ihn doppelt. Einer pro Reich.' },
+  barrier: { name: 'Steinwall', cost: { wood: 3, ore: 7 }, hp: 30, atk: 0, def: 6, move: 0, range: 0, structure: true, desc: 'Sehr stabiles Wallstück, blockiert den Weg. Im Stadtgebiet setzen; benachbarte Wallstücke verbinden sich zu einer Mauer und lenken den Gegner.' },
   catapult: { name: 'Katapult', cost: { wood: 8, ore: 6 }, hp: 10, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, splash: 0.5, needs: 'workshop', desc: 'Reichweite 3, nicht nach Bewegung. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Braucht eine Werkstatt.' },
 };
 // Wert einer Einheit für die KI (Rohstoffsumme / 2)
@@ -96,6 +97,8 @@ export const TOWER_LEVELS = [null,
 ];
 export const TOWER_UPGRADE = [null, { wood: 6, ore: 8 }, { wood: 8, ore: 12 }];
 export const TOWERS_PER_CITY = 2;
+// Bauwerke im Stadtgebiet: Höchstzahl pro Stadt
+export const STRUCTURE_LIMIT = { tower: TOWERS_PER_CITY, barrier: 6 };
 
 // Entwicklungsbaum: einmalig erforschen, gilt für das ganze Reich
 export const TECH_BRANCHES = [['mil', 'Militär'], ['eco', 'Wirtschaft'], ['def', 'Verteidigung']];

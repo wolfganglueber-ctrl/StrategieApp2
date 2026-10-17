@@ -372,7 +372,10 @@ function economyAction(state, ctx, P, pid, rng) {
     const ups = safe
       .filter((c) => c.level < CITY_MAX_LEVEL && c.buildings.length >= citySlots(c) - 1 && canAfford(res, upgradeCostOf(state, c)))
       .sort((a, b) => (b.capital - a.capital) || (a.level - b.level));
-    if (ups.length) return { type: 'upgrade', idx: ups[0].idx };
+    if (ups.length) {
+      memory.ctxKey = ''; // Ausbau verschiebt Gebietsgrenzen: Karte neu berechnen
+      return { type: 'upgrade', idx: ups[0].idx };
+    }
   }
   // Türme in bedrohten Städten
   if (P.smart) {
@@ -390,6 +393,17 @@ function economyAction(state, ctx, P, pid, rng) {
           if (!best || d < best.d) best = { j, d };
         }
         if (best) return { type: 'tower', idx: best.j };
+      }
+      // Steinwälle am Rand des Gebiets, dort wo der Gegner herkommt
+      if (P.upgrade >= 1 && towersOfCity(state, ci, ctx.territory, 'barrier') < 4 && rng() < 0.25) {
+        let best = null;
+        for (const j of ctx.geo.within(c.idx, 2)) {
+          if (ctx.geo.dist(j, c.idx) < 2 || canBuildTower(state, pid, j, ctx.territory, 'barrier')) continue;
+          const d = ctx.distEnemy[j] < 0 ? 99 : ctx.distEnemy[j];
+          if (d < 2) continue;
+          if (!best || d < best.d) best = { j, d };
+        }
+        if (best && best.d <= 4) return { type: 'tower', unitType: 'barrier', idx: best.j };
       }
     }
   }

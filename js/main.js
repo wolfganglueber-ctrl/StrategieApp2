@@ -12,7 +12,7 @@ import { getGeo } from './hex.js';
 import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
-  hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY,
+  hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT,
   RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, trainCost, moveCap,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
@@ -134,7 +134,7 @@ function saveGame() {
 
 // ---------------------------------------------------------------- Auswahl & Overlay
 function clearSel() {
-  sel = { unitId: null, cityIdx: null, infoIdx: null, placeTower: null, group: null };
+  sel = { unitId: null, cityIdx: null, infoIdx: null, placeTower: null, placeType: 'tower', group: null };
 }
 
 // ---------------------------------------------------------------- Gruppen
@@ -153,7 +153,7 @@ function startGroup(u) {
 }
 
 function toggleGroupMember(u) {
-  if (u.type === 'tower') return;
+  if (UNITS[u.type].structure) return;
   const g = sel.group || [];
   sel.group = g.includes(u.id) ? g.filter((x) => x !== u.id) : [...g, u.id];
   if (!sel.group.length) clearSel();
@@ -170,7 +170,7 @@ function addNearbyToGroup() {
     const m = front.shift();
     for (const x of S.units) {
       if (ids.size >= 20) break;
-      if (x.owner !== S.current || ids.has(x.id) || x.type === 'tower') continue;
+      if (x.owner !== S.current || ids.has(x.id) || UNITS[x.type].structure) continue;
       if (!canMove(x) && !canAttack(x)) continue;
       if (geo.dist(m.idx, x.idx) <= 2) { ids.add(x.id); front.push(x); }
     }
@@ -278,7 +278,7 @@ function refresh() {
   if (curVis) o.fog = { vis: curVis, explored: S.explored[humanId()] };
   if (humanTurn() && !busy) {
     for (const u of S.units) {
-      if (u.owner !== S.current) continue;
+      if (u.owner !== S.current || u.type === 'barrier') continue;
       if (!canMove(u) && unitTargets(u, occ).length === 0 && !unitHeals(u).length) o.exhausted.add(u.id);
       else if (!u.sentry) o.ready.add(u.id);
     }
@@ -288,7 +288,7 @@ function refresh() {
     o.selected = u.idx;
     if (humanTurn() && u.owner === S.current) {
       if (canMove(u)) o.moves = new Set(getMoves(S, u, occ).keys());
-      if (u.type === 'tower') o.moves = null;
+      if (UNITS[u.type].structure) o.moves = null;
       if (UNITS[u.type].healer) {
         const geo = getGeoOf();
         o.aura = new Set(geo.within(u.idx, auraRadius(S, u.owner)));
@@ -323,7 +323,7 @@ function refresh() {
   if (sel.placeTower != null) {
     const terr = computeTerritory(S);
     o.moves = new Set();
-    for (let i = 0; i < terr.length; i++) if (terr[i] === sel.placeTower && !canBuildTower(S, S.current, i, terr)) o.moves.add(i);
+    for (let i = 0; i < terr.length; i++) if (terr[i] === sel.placeTower && !canBuildTower(S, S.current, i, terr, sel.placeType)) o.moves.add(i);
   }
   if (sel.infoIdx != null) o.selected = sel.infoIdx;
   R.overlay = o;
@@ -339,11 +339,26 @@ function onTap(sx, sy) {
   const i = R.pick(sx, sy);
   if (i < 0) { clearSel(); refresh(); return; }
   if (sel.placeTower != null) {
-    const ok = !canBuildTower(S, S.current, i) && computeTerritory(S)[i] === sel.placeTower;
+    const type = sel.placeType;
+    const ok = !canBuildTower(S, S.current, i, undefined, type) && computeTerritory(S)[i] === sel.placeTower;
     const city = S.cities[sel.placeTower].idx;
     clearSel();
-    if (ok) { sel.cityIdx = city; cityTab = 'build'; act({ type: 'tower', idx: i }); }
-    else { toast('Turmbau abgebrochen.'); refresh(); }
+    if (ok) {
+      // Steinwälle: nach dem Setzen gleich weiter platzieren, solange es geht
+      const again = type === 'barrier' ? sel.placeTower : null;
+      sel.cityIdx = city;
+      cityTab = 'build';
+      act({ type: 'tower', unitType: type, idx: i }, {
+        after: () => {
+          const ci = S.cityAt[city];
+          if (again != null && towersOfCity(S, ci, undefined, 'barrier') < STRUCTURE_LIMIT.barrier && canAfford(S.players[S.current].res, UNITS.barrier.cost)) {
+            clearSel();
+            sel.placeTower = ci;
+            sel.placeType = 'barrier';
+          }
+        },
+      });
+    } else { toast(type === 'barrier' ? 'Wallbau beendet.' : 'Turmbau abgebrochen.'); refresh(); }
     return;
   }
   const occ = buildOcc(S);
@@ -403,7 +418,7 @@ function unitNotes(u) {
   if (u.shaken) notes.push('⭐ Erschüttert: halbe Verteidigung, kein Gegenschlag.');
   if (inAura(S, u)) notes.push('🛡 Schutzaura: 25 % weniger Schaden, Flächenschaden halbiert.');
   if (UNITS[u.type].healer) notes.push(`Heilt ${healAmount(S, u)} Leben.`);
-  if (u.type !== 'tower') {
+  if (!UNITS[u.type].structure) {
     const r = u.rank || 1;
     notes.push(r < MAX_RANK ? `Erfahrung ${u.xp || 0}/${RANK_XP[r + 1]} bis ${RANK_NAMES[r + 1]}.` : 'Höchster Rang.');
   }
@@ -997,7 +1012,7 @@ function rankText(u) {
 }
 
 function unitCard(u, subtitle) {
-  const name = u.type === 'tower' ? `Turm · Stufe ${u.level}` : `${UNITS[u.type].name} · ${rankText(u)}`;
+  const name = u.type === 'tower' ? `Turm · Stufe ${u.level}` : UNITS[u.type].structure ? UNITS[u.type].name : `${UNITS[u.type].name} · ${rankText(u)}`;
   return el('div', { class: 'unit-card' },
     iconCanvas(u.type, u.owner, 48, u.level),
     el('div', { class: 'uc-main' },
@@ -1045,7 +1060,7 @@ function advice(occ) {
     }
   }
   // 2. Fernkämpfer zuerst
-  const shooter = canStill.find((u) => u.type !== 'tower' && statsOf(S, u).range > 1 && canAttack(u) && (unitTargets(u, occ).length || canMove(u) && [...getMoves(S, u, occ).keys()].some((f) => getTargets(S, u, f, occ).length)));
+  const shooter = canStill.find((u) => !UNITS[u.type].structure && statsOf(S, u).range > 1 && canAttack(u) && (unitTargets(u, occ).length || canMove(u) && [...getMoves(S, u, occ).keys()].some((f) => getTargets(S, u, f, occ).length)));
   if (shooter) return { text: `Lass zuerst deinen ${UNITS[shooter.type].name} schießen: Getroffene Gegner sind erschüttert und wehren sich nicht.`, unit: shooter.id };
   // 3. Dörfer besetzen
   const free = S.cities.filter((c) => c.owner !== pid && !occ[c.idx]);
@@ -1139,14 +1154,19 @@ function renderCityPanel(panel, ci, occ) {
     panel.append(el('div', { class: 'note', id: 'recruitNote' }, note ? `Rekrutieren nicht möglich: ${note}.` : `Neue Einheiten erscheinen im Stadtgebiet.${ready}`));
   } else {
     const list = el('div', { class: 'build-list' });
-    const nt = towersOfCity(S, ci);
-    list.append(el('div', { class: 'build-row tower-row' },
-      el('span', { class: 'bicon' }, iconCanvas('tower', p.id, 56, 1)),
-      el('div', { class: 'binfo' }, el('b', {}, `Turm (${nt}/${TOWERS_PER_CITY})`), el('span', { class: 'muted' }, 'Auf einem Feld im Stadtgebiet, schießt auf Gegner. 3 Ausbaustufen. Belegt keinen Bauplatz.')),
-      el('button', {
-        class: 'btn small', disabled: nt >= TOWERS_PER_CITY || !canAfford(p.res, UNITS.tower.cost),
-        onclick: () => { clearSel(); sel.placeTower = ci; refresh(); },
-      }, costEl(UNITS.tower.cost, p.res))));
+    for (const [type, text] of [
+      ['tower', 'Auf einem Feld im Stadtgebiet, schießt auf Gegner. 3 Ausbaustufen. Belegt keinen Bauplatz.'],
+      ['barrier', 'Sehr stabiles Wallstück, blockiert den Weg. Mehrere nebeneinander bilden eine Mauer, die Gegner umgehen müssen.'],
+    ]) {
+      const nt = towersOfCity(S, ci, undefined, type), max = STRUCTURE_LIMIT[type];
+      list.append(el('div', { class: 'build-row tower-row' },
+        el('span', { class: 'bicon' }, iconCanvas(type, p.id, 56, 1)),
+        el('div', { class: 'binfo' }, el('b', {}, `${UNITS[type].name} (${nt}/${max})`), el('span', { class: 'muted' }, text)),
+        el('button', {
+          class: 'btn small', disabled: nt >= max || !canAfford(p.res, UNITS[type].cost),
+          onclick: () => { clearSel(); sel.placeTower = ci; sel.placeType = type; refresh(); },
+        }, costEl(UNITS[type].cost, p.res))));
+    }
     for (const b of BUILDING_ORDER) {
       const B = BUILDINGS[b];
       const built = hasBuilding(c, b);
@@ -1178,9 +1198,11 @@ function renderPanel() {
   if (curVis) for (const x of S.units) if (x.owner !== S.current && !curVis[x.idx]) occ[x.idx] = null;
   if (sel.placeTower != null) {
     panel.append(el('div', { class: 'city-head' },
-      el('span', { class: 'title' }, 'Turm platzieren'),
-      el('button', { class: 'btn small', onclick: () => { clearSel(); refresh(); } }, 'Abbrechen')));
-    panel.append(el('div', { class: 'note' }, 'Tippe ein helles Feld im Stadtgebiet an.'));
+      el('span', { class: 'title' }, `${UNITS[sel.placeType].name} platzieren`),
+      el('button', { class: 'btn small', onclick: () => { clearSel(); refresh(); } }, sel.placeType === 'barrier' ? 'Fertig' : 'Abbrechen')));
+    panel.append(el('div', { class: 'note' }, sel.placeType === 'barrier'
+      ? `Tippe helle Felder im Stadtgebiet an – Wallstück für Wallstück (${towersOfCity(S, sel.placeTower, undefined, 'barrier')}/${STRUCTURE_LIMIT.barrier}).`
+      : 'Tippe ein helles Feld im Stadtgebiet an.'));
     return;
   }
   if (sel.group) {
@@ -1210,9 +1232,9 @@ function renderPanel() {
     if (canMove(u)) status = targets.length ? 'Ziehen oder Ziel antippen' : unitHeals(u).length ? 'Ziehen oder Grün = heilen' : 'Helles Feld = ziehen';
     else if (targets.length) status = 'Rotes Ziel = angreifen';
     else if (unitHeals(u).length) status = 'Grüne Einheit = heilen';
-    else status = u.type === 'tower' ? 'Kein Ziel in Reichweite' : 'Fertig für diese Runde';
+    else status = u.type === 'tower' ? 'Kein Ziel in Reichweite' : u.type === 'barrier' ? 'Blockiert den Weg' : 'Fertig für diese Runde';
     panel.append(unitCard(u, status));
-    if (u.type !== 'tower' && u.owner === S.current) {
+    if (!UNITS[u.type].structure && u.owner === S.current) {
       const opts = perkOptions(u);
       if (opts.length) {
         panel.append(el('div', { class: 'note' }, `⭐ ${RANK_NAMES[u.rank]}! Wähle eine Fähigkeit:`));
@@ -1531,6 +1553,8 @@ function renderHelp() {
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
     <h3>Türme</h3>
     <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt). Türme bewegen sich nicht, greifen aber Gegner in Reichweite an und lassen sich in 3 Stufen ausbauen: tippe den Turm an.</p>
+    <h3>Steinwälle 🧱</h3>
+    <p>Im Reiter „Gebäude“ einer Stadt setzt du Steinwälle auf freie Felder im Stadtgebiet (bis zu 6 pro Stadt). Sie sind sehr stabil (30 Leben, Verteidigung 6), greifen nicht an, versperren aber den Weg: Gegner müssen sie umgehen oder mühsam einreißen – ideal, um Angreifer in die Reichweite deiner Türme und Schützen zu lenken. Nebeneinander gesetzte Wallstücke verbinden sich zu einer Mauer. Katapulte und Belagerer sind gegen sie besonders wirksam.</p>
     <h3>Forschung 🔬</h3>
     <p>Oben rechts öffnest du den Entwicklungsbaum. Jede Forschung gilt für dein ganzes Reich: ${TECH_ORDER.map((t) => `${TECHS[t].icon} ${TECHS[t].name} (${TECHS[t].desc})`).join(', ')}.</p>
     <h3>Kartennebel</h3>
@@ -1538,7 +1562,7 @@ function renderHelp() {
     <h3>Handel</h3>
     <p>Handeln kannst du erst mit einem <b>Markt</b> in einer deiner Städte. Dann tippst du oben auf einen Rohstoff: 3 beliebige Rohstoffe gegen 1 anderen, mit der Forschung <b>Handelsgilde</b> 2 gegen 1.</p>
     <h3>Gelände</h3>
-    <p>Alle Felder sind gleich gut begehbar – nur <b>Gebirge</b> und <b>Seen</b> sind unpassierbar. Verteidigungsbonus gibt es nur in Städten.</p>
+    <p><b>Gebirge</b> und <b>Seen</b> sind unpassierbar (nur der Drache fliegt darüber). Ein <b>Wald</b>feld zu betreten kostet 2 Bewegung statt 1 – ein einzelner Schritt in den Wald geht aber immer. Verteidigungsbonus gibt es nur in Städten.</p>
     <h3>Heilung</h3>
     <p>Einheiten, die eine Runde nichts tun, heilen 2 Lebenspunkte – in der Nähe eigener Städte 4. Zauberer heilen sofort.</p>
     <h3>Einheiten</h3>

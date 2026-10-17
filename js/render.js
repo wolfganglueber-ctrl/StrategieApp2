@@ -4,7 +4,7 @@ import { hexCenter, pixelToIndex, boardSize, SQRT3, getGeo } from './hex.js';
 import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS } from './data.js';
 import { computeTerritory, statsOf, inAura } from './game.js';
 import {
-  hash, hexPath, mix, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, FIG_BOX,
+  hash, hexPath, mix, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, drawWallLink, FIG_BOX,
 } from './art.js';
 
 export const HEX = 40;
@@ -740,6 +740,7 @@ export class Renderer {
 
     // Einheiten (von oben nach unten, damit vordere Figuren davor stehen)
     const s = this.state;
+    this.drawWallLinks(ctx, fog);
     const sorted = s.units.slice().sort((a, b) => a.idx - b.idx);
     for (const u of sorted) {
       if (this.hidden.has(u.id)) continue;
@@ -756,6 +757,24 @@ export class Renderer {
     if (o.targets) for (const t of o.targets.values()) this.forecastBubble(ctx, t);
 
     for (const a of this.anims) if (a.draw && a.p >= 0) a.draw(ctx, a.p);
+  }
+
+  // Benachbarte Steinwälle desselben Spielers zu einer Mauer verbinden
+  drawWallLinks(ctx, fog) {
+    const s = this.state;
+    const walls = s.units.filter((u) => u.type === 'barrier' && !this.hidden.has(u.id) && (!fog || fog.vis[u.idx]));
+    if (walls.length < 2) return;
+    const at = new Map(walls.map((u) => [u.idx, u]));
+    const geo = getGeo(s.cols, s.rows);
+    const k = (HEX / 40) * FIG;
+    for (const u of walls.sort((a, b) => a.idx - b.idx)) {
+      for (const j of geo.nb[u.idx]) {
+        const o = at.get(j);
+        if (!o || j < u.idx || o.owner !== u.owner) continue;
+        const a = this.center(u.idx), b = this.center(j);
+        drawWallLink(ctx, a.x, a.y + 4 + 4 * k, b.x, b.y + 4 + 4 * k, colorOf(u.owner), k);
+      }
+    }
   }
 
   drawFog(ctx, fog, vr) {
