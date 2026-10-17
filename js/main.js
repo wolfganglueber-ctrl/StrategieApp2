@@ -447,10 +447,17 @@ function onTap(sx, sy) {
     if (!u && canMove(selU) && getMoves(S, selU, occ).has(i)) { doMove(selU, i); return; }
   }
   if (u && u.owner === S.current) {
-    if (selU && selU.id === u.id) {
-      const c = cityOn(S, i);
+    // Eigene Stadt mit Einheit: erster Tipp öffnet das Stadtmenü, zweiter wählt die Einheit
+    const uc = cityOn(S, i);
+    if (uc && uc.owner === S.current && sel.cityIdx !== i && !(selU && selU.id === u.id)) {
       clearSel();
-      if (c && c.owner === S.current) sel.cityIdx = i;
+      cityTab = 'units';
+      sel.cityIdx = i;
+      refresh();
+      return;
+    }
+    if (selU && selU.id === u.id) {
+      clearSel();
       refresh();
       return;
     }
@@ -1270,6 +1277,12 @@ function renderCityPanel(panel, ci, occ) {
     tabs.append(el('button', { class: cityTab === k ? 'active' : '', onclick: () => { cityTab = k; renderPanel(); } }, label));
   }
   panel.append(tabs);
+  // Einheit in der Stadt: per Knopf oder zweitem Tipp auf die Stadt wählen
+  const here = occ[c.idx];
+  if (here && here.owner === p.id && !UNITS[here.type].structure) {
+    panel.append(el('button', { class: 'btn small', onclick: () => { clearSel(); sel.unitId = here.id; refresh(); } },
+      `👆 ${UNITS[here.type].name} in der Stadt wählen (oder Stadt nochmal antippen)`));
+  }
   if (cityTab === 'units') {
     const grid = el('div', { class: 'recruit-grid' });
     let note = null;
