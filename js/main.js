@@ -1776,7 +1776,7 @@ function renderHelp() {
     <h3>Schwarzer Troll</h3>
     <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel und braucht eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
     <h3>Tribok</h3>
-    <p>Die schwerste Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einzelnes Feld mit vollem Schaden (kein Flächenschaden, kein Abschlag gegen Truppen), kann aber nicht auf direkte Nachbarn schießen und nicht nach einer Bewegung. Braucht eine Werkstatt und die Forschung <b>Gegengewicht</b> (nach Ballistik), höchstens 2 pro Reich, Unterhalt 1 Nahrung + 1 Holz. Ideal, um Burgverteidiger aus sicherer Entfernung zu treffen.</p>
+    <p>Die schwerste Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einzelnes Feld mit vollem Schaden (kein Flächenschaden, kein Abschlag gegen Truppen), kann aber nicht auf direkte Nachbarn schießen und nicht nach einer Bewegung. Braucht eine Werkstatt und die Forschung <b>Gegengewicht</b> (nach Ballistik), ohne Mengenbegrenzung, Unterhalt 1 Nahrung + 1 Holz. Ideal, um Burgverteidiger aus sicherer Entfernung zu treffen.</p>
     <h3>Basilisk 🦎</h3>
     <p>Eine Riesenechse mit tödlichem Blick: Sie greift aus 2 Feldern an, und wer getroffen wird und überlebt, <b>versteinert</b> – er setzt seinen nächsten Zug aus und schlägt bis dahin nicht zurück (grau dargestellt). Troll, Drache, Türme und Wälle sind immun. Ideal, um einen starken Gegner festzuhalten, während deine Armee angreift. Braucht ein Basiliskennest (Stadt ab Stufe 3), höchstens 2 pro Reich.</p>
     <h3>Drache 🐉</h3>
