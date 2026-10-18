@@ -76,6 +76,10 @@ export const PERKS = {
   greatheal: { name: 'Großheiler', icon: '💚', desc: 'Heilt 3 Leben mehr' },
   wideaura: { name: 'Weite Aura', icon: '🌀', desc: 'Schutzaura reicht 1 Feld weiter' },
   rampage: { name: 'Wüten', icon: '💥', desc: 'Trifft auch Gegner neben dem Ziel mit 30 % Schaden' },
+  lance: { name: 'Lange Lanze', icon: '🗡️', desc: 'Nahkämpfer schlagen nicht zurück' },
+  precise: { name: 'Präzision', icon: '🎯', desc: 'Kein Flächenschaden' },
+  blast: { name: 'Sprengladung', icon: '💣', desc: 'Flächenschaden 40 %' },
+  mobile: { name: 'Schnellladung', icon: '⚙️', desc: 'Schießt auch nach dem Ziehen' },
 };
 export const PERK_CHOICES = {
   warrior: [['charge', 'shieldwall'], ['siege', 'tough']],
@@ -167,6 +171,105 @@ export const TECHS = {
   towers2: { branch: 'def', name: 'Turmbaukunst', icon: '🗼', cost: { wood: 20, ore: 28 }, req: ['stonework'], mod: { tower: { range: 1, atk: 1 } }, desc: 'Türme +1 Reichweite, +1 Angriff' },
 };
 export const TECH_ORDER = Object.keys(TECHS);
+
+// Einheiten-Entwicklung: für jede Einheit 5 Stufen, die 3. Stufe ist eine Wahl zwischen zwei Richtungen.
+// mod: Werte (hp, atk, def, move, range, regen) · perk: Sonderfähigkeit wie bei den Rängen (siehe PERKS)
+// Jede Stufe verändert auch das Aussehen der Einheit.
+export const UP_GROUPS = [
+  ['melee', 'Nahkämpfer', ['warrior', 'rider', 'defender', 'knight']],
+  ['ranged', 'Fernkämpfer', ['archer', 'mage', 'basilisk']],
+  ['siege', 'Katapulte', ['catapult', 'trebuchet']],
+  ['titan', 'Titanen', ['troll', 'dragon']],
+];
+const U = (id, name, desc, mod = {}, perk = null) => ({ id, name, desc, mod, perk });
+export const UNIT_UPS = {
+  warrior: [
+    U('w1', 'Gesteppter Waffenrock', '+3 Leben', { hp: 3 }),
+    U('w2', 'Eisenhelm', '+0,5 Verteidigung, trägt jetzt Helm', { def: 0.5 }),
+    [U('w3a', 'Beidhändig', 'Zwei Schwerter statt Schild: +1 Angriff', { atk: 1 }), U('w3b', 'Schildkämpfer', 'Großer Schild: +1 Verteidigung, +2 Leben', { def: 1, hp: 2 })],
+    U('w4', 'Kettenhemd', '+4 Leben, +0,5 Verteidigung', { hp: 4, def: 0.5 }),
+    U('w5', 'Klingenmeister', 'Schwarze Rüstung: +1 Angriff, +1 Bewegung', { atk: 1, move: 1 }),
+  ],
+  rider: [
+    U('r1', 'Sattelzeug', '+1 Bewegung', { move: 1 }),
+    U('r2', 'Rundschild', '+0,5 Verteidigung', { def: 0.5 }),
+    [U('r3a', 'Säbelreiter', 'Krummsäbel: +1 Angriff, Sturmangriff', { atk: 1 }, 'charge'), U('r3b', 'Plänkler', 'Wurfspeere: greift aus 2 Feldern an', { range: 1 })],
+    U('r4', 'Kettenpanzer', '+4 Leben', { hp: 4 }),
+    U('r5', 'Steppenfürst', 'Schwarze Rüstung: +0,5 Angriff, +1 Bewegung', { atk: 0.5, move: 1 }),
+  ],
+  defender: [
+    U('d1', 'Pavese', 'Großer Setzschild: +0,5 Verteidigung', { def: 0.5 }),
+    U('d2', 'Hellebarde', '+0,5 Angriff', { atk: 0.5 }),
+    [U('d3a', 'Schildwall', '+1,5 Verteidigung', { def: 1.5 }), U('d3b', 'Pikenier', 'Lange Pike: +40 % gegen Reiter, Ritter, Trolle, Drachen', {}, 'hunter')],
+    U('d4', 'Plattenrüstung', '+5 Leben', { hp: 5 }),
+    U('d5', 'Turmwächter', 'Schwarze Rüstung: +1 Verteidigung, +1 Bewegung', { def: 1, move: 1 }),
+  ],
+  knight: [
+    U('k1', 'Lanze', 'Turnierlanze statt Schwert: +1 Angriff', { atk: 1 }),
+    U('k2', 'Plattenrüstung', 'Helm und Rossharnisch: +1 Verteidigung, +3 Leben', { def: 1, hp: 3 }),
+    [U('k3a', 'Chevalier', 'Extralange Lanze: Nahkämpfer schlagen nicht zurück, +0,5 Angriff', { atk: 0.5 }, 'lance'), U('k3b', 'Schwerer Ritter', '+6 Leben, +0,5 Verteidigung', { hp: 6, def: 0.5 })],
+    U('k4', 'Schwarzer Ritter', 'Schwarze Rüstung: +1 Angriff, +0,5 Verteidigung', { atk: 1, def: 0.5 }),
+    U('k5', 'Ordensritter', '+1 Bewegung, heilt jede Runde 2', { move: 1, regen: 2 }),
+  ],
+  archer: [
+    U('a1', 'Eibenbogen', '+0,5 Angriff', { atk: 0.5 }),
+    U('a2', 'Lederkappe', '+3 Leben', { hp: 3 }),
+    [U('a3a', 'Langbogenschütze', 'Riesiger Langbogen: +1 Reichweite', { range: 1 }), U('a3b', 'Brandpfeile', '+1 Angriff, Flächenschaden 25 %', { atk: 1 }, 'fire')],
+    U('a4', 'Waldläufer', '+1 Bewegung', { move: 1 }),
+    U('a5', 'Meisterschütze', '+1 Angriff, +0,5 Verteidigung', { atk: 1, def: 0.5 }),
+  ],
+  mage: [
+    U('m1', 'Kristallstab', '+3 Leben', { hp: 3 }),
+    U('m2', 'Robe der Weisen', '+0,5 Verteidigung', { def: 0.5 }),
+    [U('m3a', 'Kriegsmagier', 'Feuerkugel: +2 Angriff, +1 Reichweite', { atk: 2, range: 1 }), U('m3b', 'Heiliger Hüter', 'Schutzaura 1 Feld weiter', {}, 'wideaura')],
+    U('m4', 'Elixier', 'Heilt 3 mehr', {}, 'greatheal'),
+    U('m5', 'Erzmagier', '+1 Angriff, +1 Verteidigung', { atk: 1, def: 1 }),
+  ],
+  basilisk: [
+    U('b1', 'Härtere Schuppen', '+0,5 Verteidigung', { def: 0.5 }),
+    U('b2', 'Giftzahn', '+1 Angriff', { atk: 1 }),
+    [U('b3a', 'Gorgonenblick', '+1 Reichweite', { range: 1 }), U('b3b', 'Panzerechse', '+8 Leben', { hp: 8 })],
+    U('b4', 'Flinke Läufe', '+1 Bewegung', { move: 1 }),
+    U('b5', 'Urbasilisk', '+1 Angriff, +6 Leben', { atk: 1, hp: 6 }),
+  ],
+  catapult: [
+    U('c1', 'Spannwerk', '+0,5 Angriff', { atk: 0.5 }),
+    U('c2', 'Eisenbeschlag', '+4 Leben', { hp: 4 }),
+    [U('c3a', 'Präzisionswurf', '+1,5 Angriff, kein Flächenschaden', { atk: 1.5 }, 'precise'), U('c3b', 'Streugeschosse', 'Flächenschaden +25 Prozentpunkte', {}, 'fire')],
+    U('c4', 'Feldlafette', '+1 Bewegung', { move: 1 }),
+    U('c5', 'Schnellladung', '+1 Angriff, darf nach dem Ziehen schießen', { atk: 1 }, 'mobile'),
+  ],
+  trebuchet: [
+    U('t1', 'Verstärkter Arm', '+1 Angriff', { atk: 1 }),
+    U('t2', 'Schutzschirm', '+5 Leben, +0,5 Verteidigung', { hp: 5, def: 0.5 }),
+    [U('t3a', 'Explosive Geschosse', 'Flächenschaden 40 % auf die Nachbarn', {}, 'blast'), U('t3b', 'Riesenkugeln', '+2 Angriff gegen das Einzelziel', { atk: 2 })],
+    U('t4', 'Bleigegengewicht', '+1 Reichweite', { range: 1 }),
+    U('t5', 'Belagerungsmeister', '+1 Angriff, darf nach dem Ziehen schießen', { atk: 1 }, 'mobile'),
+  ],
+  troll: [
+    U('o1', 'Kriegsbemalung', '+1 Angriff', { atk: 1 }),
+    U('o2', 'Eisenkette', '+8 Leben', { hp: 8 }),
+    [U('o3a', 'Wüterich', 'Trifft auch die Nachbarn des Ziels (30 %)', {}, 'rampage'), U('o3b', 'Steinhaut', '+2 Verteidigung', { def: 2 })],
+    U('o4', 'Trollblut', 'Heilt jede Runde 2 mehr', { regen: 2 }),
+    U('o5', 'Trollkönig', '+2 Angriff, +1 Bewegung', { atk: 2, move: 1 }),
+  ],
+  dragon: [
+    U('g1', 'Drachenpanzer', '+2 Verteidigung', { def: 2 }),
+    U('g2', 'Glutatem', '+3 Angriff', { atk: 3 }),
+    [U('g3a', 'Flammenschwall', 'Feueratem trifft auch die Nachbarn (25 %)', {}, 'fire'), U('g3b', 'Panzerdrache', '+60 Leben', { hp: 60 })],
+    U('g4', 'Sturmschwingen', '+1 Bewegung', { move: 1 }),
+    U('g5', 'Ahnendrache', '+4 Angriff, heilt 4 mehr', { atk: 4, regen: 4 }),
+  ],
+};
+export const UP_INDEX = {};
+for (const [type, tiers] of Object.entries(UNIT_UPS)) tiers.forEach((t, i) => (Array.isArray(t) ? t : [t]).forEach((o) => (UP_INDEX[o.id] = { ...o, type, tier: i })));
+// Kosten je Stufe (Titanen teurer)
+const UP_COST = [[20, 15, 20], [30, 25, 30], [45, 35, 45], [60, 50, 60], [85, 70, 85]];
+export function unitUpCost(type, tier) {
+  const w = type === 'dragon' ? 2.5 : type === 'troll' || type === 'basilisk' ? 1.5 : 1;
+  const [f, wd, o] = UP_COST[tier];
+  return { food: Math.round(f * w), wood: Math.round(wd * w), ore: Math.round(o * w) };
+}
 
 // Fusionsmodus: zwei verschiedene Einheiten in der Fusionsschmiede verschmelzen
 export const FUSION_COST = { wood: 20, ore: 30 };

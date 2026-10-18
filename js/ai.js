@@ -2,11 +2,11 @@
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
 import {
   UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY, structureLimit,
-  costTotal, FUSION_RECIPES,
+  costTotal, FUSION_RECIPES, UNIT_UPS, unitUpCost,
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
-  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, fuseTargets, canBuild, mergeTargets, canPetrify,
+  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, fuseTargets, unitUpOptions, unitUpList, canBuild, mergeTargets, canPetrify,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -438,6 +438,15 @@ function economyAction(state, ctx, P, pid, rng) {
     const resSum = res.food + res.wood + res.ore;
     const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'rotation', 'smelting', 'stirrups', 'keep', 'tactics', 'granary', 'counterweight', 'siegecart', 'alchemy', 'fusion', 'battlements', 'medic', 'enlight', 'blessing', 'guild'].filter((t) => t !== 'guild' || tradeRate(state, pid));
     if (resSum > (wantArmy ? 70 : 35)) {
+      // Einheiten-Entwicklung: die meistgenutzten Einheiten gezielt verbessern (abwechselnd mit normaler Forschung)
+      if (P.smart && rng() < 0.5) {
+        const counts = {};
+        for (const u of ctx.mine) if (UNIT_UPS[u.type]) counts[u.type] = (counts[u.type] || 0) + (u.count || 1);
+        for (const [type] of Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 2)) {
+          const opts = unitUpOptions(state, pid, type);
+          if (opts.length && canAfford(res, unitUpCost(type, unitUpList(state, pid, type).length))) return { type: 'unitUp', unit: type, id: opts[Math.floor(rng() * opts.length)].id };
+        }
+      }
       for (const t of prio) {
         if (techAvailable(state, pid, t) && canAfford(res, TECHS[t].cost)) return { type: 'research', tech: t };
       }

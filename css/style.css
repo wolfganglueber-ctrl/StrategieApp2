@@ -385,3 +385,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .tower-row .bicon { font-size: 18px; width: 34px; }
 .tiles-note { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .tiles-note .ico { width: 18px; height: 18px; }
+/* Forschung: Reiter umbrechen, Einheiten-Entwicklung */
+.tech-tabs { flex-wrap: wrap; }
+.tech-tabs button { flex: 1 1 30%; min-width: 0; }
+.tech-tabs .up-tab { background: rgba(168, 85, 247, 0.1); }
+.tech-tabs .up-tab.active { background: rgba(168, 85, 247, 0.28); border-color: #c084fc; color: #f3e8ff; }
+.up-units { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 5px; margin: 8px 0; }
+.up-unit { display: flex; flex-direction: column; align-items: center; gap: 0; padding: 3px 2px 4px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05); color: inherit; font: inherit; font-size: 12px; }
+.up-unit.active { background: rgba(251, 191, 36, 0.18); border-color: #fcd34d; color: #fde68a; }
+.up-unit small { color: var(--muted); font-size: 10.5px; }
+.up-tree { display: flex; flex-direction: column; gap: 6px; }
+.up-row { display: flex; flex-direction: column; gap: 6px; }
+.up-row.choice { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; position: relative; }
+.up-row.choice .up-card { flex-direction: column; align-items: stretch; text-align: center; }
+.up-row.choice .up-card canvas { align-self: center; }
+.up-card .binfo span { font-size: 12px; }
+.up-card.lost { opacity: 0.35; }
+.up-row.choice .up-card { min-width: 0; padding: 6px; gap: 4px; }
+.up-row.choice .up-card .btn { align-self: center; max-width: 100%; }
+.up-row.choice .up-card .cost { flex-wrap: wrap; justify-content: center; }

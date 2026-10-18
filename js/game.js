@@ -4,7 +4,7 @@ import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
-  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, REGIMENT_MAX, REGIMENT_TYPES, FUSION_COST, fusionResult, BUILDING_FLAT,
+  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, REGIMENT_MAX, REGIMENT_TYPES, FUSION_COST, fusionResult, BUILDING_FLAT, UNIT_UPS, UP_INDEX, unitUpCost,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -75,6 +75,8 @@ export function geoOf(state) {
 function spawnUnit(state, type, owner, idx, ready) {
   const u = { id: state.nextUnitId++, type, owner, idx, hp: 1, moved: !ready, attacked: !ready, acted: false, rank: 1, xp: 0 };
   if (type === 'tower') u.level = 1;
+  const ups = upPerks(state, owner, type);
+  if (ups.length) u.ups = ups;
   u.hp = statsOf(state, u).hp;
   state.units.push(u);
   return u;
@@ -106,6 +108,10 @@ export function statsOf(state, u) {
       }
     }
   }
+  // Einheiten-Entwicklung des Reichs (vor dem Rang, damit Ränge sie mit verstärken)
+  for (const id of unitUpList(state, u.owner, u.type)) {
+    for (const [k, v] of Object.entries(UP_INDEX[id]?.mod || {})) if (k in st) st[k] += v;
+  }
   // Rang und Fähigkeiten
   const r = (u.rank || 1) - 1;
   if (r > 0) {
@@ -129,7 +135,29 @@ export function canPetrify(t) {
 }
 
 export function hasPerk(u, p) {
-  return !!u.perks?.includes(p);
+  return !!u.perks?.includes(p) || !!u.ups?.includes(p);
+}
+
+// Einheiten-Entwicklung: gewählte Stufen eines Spielers für einen Einheitentyp
+export function unitUpList(state, pid, type) {
+  return state.players[pid]?.unitUps?.[type] || [];
+}
+// Mögliche nächste Stufe (eine oder zwei Optionen)
+export function unitUpOptions(state, pid, type) {
+  const tiers = UNIT_UPS[type];
+  if (!tiers) return [];
+  const n = unitUpList(state, pid, type).length;
+  if (n >= tiers.length) return [];
+  return Array.isArray(tiers[n]) ? tiers[n] : [tiers[n]];
+}
+// Sonderfähigkeiten aus der Entwicklung, die alle Einheiten dieses Typs tragen
+function upPerks(state, pid, type) {
+  return unitUpList(state, pid, type).map((id) => UP_INDEX[id]?.perk).filter(Boolean);
+}
+function upMod(state, u, k) {
+  let v = 0;
+  for (const id of unitUpList(state, u.owner, u.type)) v += UP_INDEX[id]?.mod?.[k] || 0;
+  return v;
 }
 
 // Angriffsfaktor aus Fähigkeiten und Flankenbonus
@@ -158,7 +186,8 @@ export function flankers(state, att, def) {
 }
 
 export function splashOf(u) {
-  const base = UNITS[u.type].splash || 0;
+  if (hasPerk(u, 'precise')) return 0;
+  const base = Math.max(UNITS[u.type].splash || 0, hasPerk(u, 'blast') ? 0.4 : 0);
   if (hasPerk(u, 'fire')) return base + 0.25;
   if (hasPerk(u, 'rampage')) return Math.max(base, 0.3);
   return base;
@@ -268,7 +297,7 @@ export function canMove(u) {
   return !u.moved && !u.attacked && !UNITS[u.type].structure;
 }
 export function canAttack(u) {
-  return !u.attacked && !(UNITS[u.type].noMoveAttack && u.moved);
+  return !u.attacked && !(UNITS[u.type].noMoveAttack && u.moved && !hasPerk(u, 'mobile'));
 }
 export function canAct(state, u) {
   if (canMove(u)) return true;
@@ -407,7 +436,9 @@ export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp
   const kill = dmg >= def.hp;
   let counter = 0;
   const geo = geoOf(state);
-  if (!kill && !def.shaken && !def.stone && !def.stoneNow && geo.dist(fromIdx, def.idx) <= unitRange(state, def)) {
+  // Chevalier mit langer Lanze: Nahkämpfer kommen nicht zum Gegenschlag
+  const lance = hasPerk(att, 'lance') && unitRange(state, def) <= 1;
+  if (!kill && !lance && !def.shaken && !def.stone && !def.stoneNow && geo.dist(fromIdx, def.idx) <= unitRange(state, def)) {
     counter = Math.round((dF / tot) * D.def * 4.5 * nd * (inAura(state, att, fromIdx) ? 1 - AURA.reduce : 1));
   }
   return { dmg, counter, kill, die: counter >= attHp };
@@ -609,7 +640,7 @@ export function startTurn(state) {
     if (u.owner !== pid) continue;
     const max = statsOf(state, u).hp;
     // Trolle und zähe Einheiten heilen jede Runde, alle anderen nur nach einer Ruhepause
-    const always = (UNITS[u.type].regen || 0) + (hasPerk(u, 'tough') ? 2 : 0);
+    const always = (UNITS[u.type].regen || 0) + (hasPerk(u, 'tough') ? 2 : 0) + upMod(state, u, 'regen');
     if ((!u.acted || always) && u.hp < max) {
       let h = always;
       if (!u.acted) {
@@ -815,6 +846,26 @@ export function applyAction(state, a) {
       u.acted = true;
       ev.push({ k: 'heal', id: t.id, idx: t.idx, amount: h, by: u.id, from: u.idx });
       if (h > 0) gainXp(state, u, 1, ev); // Zauberer steigen durch Heilen auf
+      break;
+    }
+    case 'unitUp': {
+      // Entwicklung eines Einheitentyps erforschen (gilt sofort für alle Einheiten dieses Typs)
+      const opt = unitUpOptions(state, pid, a.unit).find((o) => o.id === a.id);
+      if (!opt) return null;
+      const tier = unitUpList(state, pid, a.unit).length;
+      const cost = unitUpCost(a.unit, tier);
+      if (!canAfford(player.res, cost)) return null;
+      for (const k of RES) player.res[k] -= cost[k] || 0;
+      const mine = state.units.filter((u) => u.owner === pid && u.type === a.unit);
+      const before = new Map(mine.map((u) => [u, statsOf(state, u).hp]));
+      player.unitUps = { ...(player.unitUps || {}), [a.unit]: [...unitUpList(state, pid, a.unit), opt.id] };
+      const ups = upPerks(state, pid, a.unit);
+      for (const u of mine) {
+        u.ups = ups;
+        // Mehr Lebenspunkte kommen sofort dazu
+        u.hp = Math.min(statsOf(state, u).hp, u.hp + Math.max(0, statsOf(state, u).hp - before.get(u)));
+      }
+      ev.push({ k: 'unitUp', pid, unit: a.unit, id: opt.id });
       break;
     }
     case 'perk': {

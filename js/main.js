@@ -5,7 +5,7 @@ import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
   incomeOf, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
-  perkOptions, flankers, canBuild, mergeTargets, canSplit, fuseTargets, splashDamage, splashOf, castleOf, defenseMult,
+  perkOptions, flankers, canBuild, mergeTargets, unitUpList, unitUpOptions, canSplit, fuseTargets, splashDamage, splashOf, castleOf, defenseMult,
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
@@ -13,7 +13,7 @@ import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
-  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, CENTER_YIELD, MAX_SLOTS, BUILDING_FLAT, FUSION_COST, FUSION_RECIPES, fusionResult,
+  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, CENTER_YIELD, MAX_SLOTS, BUILDING_FLAT, FUSION_COST, FUSION_RECIPES, fusionResult, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
 import { store } from './storage.js';
@@ -669,11 +669,24 @@ function openTech() {
     const pid = humanId();
     const p = S.players[pid];
     const my = humanTurn();
-    const tabs = el('div', { class: 'ptabs' });
+    const tabs = el('div', { class: 'ptabs tech-tabs' });
     for (const [k, label] of TECH_BRANCHES) {
       const done = techList().filter((t) => TECHS[t].branch === k && hasTech(S, pid, t)).length;
       const all = techList().filter((t) => TECHS[t].branch === k).length;
       tabs.append(el('button', { class: techBranch === k ? 'active' : '', onclick: () => { techBranch = k; draw(); } }, `${label} ${done}/${all}`));
+    }
+    // Reiter für die Einheiten-Entwicklung
+    for (const [k, label, types] of UP_GROUPS) {
+      const done = types.reduce((a, t) => a + unitUpList(S, pid, t).length, 0);
+      tabs.append(el('button', { class: 'up-tab' + (techBranch === k ? ' active' : ''), onclick: () => { techBranch = k; draw(); } }, `${label} ${done}/${types.length * 5}`));
+    }
+    const group = UP_GROUPS.find((g) => g[0] === techBranch);
+    if (group) {
+      openClosable(el('h2', {}, '🔬 Forschung'), el('p', {}, 'Einheiten-Entwicklung: Jede Stufe gilt für alle Einheiten dieses Typs und verändert ihr Aussehen. Auf Stufe 3 wählst du eine von zwei Richtungen.'), tabs,
+        unitUpView(group[2], pid, my, () => { const top = $('modalBox').scrollTop; draw(); $('modalBox').scrollTop = top; }),
+        el('button', { class: 'btn big', onclick: closeModal }, 'Schließen'));
+      $('modalBox').classList.add('wide');
+      return;
     }
     const list = el('div', { class: 'tech-list' });
     for (const t of techList().filter((x) => TECHS[x].branch === techBranch)) {
@@ -699,6 +712,42 @@ function openTech() {
     $('modalBox').classList.add('wide');
   };
   draw();
+}
+
+// Einheiten-Entwicklung: Einheit wählen, darunter ihre 5 Stufen mit Vorschau des Aussehens
+let upUnit = null;
+function unitUpView(types, pid, my, redraw) {
+  if (!types.includes(upUnit)) upUnit = types[0];
+  const p = S.players[pid];
+  const chips = el('div', { class: 'up-units' });
+  for (const t of types) {
+    chips.append(el('button', { class: 'up-unit' + (t === upUnit ? ' active' : ''), onclick: () => { upUnit = t; redraw(); } },
+      iconCanvas(t, pid, 46, 1, unitUpList(S, pid, t)), el('span', {}, UNITS[t].name), el('small', {}, `${unitUpList(S, pid, t).length}/5`)));
+  }
+  const have = unitUpList(S, pid, upUnit);
+  const box = el('div', { class: 'up-tree' });
+  UNIT_UPS[upUnit].forEach((tier, i) => {
+    const opts = Array.isArray(tier) ? tier : [tier];
+    const row = el('div', { class: 'up-row' + (opts.length > 1 ? ' choice' : '') });
+    for (const o of opts) {
+      const done = have[i] === o.id;
+      const lost = have.length > i && !done; // andere Richtung gewählt
+      const next = have.length === i;
+      const cost = unitUpCost(upUnit, i);
+      const preview = [...have.slice(0, i), o.id];
+      row.append(el('div', { class: 'tech-card up-card' + (done ? ' done' : lost ? ' lost' : next ? '' : ' locked') },
+        iconCanvas(upUnit, pid, 52, 1, preview),
+        el('div', { class: 'binfo' }, el('b', {}, `${i + 1}. ${o.name}`), el('span', {}, o.desc)),
+        done ? el('span', { class: 'done' }, '✓')
+          : lost ? el('span', { class: 'lock' }, '—')
+          : el('button', {
+            class: 'btn small', disabled: !next || !my || !canAfford(p.res, cost),
+            onclick: () => { if (quickAct({ type: 'unitUp', unit: upUnit, id: o.id }, false)) redraw(); },
+          }, costEl(cost, p.res))));
+    }
+    box.append(row);
+  });
+  return el('div', {}, chips, box);
 }
 
 // Knopf, der beim Gedrückthalten immer schneller wiederholt
@@ -1035,6 +1084,13 @@ async function playEvent(ev, f, isAI, pan = true) {
       R.floatText(ev.idx, ev.tower ? `Turm Stufe ${ev.level}` : CITY_NAMES[ev.level], '#fde047', 1000 * f);
       await pause(isAI ? 300 : 150);
       break;
+    case 'unitUp':
+      if (S.players[ev.pid].human) {
+        sound.play('fanfare', { vol: 0.7 });
+        toast(`⬆ ${UNITS[ev.unit].name}: ${UP_INDEX[ev.id].name}`);
+        R.sprites = new Map(); // neues Aussehen
+      }
+      break;
     case 'research':
       if (S.players[ev.pid].human) sound.play('chime');
       if (S.players[ev.pid].human) toast(`Erforscht: ${TECHS[ev.tech].icon} ${TECHS[ev.tech].name}`);
@@ -1177,7 +1233,7 @@ function updateHud() {
   $('btnEnd').classList.toggle('pulse', my && !busy && !playerHasActions(S, S.current));
 }
 
-function iconCanvas(type, owner, px = 44, level) {
+function iconCanvas(type, owner, px = 44, level, ups = S && owner >= 0 ? unitUpList(S, owner, type) : []) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const c = document.createElement('canvas');
   c.width = c.height = Math.round(px * dpr);
@@ -1185,7 +1241,7 @@ function iconCanvas(type, owner, px = 44, level) {
   c.className = 'fig';
   const ctx = c.getContext('2d');
   ctx.scale(dpr, dpr);
-  R.drawPreview(ctx, type, owner, px / 2, type === 'tower' ? px * 0.8 : px * 0.62, type === 'tower' ? px * 0.8 : px, level);
+  R.drawPreview(ctx, type, owner, px / 2, type === 'tower' ? px * 0.8 : px * 0.62, type === 'tower' ? px * 0.8 : px, level, ups);
   return c;
 }
 
@@ -1966,6 +2022,9 @@ function renderHelp() {
     <p>Katapulte sind Belagerungswaffen: Gegen Städte, Türme und Wälle machen sie vollen Schaden, gegen Truppen im offenen Feld nur 60 %. Sie treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Gegenmittel: Reiter und Ritter, denn Katapulte haben keine Verteidigung und können nach einer Bewegung nicht schießen. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +10 % (höchstens +30 %): Einkesseln lohnt sich.</p>
     <h3>Schwarzer Troll</h3>
     <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel und braucht eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
+    <h3>Einheiten-Entwicklung ⬆</h3>
+    <p>Im Forschungsfenster gibt es neben Militär, Wirtschaft und Verteidigung die Reiter <b>Nahkämpfer</b>, <b>Fernkämpfer</b>, <b>Katapulte</b> und <b>Titanen</b>. Dort wählst du eine Einheit und entwickelst sie in 5 Stufen weiter – das gilt sofort für alle Einheiten dieses Typs, auch für die schon aufgestellten. Auf Stufe 3 entscheidest du dich für eine von zwei Richtungen (z. B. Ritter → Chevalier mit extralanger Lanze oder Schwerer Ritter; Tribok → explosive Geschosse oder Riesenkugeln). So spezialisierst du dein Heer auf wenige starke Einheiten.</p>
+    <p>Jede Stufe sieht man: goldene Steine am Sockel zählen die Stufen, neue Ausrüstung (Helm, Lanze, größerer Schild, zweites Schwert, Brandpfeile, Sprengbomben …), ab Stufe 4 schwarze Rüstung und auf Stufe 5 eine goldene Aura.</p>
     <h3>Fusion ⚗️</h3>
     <p>Im Hauptmenü (oder beim Freien Spiel) schaltest du die <b>Fusion</b> ein – sie gilt dann für neue Spiele in Kampagne und Freiem Spiel. Dann gibt es im Entwicklungsbaum (Wirtschaft) die Forschungen <b>Alchemie</b> (nach Baukunst und Plattenrüstung) und <b>Fusionskunst</b> (nach Alchemie und Gegengewicht) – ein langer, teurer Weg. Danach baust du in einer Stadt ab Stufe 4 die <b>Fusionsschmiede</b> (eine im Reich).</p>
     <p>Stehen zwei <b>verschiedene</b> eigene Einheiten nebeneinander (überall auf der Karte, alle Einheiten bis zum Drachen), beide noch unbewegt, wählst du „⚗️ Verschmelzen“ und tippst die Partnerin an. Beide gehen in einer stärkeren Fusionseinheit auf (kostet ${costText(FUSION_COST)}, eine Fusion pro Runde, doppelter Unterhalt). Es gibt ${Object.keys(FUSION_RECIPES).length} feste Rezepte – welche, verrät das 📖 Rezeptbuch im Pause-Menü erst, wenn du sie entdeckt hast. Jedes andere Paar ergibt eine wilde <b>Chimäre</b> mit gemischten Werten (+20 %). Fusionseinheiten lassen sich nicht weiter verschmelzen, sammeln aber Stufen und Spezialisierungen wie alle anderen.</p>

@@ -487,12 +487,14 @@ export class Renderer {
 
   // Figuren werden einmal pro Typ/Farbe/Zoomstufe in einen Puffer gezeichnet
   sprite(type, owner, exhausted, level, stone = false) {
+    // Aussehen je nach Einheiten-Entwicklung des Besitzers
+    const ups = this.state?.players[owner]?.unitUps?.[type] || [];
     const k = Math.max(0.5, Math.round(this.cam.z * this.dpr * 4) / 4) * (HEX / 40) * FIG;
     if (this.spriteScale !== k) {
       this.sprites = new Map();
       this.spriteScale = k;
     }
-    const key = type + owner + (exhausted ? 'x' : '') + (stone ? 's' : '') + (level || '');
+    const key = type + owner + (exhausted ? 'x' : '') + (stone ? 's' : '') + (level || '') + ups.join('');
     let sp = this.sprites.get(key);
     if (sp) return sp;
     const base = PLAYER_COLORS[owner] || NEUTRAL_COLOR;
@@ -506,7 +508,7 @@ export class Renderer {
     raw.height = H;
     const rc = raw.getContext('2d');
     rc.setTransform(k, 0, 0, k, B.left * k, B.top * k);
-    drawFigure(rc, type, col, level);
+    drawFigure(rc, type, col, level, false, { stage: ups.length, ups: new Set(ups) });
     // Plastische Beleuchtung: Licht von links oben, Schatten nach rechts unten
     rc.setTransform(1, 0, 0, 1, 0, 0);
     rc.globalCompositeOperation = 'source-atop';
@@ -776,12 +778,12 @@ export class Renderer {
   }
 
   // Vorschaubild einer Figur für Menüs/Panels
-  drawPreview(ctx, type, owner, cx, cy, size, level) {
+  drawPreview(ctx, type, owner, cx, cy, size, level, ups = []) {
     const k = size / 60;
     ctx.save();
     ctx.translate(cx, cy + size * 0.22);
     ctx.scale(k, k);
-    drawFigure(ctx, type, PLAYER_COLORS[owner] || NEUTRAL_COLOR, level);
+    drawFigure(ctx, type, PLAYER_COLORS[owner] || NEUTRAL_COLOR, level, false, { stage: ups.length, ups: new Set(ups) });
     ctx.restore();
   }
 
