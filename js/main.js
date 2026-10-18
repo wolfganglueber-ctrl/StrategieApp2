@@ -82,7 +82,7 @@ function levelConfig(level) {
 }
 
 function startLevel(level) {
-  S = createGame(levelConfig(level));
+  S = createGame({ ...levelConfig(level), fusion: !!settings.fusion });
   S.meta = { mode: 'level', levelId: level.id };
   enterGame();
   if (level.id === 1 || !store.progress().seenIntro) showIntro();
@@ -1857,6 +1857,7 @@ function renderLevels() {
 
 // ---------------------------------------------------------------- Freies Spiel
 const setup = Object.assign({ size: 'M', biome: 'mixed', enemies: 1, diff: 3, fog: false, code: randomSeedCode() }, store.lastSetup() || {});
+setup.fusion = !!settings.fusion;
 
 function renderSetup() {
   const seg = (id, options, key) => {
@@ -1872,6 +1873,7 @@ function renderSetup() {
   seg('segDiff', DIFFICULTIES.map((d) => [d.level, String(d.level)]), 'diff');
   seg('segFog', [[false, 'Aus'], [true, 'An']], 'fog');
   seg('segFusion', [[false, 'Aus'], [true, 'An']], 'fusion');
+  if (setup.fusion !== !!settings.fusion) { settings.fusion = !!setup.fusion; store.saveSettings(settings); updateFusionBtn(); }
   const d = DIFFICULTIES[setup.diff - 1];
   $('diffDesc').textContent = `${d.name}: ${d.desc}`;
   $('seedInput').value = setup.code;
@@ -1957,7 +1959,7 @@ function renderHelp() {
     <h3>Schwarzer Troll</h3>
     <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel und braucht eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
     <h3>Fusion ⚗️</h3>
-    <p>Im Freien Spiel kannst du die <b>Fusion</b> einschalten. Dann gibt es im Entwicklungsbaum (Wirtschaft) die Forschungen <b>Alchemie</b> (nach Baukunst und Plattenrüstung) und <b>Fusionskunst</b> (nach Alchemie und Gegengewicht) – ein langer, teurer Weg. Danach baust du in einer Stadt ab Stufe 4 die <b>Fusionsschmiede</b> (eine im Reich).</p>
+    <p>Im Hauptmenü (oder beim Freien Spiel) schaltest du die <b>Fusion</b> ein – sie gilt dann für neue Spiele in Kampagne und Freiem Spiel. Dann gibt es im Entwicklungsbaum (Wirtschaft) die Forschungen <b>Alchemie</b> (nach Baukunst und Plattenrüstung) und <b>Fusionskunst</b> (nach Alchemie und Gegengewicht) – ein langer, teurer Weg. Danach baust du in einer Stadt ab Stufe 4 die <b>Fusionsschmiede</b> (eine im Reich).</p>
     <p>Stehen zwei <b>verschiedene</b> eigene Einheiten nebeneinander, beide noch unbewegt, und die angetippte Partnerin höchstens 2 Felder von der Schmiede entfernt, wählst du „⚗️ Verschmelzen“ und tippst die Partnerin an. Beide gehen in einer stärkeren Fusionseinheit auf (kostet ${costText(FUSION_COST)}, eine Fusion pro Runde, doppelter Unterhalt). Es gibt ${Object.keys(FUSION_RECIPES).length} feste Rezepte – welche, verrät das 📖 Rezeptbuch im Pause-Menü erst, wenn du sie entdeckt hast. Jedes andere Paar ergibt eine wilde <b>Chimäre</b> mit gemischten Werten (+20 %). Fusionseinheiten lassen sich nicht weiter verschmelzen, sammeln aber Stufen und Spezialisierungen wie alle anderen.</p>
     <h3>Tribok</h3>
     <p>Die schwerste Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einzelnes Feld mit vollem Schaden (kein Flächenschaden, kein Abschlag gegen Truppen), kann aber nicht auf direkte Nachbarn schießen und nicht nach einer Bewegung. Braucht eine Werkstatt und die Forschung <b>Gegengewicht</b> (nach Ballistik), ohne Mengenbegrenzung, Unterhalt 1 Nahrung + 1 Holz. Ideal, um Burgverteidiger aus sicherer Entfernung zu treffen.</p>
@@ -1985,6 +1987,16 @@ $('btnSkirmish').addEventListener('click', () => { renderSetup(); showScreen('sc
 $('btnHelp').addEventListener('click', () => { renderHelp(); showScreen('scrHelp'); });
 $('btnSettings').addEventListener('click', () => openSettings(() => { if (!$('scrLevels').classList.contains('hidden')) renderLevels(); }));
 $('btnLoad').addEventListener('click', () => openSlots('load'));
+// Fusionsmodus im Hauptmenü an/aus (gilt für neue Spiele: Kampagne und Freies Spiel)
+function updateFusionBtn() { $('btnFusion').textContent = `⚗️ Fusion: ${settings.fusion ? 'An' : 'Aus'}`; $('btnFusion').classList.toggle('primary', !!settings.fusion); }
+$('btnFusion').addEventListener('click', () => {
+  settings.fusion = !settings.fusion;
+  store.saveSettings(settings);
+  setup.fusion = settings.fusion;
+  updateFusionBtn();
+  toast(settings.fusion ? '⚗️ Fusion an: In neuen Spielen erforschst du Alchemie → Fusionskunst und baust die Fusionsschmiede.' : 'Fusion aus.', 3500);
+});
+updateFusionBtn();
 $('btnContinue').addEventListener('click', () => {
   const g = store.savedGame();
   if (!g || g.v !== STATE_VERSION) { store.clearGame(); $('btnContinue').classList.add('hidden'); return; }
