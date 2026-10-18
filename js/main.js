@@ -255,7 +255,20 @@ async function doGroupMove(target) {
   for (const e of events) if (e.k === 'move') longest = Math.max(longest, R.animateMove(e.id, e.path, 100));
   await sleep(longest);
   busy = false;
+  groupDone('move');
   refresh();
+}
+
+// Gruppe automatisch auflösen, sobald sie gezogen und angegriffen hat oder niemand mehr etwas tun kann
+function groupDone(kind) {
+  if (!sel.group) return;
+  sel.groupDid = { ...(sel.groupDid || {}), [kind]: true };
+  const occ = buildOcc(S);
+  const busyLeft = groupUnits().some((u) => canMove(u) || (canAttack(u) && unitTargets(u, occ).length));
+  if ((sel.groupDid.move && sel.groupDid.attack) || !busyLeft) {
+    clearSel();
+    toast('👥 Gruppe aufgelöst.');
+  }
 }
 
 async function doGroupAttack(target) {
@@ -286,6 +299,7 @@ async function doGroupAttack(target) {
   }
   if (!unitById(S, target.id)) toast('Ziel besiegt.');
   busy = false;
+  groupDone('attack');
   refresh();
   if (S.over) gameOver();
 }
@@ -2067,7 +2081,7 @@ function renderHelp() {
     Einheiten, die noch etwas tun können, haben einen leuchtenden Ring.</p>
     <h3>Gemeinsam angreifen 👥</h3>
     <p>Wähle eine Einheit und tippe auf „👥 Alle in der Nähe“ (alle eigenen Einheiten im Umkreis) oder „👥 Alle Ritter“ usw. (nur gleiche Einheiten im Umkreis); am PC geht auch Shift + Klick. Danach ist der Gruppenmodus aktiv. Weitere eigene Einheiten fügst du per Tipp hinzu oder nimmst sie wieder heraus.
-    Ein Tipp auf einen Gegner: Alle greifen nacheinander an und rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt. Zauberer ziehen mit, greifen aber nicht automatisch an (sie heilen lieber). Die Gruppe bleibt danach gewählt – tippe einfach den nächsten Gegner an. Ein Tipp auf ein hell markiertes Feld bewegt die Gruppe, ein Tipp auf ein anderes leeres Feld (oder „Auflösen“) beendet sie. Das Gruppenmenü unten bleibt bewusst klein: „+ Umgebung“, „+ Ritter“ usw. (nur Einheiten vom Typ der zuerst gewählten) und „Auflösen“.</p>
+    Ein Tipp auf einen Gegner: Alle greifen nacheinander an und rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt. Zauberer ziehen mit, greifen aber nicht automatisch an (sie heilen lieber). Hat die Gruppe gezogen und angegriffen (oder kann niemand mehr etwas tun), löst sie sich automatisch auf; sonst bleibt sie gewählt – tippe einfach den nächsten Gegner an. Ein Tipp auf ein hell markiertes Feld bewegt die Gruppe, ein Tipp auf ein anderes leeres Feld (oder „Auflösen“) beendet sie. Das Gruppenmenü unten bleibt bewusst klein: „+ Umgebung“, „+ Ritter“ usw. (nur Einheiten vom Typ der zuerst gewählten) und „Auflösen“.</p>
     <h3>Angreifen</h3>
     <p>Wählst du eine Einheit, zeigen rote Felder alle Ziele. Die Blase über dem Ziel nennt den Schaden (↩ = Gegenschlag, ✖ = Ziel wird besiegt). Ein Tipp auf das Ziel greift an.
     Nahkämpfer rücken nach einem Sieg auf das Feld vor.<br>
