@@ -26,7 +26,7 @@ export const UNITS = {
   tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 2, def: 3, move: 0, range: 1, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
   mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5 }, hp: 10, atk: 1, def: 1, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben bekommen 25 % weniger Schaden, Flächenschaden halbiert. Heilt statt anzugreifen, bis 3 Felder weit. Höchstens einer pro Stadt.' },
   troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 7, def: 5, move: 2, range: 1, supply: 3, regen: 3, perRealm: 5, needs: 'lair', desc: 'Ein Titan: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben. Braucht eine Trollhöhle, höchstens 5 pro Reich.' },
-  dragon: { name: 'Drache', cost: { food: 500, wood: 300, ore: 700 }, hp: 300, atk: 12, def: 10, move: 5, range: 1, supply: 3, regen: 6, perRealm: 1, flying: true, splash: 0.4, arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten, Feueratem trifft auch Gegner neben dem Ziel, heilt jede Runde 6 Leben. Ein Endgegner – extrem mächtig und extrem teuer; Schützen und Türme treffen ihn härter (+60 %). Bei Rang 3 und 5 je drei Fähigkeiten zur Wahl. Einer pro Reich.' },
+  dragon: { name: 'Drache', cost: { food: 150, wood: 150, ore: 150 }, hp: 300, atk: 12, def: 10, move: 5, range: 1, supply: 3, regen: 6, perRealm: 1, flying: true, splash: 0.4, arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten, Feueratem trifft auch Gegner neben dem Ziel, heilt jede Runde 6 Leben. Ein Endgegner – extrem mächtig und extrem teuer; Schützen und Türme treffen ihn härter (+60 %). Bei Rang 3 und 5 je drei Fähigkeiten zur Wahl. Einer pro Reich.' },
   barrier: { name: 'Steinwall', cost: { wood: 6, ore: 14 }, hp: 50, atk: 0, def: 6, move: 0, range: 0, structure: true, desc: 'Sehr stabiles Wallstück, blockiert den Weg. Im Stadtgebiet setzen; benachbarte Wallstücke verbinden sich zu einer Mauer und lenken den Gegner.' },
   basilisk: { name: 'Basilisk', cost: { food: 18, wood: 8, ore: 16 }, hp: 28, atk: 3, def: 3, move: 3, range: 2, supply: 2, perRealm: 2, petrify: true, needs: 'nest', desc: 'Versteinernder Blick aus 2 Feldern: Das Ziel setzt seinen nächsten Zug aus und schlägt nicht zurück (Troll und Drache sind immun). Höchstens 2 pro Reich.' },
   trebuchet: { name: 'Tribok', cost: { food: 4, wood: 24, ore: 16 }, hp: 14, atk: 5, def: 0, move: 1, range: 5, minRange: 2, noMoveAttack: true, upkeep: { food: 1, wood: 1 }, needs: 'workshop', tech: 'counterweight', desc: 'Schwere Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einziges Feld (kein Flächenschaden), aber nicht direkt daneben und nicht nach Bewegung. Braucht Werkstatt und die Forschung Gegengewicht.' },
@@ -50,18 +50,12 @@ export function moveCap(type) {
 }
 export const MELEE = ['warrior', 'rider', 'defender', 'knight'];
 export const FOOT = ['warrior', 'archer', 'defender', 'mage'];
-// Ränge 1–5: Erfahrung aus Kämpfen oder Ausbilden in einer Stadt mit Kaserne
-export const RANK_NAMES = ['', 'Rekrut', 'Soldat', 'Veteran', 'Elite', 'Held'];
-export const RANK_XP = [0, 0, 3, 7, 12, 18];
-export const RANK_BONUS = { hp: 0.15, atk: 0.1, def: 0.1 };
-export const MAX_RANK = 5;
-// Ausbilden kostet pro Rang einen Teil der Einheitenkosten
-export function trainCost(type, rank) {
-  const c = {};
-  for (const [k, v] of Object.entries(UNITS[type].cost)) c[k] = Math.ceil(v * 0.2 * rank);
-  return c;
-}
-// Fähigkeiten: bei Rang 3 und 5 eine von zweien wählen
+// Ränge: je 5 besiegte Gegner eine Stufe (höchstens 3), jede Stufe bringt eine Spezialisierung – überall, für alle Einheiten
+export const RANK_NAMES = ['', 'Rekrut', 'Veteran', 'Elite', 'Held'];
+export const RANK_XP = [0, 0, 5, 10, 15]; // Siege bis zur Stufe
+export const RANK_BONUS = { hp: 0.2, atk: 0.15, def: 0.15 };
+export const MAX_RANK = 4;
+// Spezialisierungen: bei jeder Stufe eine von mehreren wählen
 export const PERKS = {
   charge: { name: 'Sturmangriff', icon: '🐗', desc: '+30 % Angriff, wenn die Einheit in diesem Zug gezogen ist' },
   shieldwall: { name: 'Schildwall', icon: '🛡️', desc: '+30 % Verteidigung' },
@@ -87,7 +81,7 @@ export const PERK_CHOICES = {
   basilisk: [['hunter', 'tough'], ['swift', 'siege']],
   dragon: [['fire', 'tough', 'swift'], ['siege', 'charge', 'hunter']],
 };
-export const PERK_RANKS = [3, 5];
+export const PERK_RANKS = [2, 3, 4];
 export const FLANK_BONUS = 0.1;
 export const FLANK_MAX = 3;
 export const CAVALRY = ['rider', 'knight'];
@@ -165,7 +159,7 @@ export const BUILDINGS = {
   farm: { art: 'einen', name: 'Bauernhof', icon: '🌾', cost: { wood: 4 }, desc: '+3 Nahrung' },
   lumber: { art: 'einen', name: 'Holzfäller', icon: '🌲', cost: { food: 4 }, desc: '+1 Holz, +1 je Wald im Gebiet' },
   mine: { art: 'eine', name: 'Mine', icon: '⛏️', cost: { food: 4, wood: 4 }, desc: '+2 Erz, +2 je Hügel/Berg im Gebiet' },
-  barracks: { art: 'eine', name: 'Kaserne', icon: '🛡️', cost: { wood: 6, ore: 4 }, desc: 'Ritter möglich, neue Einheiten können sofort ziehen, Einheiten in der Stadt ausbilden (Rang +1)' },
+  barracks: { art: 'eine', name: 'Kaserne', icon: '🛡️', cost: { wood: 6, ore: 4 }, desc: 'Ritter möglich, neue Einheiten können sofort ziehen' },
   workshop: { art: 'eine', name: 'Werkstatt', icon: '⚙️', cost: { wood: 8, ore: 4 }, desc: 'Katapulte möglich' },
   wall: { art: 'eine', name: 'Mauer', icon: '🧱', cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt ×2,2' },
   sanctum: { art: 'einen', name: 'Turm der Weisen', icon: '🔮', cost: { wood: 6, ore: 6 }, desc: 'Zauberer möglich' },

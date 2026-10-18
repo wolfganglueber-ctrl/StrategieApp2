@@ -2,11 +2,11 @@
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
 import {
   UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY, structureLimit,
-  trainCost, costTotal,
+  costTotal,
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
-  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, canTrain, unitCount, canBuild, mergeTargets, canPetrify,
+  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, canBuild, mergeTargets, canPetrify,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -368,12 +368,6 @@ function economyAction(state, ctx, P, pid, rng) {
   if (P.smart) {
     const t = tradeAction(state, pid);
     if (t && rng() < 0.8) return t;
-  }
-  // Ausbilden: wertvolle Einheiten, die in einer Stadt mit Kaserne stehen und noch nichts getan haben
-  if (P.upgrade > 0 && !saveTroll && rng() < P.upgrade) {
-    const resSum = res.food + res.wood + res.ore;
-    const cand = ctx.mine.filter((u) => !canTrain(state, u)).sort((a, b) => baseValue(b) - baseValue(a));
-    if (cand.length && resSum - costTotal(trainCost(cand[0].type, cand[0].rank || 1)) > (wantArmy ? 30 : 10)) return { type: 'train', unitId: cand[0].id };
   }
 
   // Wirtschaft: Gebäude und Ausbau, wenn keine akute Gefahr

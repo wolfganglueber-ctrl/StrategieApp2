@@ -686,7 +686,7 @@ export class Renderer {
         ctx.stroke();
       }
     }
-    // Fähigkeit wählbar oder Ausbilden möglich: goldener Schimmer, Aufblinken und aufsteigende Funken
+    // Spezialisierung wählbar: goldener Schimmer, Aufblinken und aufsteigende Funken
     if (this.overlay.upgrade?.has(u.id)) {
       const p = 0.5 + 0.5 * Math.sin(now / 260);
       ctx.strokeStyle = `rgba(253,224,71,${0.4 + p * 0.5})`;

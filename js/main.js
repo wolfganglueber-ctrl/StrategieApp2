@@ -5,7 +5,7 @@ import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
   incomeOf, unitCount, upkeepTotal, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
-  perkOptions, canTrain, flankers, canBuild, mergeTargets, canSplit, castleOf, defenseMult,
+  perkOptions, flankers, canBuild, mergeTargets, canSplit, castleOf, defenseMult,
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
@@ -13,7 +13,7 @@ import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
-  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, trainCost, moveCap, TRADE_RATE,
+  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
 import { store } from './storage.js';
@@ -325,8 +325,8 @@ function refresh() {
         o.ready.add(u.id);
         if (u.moved) (o.partial ||= new Set()).add(u.id); // schon gezogen, kann aber noch angreifen
       }
-      // Fähigkeit wählbar oder Ausbilden möglich: Einheit schimmert
-      if (perkOptions(u).length || !canTrain(S, u)) (o.upgrade ||= new Set()).add(u.id);
+      // Spezialisierung wählbar: Einheit schimmert
+      if (perkOptions(u).length) (o.upgrade ||= new Set()).add(u.id);
     }
   }
   const u = sel.unitId != null ? unitById(S, sel.unitId) : null;
@@ -485,7 +485,7 @@ function unitNotes(u) {
   if (UNITS[u.type].healer) notes.push(`Heilt ${healAmount(S, u)} Leben bis 3 Felder weit.`);
   if (!UNITS[u.type].structure) {
     const r = u.rank || 1;
-    notes.push(r < MAX_RANK ? `Erfahrung ${u.xp || 0}/${RANK_XP[r + 1]} bis ${RANK_NAMES[r + 1]}.` : 'Höchster Rang.');
+    notes.push(r < MAX_RANK ? `${UNITS[u.type].healer ? 'Heilungen' : 'Besiegte Gegner'}: ${u.xp || 0}/${RANK_XP[r + 1]} bis ${RANK_NAMES[r + 1]}.` : 'Höchste Stufe erreicht.');
   }
   for (const p of u.perks || []) notes.push(`${PERKS[p].icon} ${PERKS[p].name}: ${PERKS[p].desc}.`);
   if (u.sentry) notes.push('💤 Hält Wache.');
@@ -1105,7 +1105,11 @@ function updateHud() {
     bar.append(el('button', { class: 'pill', title: `${RES_INFO[k].name}: Ertrag pro Runde nach Abzug von ${up} Unterhalt für die Armee – tippen zum Handeln`, onclick: () => openTrade(k) },
       icon(k), el('b', {}, human.res[k]), el('small', { class: inc[k] < 0 ? 'neg' : '' }, inc[k] < 0 ? `${inc[k]}` : `+${inc[k]}`)));
   }
+  // Armee-Unterhalt pro Runde neben der Einheitenzahl
+  const up = upkeepTotal(S, human.id);
   $('unitText').textContent = `${unitCount(S, human.id)}`;
+  $('upkeepText').textContent = `−${up.food}`;
+  $('upkeepWood').textContent = up.wood ? ` −${up.wood}🪵` : '';
   const nAvail = TECH_ORDER.filter((t) => techAvailable(S, human.id, t) && canAfford(human.res, TECHS[t].cost)).length;
   $('techText').textContent = human.tech.length;
   $('techBadge').textContent = nAvail;
@@ -1424,20 +1428,14 @@ function renderPanelContent(panel) {
     if (!UNITS[u.type].structure && u.owner === S.current) {
       const opts = perkOptions(u);
       if (opts.length) {
-        panel.append(el('div', { class: 'note' }, `⭐ ${RANK_NAMES[u.rank]}! Wähle eine Fähigkeit:`));
+        panel.append(el('div', { class: 'note' }, `⭐ ${RANK_NAMES[u.rank]}! Wähle eine Spezialisierung:`));
         panel.append(el('div', { class: 'perk-row' }, ...opts.map((p) => el('button', { class: 'btn small perk', onclick: () => act({ type: 'perk', unitId: u.id, perk: p }) },
           el('b', {}, `${PERKS[p].icon} ${PERKS[p].name}`), el('span', { class: 'muted' }, PERKS[p].desc)))));
       }
-      const why = canTrain(S, u);
-      const r = u.rank || 1;
       const actions = el('div', { class: 'unit-actions' },
         el('button', { class: 'btn small', title: 'Alle eigenen Einheiten in der Nähe ziehen und greifen gemeinsam an', onclick: () => groupNearby(u, false) }, '👥 Alle in der Nähe'),
         el('button', { class: 'btn small', title: `Alle ${UNITS[u.type].name} in der Nähe ziehen und greifen gemeinsam an`, onclick: () => groupNearby(u, true) }, `👥 Alle ${UNITS[u.type].name}`),
         el('button', { class: 'btn small' + (u.sentry ? ' active' : ''), onclick: () => act({ type: 'sentry', unitId: u.id }, { after: () => { if (unitById(S, u.id)?.sentry) clearSel(); } }) }, u.sentry ? '💤 Wache beenden' : '💤 Wache halten'));
-      if (r < MAX_RANK && (why === null || why === 'cost' || why === 'acted')) {
-        actions.append(el('button', { class: 'btn small primary', title: `Ausbilden zum ${RANK_NAMES[r + 1]}`, disabled: !!why, onclick: () => act({ type: 'train', unitId: u.id }, { after: () => clearSel() }) },
-          `🎓 ${RANK_NAMES[r + 1]} `, costEl(trainCost(u.type, r), S.players[S.current].res)));
-      }
       actions.append(el('button', { class: 'btn small raze', title: 'Einheit auflösen', onclick: () => doDisband(u) }, '🗑 Entlassen'));
       if (mergeTargets(S, u).length) actions.append(el('button', { class: 'btn small merge', onclick: () => { sel.merge = true; refresh(); } }, '🔗 Verband bilden'));
       if (canSplit(S, u)) actions.append(el('button', { class: 'btn small', onclick: () => act({ type: 'split', unitId: u.id }) }, `✂ Aufteilen (${u.count} → ${u.count - 1} + 1)`));
@@ -1856,8 +1854,8 @@ function renderHelp() {
     <h3>Zugweite</h3>
     <p>Auch voll entwickelt ziehen Fußtruppen höchstens 4 Felder, Katapulte 3, Reiter und Ritter 6 – auch wenn sie über eigene Einheiten springen.</p>
     <h3>Ränge und Fähigkeiten ★</h3>
-    <p>Einheiten sammeln Erfahrung: +1 pro Angriff, +1 pro Sieg, +1 wenn sie einen Angriff überleben. Ränge: ${RANK_NAMES.slice(1).join(' → ')}. Jeder Rang gibt +15 % Leben und +10 % Angriff und Verteidigung, Reiter und Ritter ab Veteran +1 Bewegung, alle Helden +1 Bewegung.
-    Steht eine Einheit zu Zugbeginn in einer eigenen Stadt mit Kaserne, kannst du sie gegen Rohstoffe <b>ausbilden</b> (Rang +1). Einheiten, die ausgebildet werden können oder eine Fähigkeit wählen dürfen (bei Veteran und Held), schimmern golden, blinken auf und tragen ein ⬆; gewählte Fähigkeiten erscheinen als kleines Abzeichen neben der Figur: ${Object.values(PERKS).map((p) => `${p.icon} ${p.name} (${p.desc})`).join(', ')}.</p>
+    <p>Einheiten steigen durch <b>Siege</b> auf – überall auf der Karte, ganz ohne Stadt oder Kaserne: Je 5 besiegte Gegner bringen eine Stufe (Zauberer zählen stattdessen ihre Heilungen), höchstens 3 Stufen: ${RANK_NAMES.slice(1).join(' → ')}. Jede Stufe gibt +20 % Leben und +15 % Angriff und Verteidigung, Reiter und Ritter ab Veteran +1 Bewegung, alle Helden +1 Bewegung.
+    Bei jeder Stufe wählst du eine <b>Spezialisierung</b>. Einheiten, die gerade eine wählen dürfen, schimmern golden, blinken auf und tragen ein ⬆; gewählte Spezialisierungen erscheinen als kleines Abzeichen neben der Figur: ${Object.values(PERKS).map((p) => `${p.icon} ${p.name} (${p.desc})`).join(', ')}.</p>
     <h3>Zauberer 🔮</h3>
     <p>Eigene Einheiten neben einem Zauberer (blaues Schild-Symbol) bekommen 25 % weniger Schaden, Flächenschaden halbiert. Statt anzugreifen heilt der Zauberer eine eigene Einheit bis 3 Felder entfernt (grün markiert antippen). Höchstens ein Zauberer pro Stadt.</p>
     <h3>Katapult und Flanke</h3>
@@ -1869,7 +1867,7 @@ function renderHelp() {
     <h3>Basilisk 🦎</h3>
     <p>Eine Riesenechse mit tödlichem Blick: Sie greift aus 2 Feldern an, und wer getroffen wird und überlebt, <b>versteinert</b> – er setzt seinen nächsten Zug aus und schlägt bis dahin nicht zurück (grau dargestellt). Troll, Drache, Türme und Wälle sind immun. Ideal, um einen starken Gegner festzuhalten, während deine Armee angreift. Braucht ein Basiliskennest (Stadt ab Stufe 3), höchstens 2 pro Reich.</p>
     <h3>Drache 🐉</h3>
-    <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), sein Feueratem trifft auch Gegner neben dem Ziel, und er heilt jede Runde 6 Leben. Er ist ein Endgegner: etwa fünfmal so stark wie früher, aber zehnmal so teuer – bei Rang 3 und 5 wählst du jeweils aus drei Fähigkeiten. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (in jeder Stadt baubar, aber nur eine im Reich – ein kleiner Drache auf dem Stadtturm zeigt, wo sie steht), und es gibt nur einen Drachen pro Reich.</p>
+    <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), sein Feueratem trifft auch Gegner neben dem Ziel, und er heilt jede Runde 6 Leben. Er ist ein Endgegner und kostet je 300 Nahrung, Holz und Erz – bei jeder Stufe wählst du aus drei Spezialisierungen. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (in jeder Stadt baubar, aber nur eine im Reich – ein kleiner Drache auf dem Stadtturm zeigt, wo sie steht), und es gibt nur einen Drachen pro Reich.</p>
     <h3>Geräusche 🔊</h3>
     <p>Kampf, Bewegung und Ereignisse sind zu hören, im Hintergrund je nach Kartenausschnitt Meeresrauschen, plätschernde Seen, Wind über den Bergen, Vögel im Wald und das Treiben der Städte. Alles wird im Gerät erzeugt und funktioniert offline. Lautstärke und Umgebung stellst du im Menü unter Einstellungen ein.</p>
     <h3>Wache halten 💤</h3>

@@ -351,3 +351,5 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .panel-small .panel { max-height: min(40vh, calc(100vh - var(--hud-top, 110px) - 120px)); }
 .panel-medium .panel { max-height: min(45vh, calc(100vh - var(--hud-top, 110px) - 120px)); }
 .panel-large .panel { max-height: min(62vh, calc(100vh - var(--hud-top, 110px) - 120px)); }
+.pill.units .upkeep { color: #fca5a5; font-size: 0.85em; margin-left: 4px; white-space: nowrap; }
+.pill.units .upkeep b { color: #fca5a5; }

@@ -4,7 +4,7 @@ import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
-  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, trainCost, REGIMENT_MAX, REGIMENT_TYPES,
+  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, REGIMENT_MAX, REGIMENT_TYPES,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -110,8 +110,8 @@ export function statsOf(state, u) {
     st.hp = Math.round(st.hp * (1 + RANK_BONUS.hp * r));
     st.atk = Math.round(st.atk * (1 + RANK_BONUS.atk * r) * 10) / 10;
     st.def = Math.round(st.def * (1 + RANK_BONUS.def * r) * 10) / 10;
-    if (r >= 2 && CAVALRY.includes(u.type)) st.move++;
-    if (r >= 4) st.move++;
+    if (r >= 1 && CAVALRY.includes(u.type)) st.move++;
+    if (r >= 3) st.move++;
   }
   if (hasPerk(u, 'tough')) st.hp = Math.round(st.hp * 1.25);
   if (hasPerk(u, 'shieldwall')) st.def = Math.round(st.def * 1.3 * 10) / 10;
@@ -177,18 +177,11 @@ function rankUp(state, u, ev) {
 }
 
 export function perkOptions(u) {
-  if (!u.pick) return [];
-  return PERK_CHOICES[u.type]?.[PERK_RANKS.indexOf(u.pick)] || [];
-}
-
-// Ausbilden: Einheit steht in eigener Stadt mit Kaserne und hat in diesem Zug noch nichts getan
-export function canTrain(state, u) {
-  if (!u || isStructure(u) || (u.rank || 1) >= MAX_RANK) return 'max';
-  const c = cityOn(state, u.idx);
-  if (!c || c.owner !== u.owner || !hasBuilding(c, 'barracks')) return 'city';
-  if (u.acted || u.moved || u.attacked) return 'acted';
-  if (!canAfford(state.players[u.owner].res, trainCost(u.type, u.rank || 1))) return 'cost';
-  return null;
+  if (!u.pick || !PERK_CHOICES[u.type]) return [];
+  const tiers = PERK_CHOICES[u.type];
+  // Dritte Stufe: Auswahl aus allen Spezialisierungen dieser Einheit, die sie noch nicht hat
+  const opts = tiers[PERK_RANKS.indexOf(u.pick)] || [...new Set(tiers.flat())];
+  return opts.filter((p) => !u.perks?.includes(p));
 }
 
 export function isStructure(u) {
@@ -770,8 +763,10 @@ export function applyAction(state, a) {
       if (splashOf(u)) e.splash = applySplash(state, u, defSnap.idx, r.dmg);
       ev.push(e);
       // Erfahrung: Angreifer +1 (+1 für einen Sieg), überlebender Verteidiger +1
-      if (!e.died) gainXp(state, u, 1 + (e.killed ? 1 : 0) + (e.splash || []).filter((h) => h.killed).length, ev);
-      if (!e.killed) gainXp(state, t, 1, ev);
+      // Erfahrung = besiegte Gegner (auch durch Flächenschaden oder Gegenschlag)
+      const kills = (e.killed ? 1 : 0) + (e.splash || []).filter((h) => h.killed).length;
+      if (!e.died && kills) gainXp(state, u, kills, ev);
+      if (e.died && !e.killed) gainXp(state, t, 1, ev);
       break;
     }
     case 'heal': {
@@ -785,19 +780,7 @@ export function applyAction(state, a) {
       u.moved = true;
       u.acted = true;
       ev.push({ k: 'heal', id: t.id, idx: t.idx, amount: h, by: u.id, from: u.idx });
-      gainXp(state, u, 1, ev);
-      break;
-    }
-    case 'train': {
-      const u = unitById(state, a.unitId);
-      if (!u || u.owner !== pid || canTrain(state, u)) return null;
-      const cost = trainCost(u.type, u.rank || 1);
-      for (const k of RES) player.res[k] -= cost[k] || 0;
-      u.xp = Math.max(u.xp || 0, RANK_XP[(u.rank || 1) + 1]);
-      rankUp(state, u, ev);
-      u.moved = true;
-      u.attacked = true;
-      u.acted = true;
+      if (h > 0) gainXp(state, u, 1, ev); // Zauberer steigen durch Heilen auf
       break;
     }
     case 'perk': {
