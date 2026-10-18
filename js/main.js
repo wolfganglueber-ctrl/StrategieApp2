@@ -1282,8 +1282,7 @@ function renderCityPanel(panel, ci, occ) {
   const y = cityYield(S, ci);
   panel.append(el('div', { class: 'city-head' },
     el('span', { class: 'title' }, cityTitle(c)),
-    el('span', { class: 'yield' }, ...RES.map((k) => el('span', {}, icon(k), `+${y[k]}`))),
-    el('button', { class: 'panel-x', 'aria-label': 'Schließen', onclick: () => { clearSel(); refresh(); } }, '✕')));
+    el('span', { class: 'yield' }, ...RES.map((k) => el('span', {}, icon(k), `+${y[k]}`)))));
   const tabs = el('div', { class: 'ptabs' });
   for (const [k, label] of [['units', 'Einheiten'], ['build', `Gebäude ${c.buildings.length}/${citySlots(c)}`]]) {
     tabs.append(el('button', { class: cityTab === k ? 'active' : '', onclick: () => { cityTab = k; renderPanel(); } }, label));
@@ -1364,6 +1363,8 @@ function renderPanel() {
     panelScroll.list = panel.querySelector('.build-list')?.scrollTop || 0;
   } else panelScroll = { key, top: 0, list: 0 };
   renderPanelContent(panel);
+  // Schließen-Kreuz ragt oben rechts aus dem Stadt- bzw. Einheitenmenü heraus
+  $('panelX').classList.toggle('hidden', !panel.childElementCount || (sel.cityIdx == null && sel.unitId == null && sel.infoIdx == null));
   if (key) {
     panel.scrollTop = panelScroll.top;
     const list = panel.querySelector('.build-list');
@@ -1891,6 +1892,7 @@ $('btnContinue').addEventListener('click', () => {
   enterGame();
 });
 $('btnMenu').addEventListener('click', gameMenu);
+$('panelX').addEventListener('click', () => { clearSel(); refresh(); });
 $('btnTech').addEventListener('click', openTech);
 $('btnUndo').addEventListener('click', undo);
 $('btnTip').addEventListener('click', showAdvice);

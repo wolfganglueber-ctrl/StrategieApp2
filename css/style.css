@@ -311,24 +311,33 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .slot-list .build-row.empty { opacity: 0.6; }
 
 /* Bedienfeld-Größe (Einstellung oder automatisch nach Gerät) */
-.panel-small .panel { max-height: 31vh; }
+.panel-small .panel { max-height: 40vh; }
 .panel-medium .panel { max-height: 45vh; }
 .panel-large .panel { max-height: 62vh; }
-.panel-small .recruit-grid { grid-template-columns: repeat(4, 1fr); gap: 5px; }
-.panel-small .recruit { font-size: 11px; padding: 2px 2px 5px; }
-.panel-small .recruit .name { font-size: 12px; }
-.panel-small .recruit canvas { width: 40px !important; height: 40px !important; margin: -4px 0 -2px; }
+.panel-small .recruit-grid { grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.panel-small .recruit { font-size: 10.5px; padding: 2px 2px 3px; gap: 0; }
+.panel-small .recruit .name { font-size: 11px; }
+.panel-small .recruit canvas { width: 32px !important; height: 32px !important; margin: -3px 0 -3px; }
 .panel-small .recruit .cost { font-size: 11px; gap: 3px; }
-.panel-small .recruit .cost .ico { width: 15px; height: 15px; }
+.panel-small .recruit .cost .ico { width: 13px; height: 13px; }
 .panel-small .build-row { padding: 4px 6px; }
 .panel-small .binfo { font-size: 12.5px; }
-.panel-small .bicon { font-size: 22px; width: 30px; }
+.panel-small .bicon { font-size: 19px; width: 26px; }
+.panel-small .bicon canvas { width: 34px !important; height: 34px !important; }
+.panel-small .city-head .title { font-size: 14px; }
+.panel-small .yield .ico { width: 18px; height: 18px; }
+.panel-small .ptabs button { padding: 5px 6px; font-size: 13px; }
+.panel-small .panel { padding: 8px 9px; }
 .panel-small .panel .note { font-size: 12px; }
+.panel-wrap { position: relative; }
 .panel-x {
-  flex: none; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.08);
-  font-size: 15px; display: grid; place-items: center; margin-left: 4px;
+  position: absolute; top: -20px; right: -4px; z-index: 2; width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35); background: #1e3350; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  font-size: 15px; font-weight: 800; display: grid; place-items: center;
 }
+.panel-x.hidden { display: none; }
 .panel-x:active { transform: scale(0.94); }
 .panel-small .recruit { min-width: 0; overflow: hidden; }
 .panel-small .recruit .cost { flex-wrap: wrap; justify-content: center; row-gap: 0; }
 .panel-small .recruit .lock { font-size: 10px; white-space: normal; }
+.panel > .city-head:first-child { padding-right: 18px; }
