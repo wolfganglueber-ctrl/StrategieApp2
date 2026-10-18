@@ -997,14 +997,16 @@ export function drawCity(ctx, city, x, y, H, col) {
   // Stufenanzeige
   const lv = city.stars ?? city.level;
   if (lv > 1) {
+    // Ab Stufe 6 enger und kleiner, damit 8 Sterne aufs Feld passen
+    const sp = lv > 5 ? 7.5 : 10, sk = lv > 5 ? 0.8 : 1;
     for (let k = 0; k < lv; k++) {
-      const px = x - (lv - 1) * 5 * s + k * 10 * s, py = y + 29 * s;
-      ctx.fillStyle = '#ffd34d';
+      const px = x - ((lv - 1) * sp * s) / 2 + k * sp * s, py = y + 29 * s;
+      ctx.fillStyle = k >= 5 ? '#ffb02e' : '#ffd34d';
       ctx.strokeStyle = '#6b4a00';
       ctx.lineWidth = 1;
       ctx.beginPath();
       for (let i = 0; i < 10; i++) {
-        const a = -Math.PI / 2 + (i * Math.PI) / 5, r = i % 2 ? 2 * s : 4.5 * s;
+        const a = -Math.PI / 2 + (i * Math.PI) / 5, r = (i % 2 ? 2 * s : 4.5 * s) * sk;
         if (i === 0) ctx.moveTo(px + r * Math.cos(a), py + r * Math.sin(a));
         else ctx.lineTo(px + r * Math.cos(a), py + r * Math.sin(a));
       }
@@ -1971,12 +1973,61 @@ function drawBarrierFigure(ctx, col) {
   ctx.fillRect(-0.8, top + 9, 1.6, 5);
 }
 
-export function drawFigure(ctx, type, col, level = 1) {
+// Fusionseinheiten: beide Ausgangsfiguren auf einem gemeinsamen Sockel, umhüllt von violetter Fusionsenergie
+const FUSION_LOOK = {
+  horsearcher: ['knight', 'archer'], shieldbreaker: ['defender', 'warrior'], firemage: ['catapult', 'mage'], gorgon: ['basilisk', 'rider'],
+  rocktroll: ['troll', 'catapult'], stormdragon: ['dragon', 'mage'], ram: ['trebuchet', 'knight'], chimera: ['rider', 'warrior'],
+};
+const BIG_FIG = ['troll', 'dragon', 'trebuchet'];
+function drawFusion(ctx, back, front, col) {
+  ctx.save();
+  // Energieaura hinter den Figuren
+  const g = ctx.createRadialGradient(0, -18, 2, 0, -18, 34);
+  g.addColorStop(0, 'rgba(216,180,254,0.55)');
+  g.addColorStop(0.6, 'rgba(147,51,234,0.22)');
+  g.addColorStop(1, 'rgba(147,51,234,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(0, -18, 34, 38, 0, 0, Math.PI * 2);
+  ctx.fill();
+  pedestal(ctx, col, BIG_FIG.includes(back) ? 18 : 16);
+  // Goldener Fusionsring auf dem Sockel
+  ctx.strokeStyle = 'rgba(250,204,21,0.9)';
+  ctx.lineWidth = 1.4;
+  ctx.setLineDash([3, 2]);
+  ctx.beginPath();
+  ctx.ellipse(0, 6, 13, 4.6, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  const bigBack = BIG_FIG.includes(back);
+  ctx.save();
+  ctx.translate(bigBack ? -2 : -8, bigBack ? -2 : -5);
+  ctx.scale(bigBack ? 0.86 : 0.8, bigBack ? 0.86 : 0.8);
+  drawFigure(ctx, back, col, 1, true);
+  ctx.restore();
+  ctx.save();
+  ctx.translate(bigBack ? 9 : 7, 3);
+  ctx.scale(0.78, 0.78);
+  drawFigure(ctx, front, col, 1, true);
+  ctx.restore();
+  // Funken
+  ctx.fillStyle = '#f5d0fe';
+  for (const [x, y, r] of [[-16, -40, 1.6], [14, -46, 1.2], [20, -22, 1.4], [-20, -14, 1.1], [2, -54, 1.3]]) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+export function drawFigure(ctx, type, col, level = 1, noPedestal = false) {
   if (type === 'tower') { drawTowerFigure(ctx, col, level); return; }
   if (type === 'barrier') { drawBarrierFigure(ctx, col); return; }
+  if (type.startsWith('chimera:')) { const [a, b] = type.slice(8).split('+'); drawFusion(ctx, BIG_FIG.includes(b) ? b : a, BIG_FIG.includes(b) ? a : b, col); return; }
+  if (FUSION_LOOK[type]) { drawFusion(ctx, FUSION_LOOK[type][0], FUSION_LOOK[type][1], col); return; }
   ctx.save();
   ctx.lineJoin = 'round';
-  pedestal(ctx, col, type === 'troll' || type === 'dragon' ? 18 : 15);
+  if (!noPedestal) pedestal(ctx, col, type === 'troll' || type === 'dragon' ? 18 : 15);
   switch (type) {
     case 'warrior': {
       cape(ctx, 0, 6, col, 19, 7.5);

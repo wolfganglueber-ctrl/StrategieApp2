@@ -2,11 +2,11 @@
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
 import {
   UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY, structureLimit,
-  costTotal,
+  costTotal, FUSION_RECIPES,
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
-  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, canBuild, mergeTargets, canPetrify,
+  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, fuseTargets, canBuild, mergeTargets, canPetrify,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -316,6 +316,7 @@ function chooseBuilding(state, ctx, pid, ci, inc) {
     nest: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'nest')) ? 1.3 : 0.1,
     sanctum: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'sanctum')) ? 1.5 : 0.3,
     wall: (ctx.cityDanger.get(c.idx) || 0) > 3 ? 3 : 0.4,
+    forge: ctx.ownCities.some((x) => hasBuilding(x, 'forge')) ? 0 : 2.5,
     market: ctx.ownCities.some((x) => hasBuilding(x, 'market')) ? 0 : ctx.ownCities.length >= 3 ? 2 : 1,
   };
   let best = null;
@@ -360,6 +361,13 @@ function economyAction(state, ctx, P, pid, rng) {
   for (const u of ctx.mine) {
     const opts = perkOptions(u);
     if (opts.length) return { type: 'perk', unitId: u.id, perk: opts[Math.floor(rng() * opts.length)] };
+  }
+  // Fusion: bekannte Rezepte nutzen, sobald zwei passende Einheiten an der Schmiede stehen
+  if (state.fusion && P.smart && rng() < 0.7) {
+    for (const u of ctx.mine) {
+      const t = fuseTargets(state, u).find((x) => FUSION_RECIPES[[u.type, x.type].sort().join('+')]);
+      if (t) return { type: 'fuse', unitId: u.id, targetId: t.id };
+    }
   }
   // Troll: wer eine Trollhöhle hat, spart darauf
   // Titanen (Drache, Troll): wer die Höhle hat, spart darauf
@@ -428,7 +436,7 @@ function economyAction(state, ctx, P, pid, rng) {
   // Forschung, wenn Rohstoffe übrig sind (Eifer je nach Stufe)
   if ((P.tech ?? P.upgrade) > 0 && !saveTroll && rng() < (P.tech ?? P.upgrade)) {
     const resSum = res.food + res.wood + res.ore;
-    const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'rotation', 'smelting', 'stirrups', 'keep', 'tactics', 'granary', 'counterweight', 'battlements', 'medic', 'enlight', 'blessing', 'guild'].filter((t) => t !== 'guild' || tradeRate(state, pid));
+    const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'rotation', 'smelting', 'stirrups', 'keep', 'tactics', 'granary', 'counterweight', 'alchemy', 'fusion', 'battlements', 'medic', 'enlight', 'blessing', 'guild'].filter((t) => t !== 'guild' || tradeRate(state, pid));
     if (resSum > (wantArmy ? 70 : 35)) {
       for (const t of prio) {
         if (techAvailable(state, pid, t) && canAfford(res, TECHS[t].cost)) return { type: 'research', tech: t };

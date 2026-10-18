@@ -4,14 +4,14 @@ import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
-  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, REGIMENT_MAX, REGIMENT_TYPES,
+  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, REGIMENT_MAX, REGIMENT_TYPES, FUSION_COST, fusionResult,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
 export const STATE_VERSION = 5;
 
 /*
- config: { seed, cols, rows, biome, players: [{ human: bool, ai: 1..6, name? }], levelId?, villageDensity? }
+ config: { seed, cols, rows, biome, players: [{ human: bool, ai: 1..6, name? }], levelId?, villageDensity?, fusion? }
 */
 export function createGame(config) {
   const n = config.players.length;
@@ -43,6 +43,7 @@ export function createGame(config) {
     over: null,
     stats: { kills: new Array(n).fill(0), losses: new Array(n).fill(0) },
     fog: !!config.fog,
+    fusion: !!config.fusion,
     explored: {},
   };
   if (state.fog) {
@@ -87,6 +88,7 @@ export function hasTech(state, pid, t) {
 export function statsOf(state, u) {
   const T = UNITS[u.type];
   const st = { hp: T.hp, atk: T.atk, def: T.def, move: T.move, range: T.range };
+  if (u.mix) Object.assign(st, { hp: u.mix.hp, atk: u.mix.atk, def: u.mix.def, move: u.mix.move, range: u.mix.range }); // Chimäre
   if (u.type === 'tower') {
     Object.assign(st, TOWER_LEVELS[u.level || 1]);
     if (hasTech(state, u.owner, 'stonework')) st.hp += 6;
@@ -139,6 +141,7 @@ export function attackMult(state, att, def, fromIdx = att.idx) {
   // Drachen sind anfällig gegen Pfeile
   if (UNITS[def.type].arrowWeak && (att.type === 'archer' || att.type === 'tower')) m += 0.6;
   if (!isStructure(att)) m += (hasTech(state, att.owner, 'tactics') ? 0.15 : FLANK_BONUS) * flankers(state, att, def);
+  if (UNITS[att.type].siegeMult && (isStructure(def) || cityOn(state, def.idx) || castleOf(state, def.idx))) m *= UNITS[att.type].siegeMult;
   // Belagerungswaffen: gegen Truppen im offenen Feld schwächer
   if (UNITS[att.type].fieldMult && !isStructure(def) && !cityOn(state, def.idx)) m *= UNITS[att.type].fieldMult;
   return m;
@@ -242,7 +245,7 @@ export function upgradeCostOf(state, city) {
 
 export function techAvailable(state, pid, t) {
   const T = TECHS[t];
-  if (!T || hasTech(state, pid, t)) return false;
+  if (!T || hasTech(state, pid, t) || (T.fusionOnly && !state.fusion)) return false;
   return T.req.every((r) => hasTech(state, pid, r));
 }
 
@@ -395,7 +398,7 @@ export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp
   const A = statsOf(state, att), D = statsOf(state, def);
   const atk = A.atk * attackMult(state, att, def, fromIdx);
   const aF = atk * (attHp / A.hp);
-  const dF = D.def * (def.hp / D.hp) * defenseMult(state, def.idx) * (def.shaken ? 0.5 : 1);
+  const dF = D.def * (def.hp / D.hp) * (UNITS[att.type].ignoreWalls ? 1 : defenseMult(state, def.idx)) * (def.shaken ? 0.5 : 1);
   const tot = aF + dF;
   // Verbände teilen Schaden mal Mitgliederzahl aus; Flächenwaffen treffen Verbände härter
   const na = att.count || 1, nd = def.count || 1;
@@ -492,6 +495,8 @@ export function spawnSpots(state, ci, occ = buildOcc(state), territory = compute
 export function canBuild(state, pid, c, b) {
   const B = BUILDINGS[b];
   if (hasBuilding(c, b)) return 'built';
+  if (B.fusionOnly && !state.fusion) return 'off';
+  if (B.tech && !hasTech(state, pid, B.tech)) return 'tech';
   if (c.level < (B.minLevel || 0)) return 'level';
   if (B.perRealm && state.cities.filter((x) => x.owner === pid && hasBuilding(x, b)).length >= B.perRealm) return 'realm';
   if (c.buildings.length >= citySlots(c)) return 'slots';
@@ -909,6 +914,29 @@ export function applyAction(state, a) {
       ev.push({ k: 'merge', id: t.id, from: u.idx, idx: t.idx, count: t.count });
       break;
     }
+    case 'fuse': {
+      const u = unitById(state, a.unitId), t = unitById(state, a.targetId);
+      if (!u || !t || u.owner !== pid || !canFuse(state, u, t)) return null;
+      for (const k of RES) player.res[k] -= FUSION_COST[k] || 0;
+      player.fusedTurn = state.turn;
+      const type = fusionResult(u.type, t.type);
+      const nu = { id: state.nextUnitId++, type, owner: pid, idx: t.idx, hp: 1, moved: true, attacked: true, acted: true, rank: 1, xp: 0 };
+      if (type === 'chimera') {
+        // Wilde Fusion: beste Bewegung und Reichweite, Kampfwerte gemittelt plus 20 %
+        const A = statsOf(state, { ...u, rank: 1, perks: [] }), B = statsOf(state, { ...t, rank: 1, perks: [] });
+        nu.mix = {
+          parents: [u.type, t.type],
+          hp: Math.round(((A.hp + B.hp) / 2) * 1.2), atk: Math.round(((A.atk + B.atk) / 2) * 1.2 * 10) / 10, def: Math.round(((A.def + B.def) / 2) * 1.2 * 10) / 10,
+          move: Math.max(A.move, B.move), range: Math.max(A.range, B.range),
+        };
+      }
+      const frac = (u.hp / statsOf(state, u).hp + t.hp / statsOf(state, t).hp) / 2;
+      nu.hp = Math.max(1, Math.round(statsOf(state, nu).hp * frac));
+      state.units = state.units.filter((x) => x !== u && x !== t);
+      state.units.push(nu);
+      ev.push({ k: 'fuse', id: nu.id, idx: nu.idx, from: u.idx, type, parents: [u.type, t.type] });
+      break;
+    }
     case 'split': {
       const u = unitById(state, a.unitId);
       if (!u || u.owner !== pid || !canSplit(state, u)) return null;
@@ -942,6 +970,21 @@ export function canMerge(state, u, t) {
   if (u.acted || u.moved || u.attacked || t.acted || t.moved || t.attacked) return false;
   return geoOf(state).dist(u.idx, t.idx) === 1;
 }
+// Fusion: zwei verschiedene eigene Einheiten nebeneinander, beide noch unbewegt, die Partnerin im Umkreis von 2 Feldern
+// der Fusionsschmiede; einmal pro Runde, kostet Rohstoffe. Fusionseinheiten lassen sich nicht weiter verschmelzen.
+export function canFuse(state, u, t) {
+  if (!state.fusion || !u || !t || u === t || u.owner !== t.owner || u.type === t.type) return false;
+  for (const x of [u, t]) if (isStructure(x) || UNITS[x.type].fused || (x.count || 1) > 1 || x.moved || x.attacked || x.acted) return false;
+  const p = state.players[u.owner];
+  if (p.fusedTurn === state.turn || !canAfford(p.res, FUSION_COST)) return false;
+  const geo = geoOf(state);
+  if (geo.dist(u.idx, t.idx) !== 1) return false;
+  return state.cities.some((c) => c.owner === u.owner && hasBuilding(c, 'forge') && geo.dist(c.idx, t.idx) <= 2);
+}
+export function fuseTargets(state, u) {
+  return state.units.filter((t) => canFuse(state, u, t));
+}
+
 export function mergeTargets(state, u) {
   return state.units.filter((t) => canMerge(state, u, t));
 }

@@ -30,6 +30,15 @@ export const UNITS = {
   barrier: { name: 'Steinwall', cost: { wood: 6, ore: 14 }, hp: 50, atk: 0, def: 6, move: 0, range: 0, structure: true, desc: 'Sehr stabiles Wallstück, blockiert den Weg. Im Stadtgebiet setzen; benachbarte Wallstücke verbinden sich zu einer Mauer und lenken den Gegner.' },
   basilisk: { name: 'Basilisk', cost: { food: 18, wood: 8, ore: 16 }, hp: 28, atk: 3, def: 3, move: 3, range: 2, supply: 2, perRealm: 2, petrify: true, needs: 'nest', desc: 'Versteinernder Blick aus 2 Feldern: Das Ziel setzt seinen nächsten Zug aus und schlägt nicht zurück (Troll und Drache sind immun). Höchstens 2 pro Reich.' },
   trebuchet: { name: 'Tribok', cost: { food: 4, wood: 24, ore: 16 }, hp: 14, atk: 5, def: 0, move: 1, range: 5, minRange: 2, noMoveAttack: true, upkeep: { food: 1, wood: 1 }, needs: 'workshop', tech: 'counterweight', desc: 'Schwere Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einziges Feld (kein Flächenschaden), aber nicht direkt daneben und nicht nach Bewegung. Braucht Werkstatt und die Forschung Gegengewicht.' },
+  // Fusionseinheiten (nur im Fusionsmodus, entstehen durch Verschmelzen in der Fusionsschmiede)
+  horsearcher: { name: 'Berittener Bogenschütze', fused: true, parents: ['knight', 'archer'], cost: { food: 11, wood: 7, ore: 6 }, hp: 24, atk: 3.5, def: 2, move: 5, range: 2, upkeep: { food: 2 }, desc: 'Fusion aus Ritter und Schütze: schnell und schießt aus 2 Feldern.' },
+  shieldbreaker: { name: 'Schildbrecher', fused: true, parents: ['warrior', 'defender'], cost: { food: 8, ore: 7 }, hp: 30, atk: 3.5, def: 4, move: 2, range: 1, ignoreWalls: true, upkeep: { food: 2 }, desc: 'Fusion aus Krieger und Wächter: sehr zäh, Stadtmauern und Burgbonus schützen den Gegner nicht.' },
+  firemage: { name: 'Feuermagier', fused: true, parents: ['mage', 'catapult'], cost: { food: 6, wood: 16, ore: 15 }, hp: 18, atk: 4.5, def: 1, move: 2, range: 2, splash: 0.5, upkeep: { food: 2, wood: 1 }, desc: 'Fusion aus Zauberer und Katapult: Feuerzauber aus 2 Feldern, trifft auch die Nachbarn des Ziels.' },
+  gorgon: { name: 'Gorgonenreiter', fused: true, parents: ['basilisk', 'rider'], cost: { food: 24, wood: 10, ore: 16 }, hp: 36, atk: 4, def: 3, move: 4, range: 1, petrify: true, upkeep: { food: 4 }, desc: 'Fusion aus Basilisk und Reiter: schnell, sein Blick versteinert im Nahkampf.' },
+  rocktroll: { name: 'Felsenwerfer-Troll', fused: true, parents: ['troll', 'catapult'], cost: { food: 45, wood: 37, ore: 60 }, hp: 90, atk: 8, def: 5, move: 2, range: 3, splash: 0.35, regen: 3, noMoveAttack: true, upkeep: { food: 6, wood: 1 }, desc: 'Fusion aus Troll und Katapult: schleudert Felsen 3 Felder weit mit Flächenschaden (nicht nach Bewegung).' },
+  stormdragon: { name: 'Sturmdrache', fused: true, parents: ['dragon', 'mage'], cost: { food: 156, wood: 154, ore: 155 }, hp: 340, atk: 13, def: 11, move: 5, range: 1, regen: 8, flying: true, splash: 0.4, arrowWeak: true, healer: true, upkeep: { food: 6 }, desc: 'Fusion aus Drache und Zauberer: fliegt, Feueratem mit Flächenschaden und heilt eigene Einheiten.' },
+  ram: { name: 'Rammbock-Ritter', fused: true, parents: ['trebuchet', 'knight'], cost: { food: 12, wood: 26, ore: 22 }, hp: 34, atk: 5, def: 3, move: 3, range: 1, siegeMult: 2, upkeep: { food: 2, wood: 2 }, desc: 'Fusion aus Tribok und Ritter: doppelter Schaden gegen Städte, Burgen, Türme und Wälle.' },
+  chimera: { name: 'Chimäre', fused: true, cost: { food: 10, wood: 5, ore: 10 }, hp: 20, atk: 3, def: 2, move: 2, range: 1, upkeep: { food: 3 }, desc: 'Wilde Fusion zweier Einheiten ohne festes Rezept: beste Bewegung und Reichweite, gemischte Kampfwerte mit Bonus.' },
   catapult: { name: 'Katapult', cost: { wood: 12, ore: 10 }, hp: 12, atk: 4, def: 0, move: 1, range: 3, noMoveAttack: true, splash: 0.5, fieldMult: 0.6, upkeep: { food: 1, wood: 1 }, needs: 'workshop', desc: 'Belagerungswaffe mit Reichweite 3, nicht nach Bewegung. Gegen Städte, Türme und Wälle voller Schaden, gegen Truppen im Feld nur 60 %. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Unterhalt 1 Nahrung + 1 Holz. Braucht eine Werkstatt.' },
 };
 // Wert einer Einheit für die KI (Rohstoffsumme / 2), danach Kaufpreise verdoppeln:
@@ -43,7 +52,7 @@ for (const k of Object.keys(UNITS)) {
 }
 export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult', 'trebuchet', 'mage', 'basilisk', 'troll', 'dragon'];
 // Höchste Zugweite bei voller Entwicklung (gilt auch für Sprünge über eigene Einheiten)
-export const MOVE_CAP = { catapult: 3, trebuchet: 2, rider: 6, knight: 6, dragon: 6 };
+export const MOVE_CAP = { catapult: 3, trebuchet: 2, rider: 6, knight: 6, dragon: 6, horsearcher: 6, gorgon: 6, stormdragon: 6, ram: 5 };
 export const MOVE_CAP_DEFAULT = 4;
 export function moveCap(type) {
   return MOVE_CAP[type] ?? MOVE_CAP_DEFAULT;
@@ -80,6 +89,14 @@ export const PERK_CHOICES = {
   troll: [['rampage', 'tough'], ['siege', 'charge']],
   basilisk: [['hunter', 'tough'], ['swift', 'siege']],
   dragon: [['fire', 'tough', 'swift'], ['siege', 'charge', 'hunter']],
+  horsearcher: [['hunter', 'swift'], ['tough', 'siege']],
+  shieldbreaker: [['shieldwall', 'charge'], ['tough', 'siege']],
+  firemage: [['fire', 'tough'], ['swift', 'siege']],
+  gorgon: [['charge', 'hunter'], ['tough', 'swift']],
+  rocktroll: [['fire', 'tough'], ['siege', 'rampage']],
+  stormdragon: [['fire', 'tough', 'swift'], ['siege', 'greatheal', 'hunter']],
+  ram: [['charge', 'siege'], ['tough', 'swift']],
+  chimera: [['tough', 'swift'], ['charge', 'hunter']],
 };
 export const PERK_RANKS = [2, 3, 4];
 export const FLANK_BONUS = 0.1;
@@ -144,17 +161,29 @@ export const TECHS = {
   blessing: { branch: 'def', name: 'Segen', icon: '🙏', cost: { food: 24, wood: 14 }, req: ['medic'], desc: 'Zauberer heilen 2 mehr und beenden die Erschütterung' },
   battlements: { branch: 'def', name: 'Wehrgang', icon: '🏯', cost: { wood: 20, ore: 30 }, req: ['stonework'], desc: 'Steinwälle +25 Leben' },
   keep: { branch: 'def', name: 'Burgausbau', icon: '🏰', cost: { food: 20, wood: 24, ore: 30 }, req: ['stonework'], desc: 'Alle 7 Burgfelder: Verteidigung +25 %' },
+  alchemy: { branch: 'eco', name: 'Alchemie', icon: '🧪', cost: { food: 40, wood: 30, ore: 45 }, req: ['masonry', 'armor'], fusionOnly: true, desc: 'Grundlage der Fusion (nur im Fusionsmodus)' },
+  fusion: { branch: 'eco', name: 'Fusionskunst', icon: '⚗️', cost: { food: 60, wood: 60, ore: 80 }, req: ['alchemy', 'counterweight'], fusionOnly: true, desc: 'Ermöglicht die Fusionsschmiede' },
   towers2: { branch: 'def', name: 'Turmbaukunst', icon: '🗼', cost: { wood: 20, ore: 28 }, req: ['stonework'], mod: { tower: { range: 1, atk: 1 } }, desc: 'Türme +1 Reichweite, +1 Angriff' },
 };
 export const TECH_ORDER = Object.keys(TECHS);
 
-export const CITY_MAX_LEVEL = 5;
-export const CITY_NAMES = ['', 'Dorf', 'Siedlung', 'Stadt', 'Burgstadt', 'Metropole'];
+// Fusionsmodus: zwei verschiedene Einheiten in der Fusionsschmiede verschmelzen
+export const FUSION_COST = { wood: 20, ore: 30 };
+export const FUSION_RECIPES = {
+  'archer+knight': 'horsearcher', 'defender+warrior': 'shieldbreaker', 'catapult+mage': 'firemage', 'basilisk+rider': 'gorgon',
+  'catapult+troll': 'rocktroll', 'dragon+mage': 'stormdragon', 'knight+trebuchet': 'ram',
+};
+export function fusionResult(a, b) {
+  return FUSION_RECIPES[[a, b].sort().join('+')] || 'chimera';
+}
+
+export const CITY_MAX_LEVEL = 8;
+export const CITY_NAMES = ['', 'Dorf', 'Siedlung', 'Stadt', 'Burgstadt', 'Metropole', 'Großmetropole', 'Residenzstadt', 'Kaiserstadt'];
 export const START_RES = { food: 6, wood: 6, ore: 4 };
 export const TRADE_RATE = 3;
 export const TRADE_RATE_GUILD = 2;
 
-// Gebäude: jede Stadt hat so viele Bauplätze wie ihre Stufe
+// Gebäude: jede Stadt hat so viele Bauplätze wie ihre Stufe (höchstens 6)
 export const BUILDINGS = {
   farm: { art: 'einen', name: 'Bauernhof', icon: '🌾', cost: { wood: 4 }, desc: '+3 Nahrung' },
   lumber: { art: 'einen', name: 'Holzfäller', icon: '🌲', cost: { food: 4 }, desc: '+1 Holz, +1 je Wald im Gebiet' },
@@ -165,28 +194,33 @@ export const BUILDINGS = {
   sanctum: { art: 'einen', name: 'Turm der Weisen', icon: '🔮', cost: { wood: 6, ore: 6 }, desc: 'Zauberer möglich' },
   nest: { art: 'ein', name: 'Basiliskennest', icon: '🦎', cost: { food: 10, wood: 8, ore: 12 }, minLevel: 3, desc: 'Basilisk möglich (Stadt ab Stufe 3)' },
   lair: { art: 'eine', name: 'Trollhöhle', icon: '🦴', cost: { food: 10, wood: 12, ore: 16 }, minLevel: 4, desc: 'Schwarzer Troll möglich (Stadt ab Stufe 4)' },
+  forge: { art: 'eine', name: 'Fusionsschmiede', icon: '⚗️', cost: { food: 30, wood: 40, ore: 50 }, minLevel: 4, perRealm: 1, tech: 'fusion', fusionOnly: true, desc: 'Zwei verschiedene Einheiten im Umkreis von 2 Feldern zu einer stärkeren verschmelzen (einmal pro Runde)' },
   market: { art: 'einen', name: 'Markt', icon: '⚖️', cost: { food: 16, wood: 16, ore: 8 }, perRealm: 1, desc: 'Erlaubt Handel (3:1, mit Handelsgilde 2:1), einer pro Reich' },
   dragonlair: { art: 'eine', name: 'Drachenhöhle', icon: '🐉', cost: { food: 20, wood: 20, ore: 30 }, perRealm: 1, desc: 'Drache möglich (nur eine im Reich)' },
 };
-export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'sanctum', 'nest', 'lair', 'dragonlair', 'wall', 'market'];
+export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'sanctum', 'nest', 'lair', 'dragonlair', 'wall', 'market', 'forge'];
 
 // Stadtzentrum liefert von jedem Rohstoff so viel wie die Stufe
+// Ertrag des Stadtzentrums je Rohstoff: steigt mit jeder Stufe stärker, damit auch wenige große Städte genug liefern
+export const CENTER_YIELD = [0, 1, 2, 4, 6, 8, 10, 13, 16];
 export function cityCenterYield(city) {
-  return city.level;
+  return CENTER_YIELD[city.level] ?? city.level;
 }
 // Versorgung: wie viele Einheiten eine Stadt unterhält (bewusst knapp: wenige, aber wertvolle Einheiten)
 export function citySupply(city) {
-  return [0, 2, 2, 3, 4, 5][city.level];
+  return [0, 2, 2, 3, 4, 5, 6, 7, 8][city.level];
 }
 // Jede Stadt besitzt 2 Felder Gebiet um sich herum
 export function cityRadius() {
   return 2;
 }
+export const MAX_SLOTS = 6;
 export function citySlots(city) {
-  return city.level;
+  return Math.min(MAX_SLOTS, city.level);
 }
 export function upgradeCost(city) {
-  return [null, { food: 8, wood: 8 }, { food: 14, wood: 12, ore: 6 }, { food: 22, wood: 18, ore: 14 }, { food: 30, wood: 26, ore: 22 }][city.level];
+  return [null, { food: 8, wood: 8 }, { food: 14, wood: 12, ore: 6 }, { food: 22, wood: 18, ore: 14 }, { food: 30, wood: 26, ore: 22 },
+    { food: 42, wood: 38, ore: 32 }, { food: 56, wood: 50, ore: 44 }, { food: 72, wood: 64, ore: 58 }][city.level];
 }
 export function cityDefense(city, stonework = false) {
   return city.buildings?.includes('wall') ? (stonework ? 2.6 : 2.2) : 1.5;

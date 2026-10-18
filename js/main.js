@@ -5,7 +5,7 @@ import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
   incomeOf, unitCount, upkeepTotal, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
-  perkOptions, flankers, canBuild, mergeTargets, canSplit, castleOf, defenseMult,
+  perkOptions, flankers, canBuild, mergeTargets, canSplit, fuseTargets, castleOf, defenseMult,
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
@@ -13,7 +13,7 @@ import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
-  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE,
+  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, CENTER_YIELD, MAX_SLOTS, FUSION_COST, FUSION_RECIPES, fusionResult,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
 import { store } from './storage.js';
@@ -97,7 +97,7 @@ function startSkirmish(setup) {
     biome = keys[seedFromCode(code) % keys.length];
   }
   S = createGame({
-    seed: seedFromCode(code), cols: size.cols, rows: size.rows, biome, fog: !!setup.fog,
+    seed: seedFromCode(code), cols: size.cols, rows: size.rows, biome, fog: !!setup.fog, fusion: !!setup.fusion,
     players: [{ human: true }, ...Array.from({ length: setup.enemies }, () => ({ ai: setup.diff }))],
   });
   S.meta = { mode: 'skirmish', code, setup };
@@ -370,6 +370,11 @@ function refresh() {
     o.targets = null;
     o.merges = new Set(mergeTargets(S, u).map((x) => x.idx));
   }
+  if (sel.fuse && u) {
+    o.moves = null;
+    o.targets = null;
+    o.merges = new Set(fuseTargets(S, u).map((x) => x.idx));
+  }
   if (sel.cityIdx != null) o.cityIdx = sel.cityIdx;
   if (sel.placeTower != null) {
     const terr = computeTerritory(S);
@@ -422,6 +427,15 @@ function onTap(sx, sy) {
     // Gegner außer Reichweite: Gruppe bleibt; Tipp auf ein leeres Feld löst sie auf
     if (u) { toast('Niemand aus der Gruppe erreicht dieses Ziel.'); return; }
     clearSel();
+    refresh();
+    return;
+  }
+  // Verschmelzen: nur markierte Partner, mit Rückfrage
+  if (sel.fuse) {
+    const from = unitById(S, sel.unitId);
+    if (from && u && fuseTargets(S, from).includes(u)) { doFuse(from, u); return; }
+    sel.fuse = false;
+    toast('Verschmelzen abgebrochen.');
     refresh();
     return;
   }
@@ -590,6 +604,20 @@ async function doRaze(u) {
   if (ok) act({ type: 'raze', unitId: u.id }, { after: () => clearSel() });
 }
 
+async function doFuse(u, t) {
+  const type = fusionResult(u.type, t.type);
+  const known = type !== 'chimera';
+  const res = known ? UNITS[type] : null;
+  const ok = await confirmDialog(`⚗️ ${UNITS[u.type].name} + ${UNITS[t.type].name}`,
+    known
+      ? `Ergibt: ${res.name} (❤ ${res.hp} · ⚔ ${fmt(res.atk)} · 🛡 ${fmt(res.def)} · 👣 ${res.move} · 🎯 ${res.range}). ${res.desc} Kostet ${costText(FUSION_COST)}; beide Einheiten gehen dabei auf. Eine Fusion pro Runde.`
+      : `Kein bekanntes Rezept – es entsteht eine wilde Chimäre mit gemischten Werten (+20 %). Kostet ${costText(FUSION_COST)}; beide Einheiten gehen dabei auf. Eine Fusion pro Runde.`,
+    'Verschmelzen', 'Abbrechen');
+  if (!ok) { sel.fuse = false; refresh(); return; }
+  act({ type: 'fuse', unitId: u.id, targetId: t.id }, { after: () => clearSel() });
+}
+const costText = (c) => RES.filter((k) => c[k]).map((k) => `${c[k]} ${RES_INFO[k].name}`).join(', ');
+
 async function doMerge(u, t) {
   const total = (u.count || 1) + (t.count || 1);
   const ok = await confirmDialog('Verband bilden?',
@@ -625,6 +653,8 @@ function doBuild(idx, building) {
 }
 
 let techBranch = 'mil';
+// Fusions-Forschungen nur im Fusionsmodus zeigen
+const techList = () => TECH_ORDER.filter((t) => !TECHS[t].fusionOnly || S?.fusion);
 function openTech() {
   if (!S || busy) return;
   const draw = () => {
@@ -633,12 +663,12 @@ function openTech() {
     const my = humanTurn();
     const tabs = el('div', { class: 'ptabs' });
     for (const [k, label] of TECH_BRANCHES) {
-      const done = TECH_ORDER.filter((t) => TECHS[t].branch === k && hasTech(S, pid, t)).length;
-      const all = TECH_ORDER.filter((t) => TECHS[t].branch === k).length;
+      const done = techList().filter((t) => TECHS[t].branch === k && hasTech(S, pid, t)).length;
+      const all = techList().filter((t) => TECHS[t].branch === k).length;
       tabs.append(el('button', { class: techBranch === k ? 'active' : '', onclick: () => { techBranch = k; draw(); } }, `${label} ${done}/${all}`));
     }
     const list = el('div', { class: 'tech-list' });
-    for (const t of TECH_ORDER.filter((x) => TECHS[x].branch === techBranch)) {
+    for (const t of techList().filter((x) => TECHS[x].branch === techBranch)) {
       const T = TECHS[t];
       const done = hasTech(S, pid, t);
       const avail = techAvailable(S, pid, t);
@@ -1046,6 +1076,19 @@ async function playEvent(ev, f, isAI, pan = true) {
     case 'defect':
       if (f > 0) R.ring(ev.idx, PLAYER_COLORS[ev.pid].main, 600 * f);
       break;
+    case 'fuse': {
+      R.ring(ev.idx, '#c084fc', 900 * Math.max(f, 0.6));
+      R.floatText(ev.idx, `⚗️ ${UNITS[ev.type].name}`, '#f5d0fe', 1500 * Math.max(f, 0.6));
+      sound.play('sparkle', { pan: panOf(ev.idx), vol: isAI ? 0.5 : 1 });
+      const fu = unitById(S, ev.id);
+      if (fu?.owner === humanId()) {
+        const book = store.recipes();
+        const key = ev.type === 'chimera' ? 'chimera' : ev.type;
+        if (!book.includes(key)) { store.saveRecipes([...book, key]); toast(`📖 Neues Rezept entdeckt: ${UNITS[ev.type].name}!`); }
+      }
+      await pause(isAI ? 300 : 150);
+      break;
+    }
     case 'merge':
       if (f > 0) R.ring(ev.idx, '#c084fc', 600 * f);
       R.floatText(ev.idx, `Verband ×${ev.count}`, '#e9d5ff', 1100 * Math.max(f, 0.6));
@@ -1175,7 +1218,7 @@ function rankText(u) {
 function unitCard(u, subtitle) {
   const name = u.type === 'tower' ? `Turm · Stufe ${u.level}` : UNITS[u.type].structure ? UNITS[u.type].name : `${UNITS[u.type].name}${(u.count || 1) > 1 ? ` ×${u.count}` : ''} · ${rankText(u)}`;
   return el('div', { class: 'unit-card' },
-    iconCanvas(u.type, u.owner, 48, u.level),
+    iconCanvas(u.mix ? 'chimera:' + u.mix.parents.join('+') : u.type, u.owner, 48, u.level),
     el('div', { class: 'uc-main' },
       el('div', { class: 'uc-top' }, el('span', { class: 'title' }, name), hpBar(u)),
       el('div', { class: 'uc-bottom' }, el('span', { class: 'muted' }, subtitle), statRow(u))));
@@ -1329,7 +1372,7 @@ function renderCityPanel(panel, ci, occ) {
           onclick: () => { clearSel(); sel.placeTower = ci; sel.placeType = type; refresh(); },
         }, costEl(UNITS[type].cost, p.res))));
     }
-    for (const b of BUILDING_ORDER) {
+    for (const b of BUILDING_ORDER.filter((x) => !BUILDINGS[x].fusionOnly || S.fusion)) {
       const B = BUILDINGS[b];
       const built = hasBuilding(c, b);
       const realm = !built && canBuild(S, p.id, c, b) === 'realm';
@@ -1338,6 +1381,7 @@ function renderCityPanel(panel, ci, occ) {
         el('div', { class: 'binfo' }, el('b', {}, B.name), el('span', { class: 'muted' }, B.desc)),
         built ? el('span', { class: 'built-actions' }, el('span', { class: 'done' }, '✓'),
           el('button', { class: 'btn small raze', title: 'Abreißen (halbe Kosten zurück)', onclick: () => doDemolish(c.idx, b) }, '🗑'))
+          : canBuild(S, p.id, c, b) === 'tech' ? el('span', { class: 'lock' }, `🔬 ${TECHS[B.tech].name}`)
           : canBuild(S, p.id, c, b) === 'level' ? el('span', { class: 'lock' }, `🔒 ab Stufe ${B.minLevel}`)
           : canBuild(S, p.id, c, b) === 'realm' ? el('span', { class: 'lock' }, '🔒 schon im Reich')
           : el('button', { class: 'btn small', disabled: !!canBuild(S, p.id, c, b), onclick: () => doBuild(c.idx, b) }, costEl(B.cost, p.res))));
@@ -1346,7 +1390,7 @@ function renderCityPanel(panel, ci, occ) {
     if (c.level < CITY_MAX_LEVEL) {
       const cost = upgradeCostOf(S, c);
       panel.append(el('div', { class: 'upgrade-row' },
-        el('span', { class: 'muted' }, `Ausbau zur ${CITY_NAMES[c.level + 1]}: +1 Bauplatz, +1 auf alle Rohstoffe`),
+        el('span', { class: 'muted' }, `Ausbau zur ${CITY_NAMES[c.level + 1]}: ${citySlots({ level: c.level + 1 }) > citySlots(c) ? '+1 Bauplatz, ' : ''}+${CENTER_YIELD[c.level + 1] - CENTER_YIELD[c.level]} auf alle Rohstoffe`),
         el('button', { class: 'btn small primary', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost, p.res))));
     } else {
       panel.append(el('div', { class: 'note' }, 'Höchste Ausbaustufe erreicht.'));
@@ -1391,6 +1435,14 @@ function renderPanelContent(panel) {
     panel.append(el('div', { class: 'note' }, sel.placeType === 'barrier'
       ? `Tippe helle Felder im Stadtgebiet an – Wallstück für Wallstück (${towersOfCity(S, sel.placeTower, undefined, 'barrier')}/${structureLimit(S.cities[sel.placeTower], 'barrier')}).`
       : 'Tippe ein helles Feld im Stadtgebiet an.'));
+    return;
+  }
+  if (sel.fuse && sel.unitId != null) {
+    const fu = unitById(S, sel.unitId);
+    panel.append(el('div', { class: 'city-head' },
+      el('span', { class: 'title' }, `⚗️ Verschmelzen · ${fu ? UNITS[fu.type].name : ''}`),
+      el('button', { class: 'btn small', onclick: () => { sel.fuse = false; refresh(); } }, 'Abbrechen')));
+    panel.append(el('div', { class: 'note' }, 'Tippe eine markierte andere Einheit direkt daneben an. Vor dem Verschmelzen siehst du, was entsteht.'));
     return;
   }
   if (sel.merge && sel.unitId != null) {
@@ -1439,6 +1491,7 @@ function renderPanelContent(panel) {
         el('button', { class: 'btn small', title: `Alle ${UNITS[u.type].name} in der Nähe ziehen und greifen gemeinsam an`, onclick: () => groupNearby(u, true) }, `👥 Alle ${UNITS[u.type].name}`),
         el('button', { class: 'btn small' + (u.sentry ? ' active' : ''), onclick: () => act({ type: 'sentry', unitId: u.id }, { after: () => { if (unitById(S, u.id)?.sentry) clearSel(); } }) }, u.sentry ? '💤 Wache beenden' : '💤 Wache halten'));
       actions.append(el('button', { class: 'btn small raze', title: 'Einheit auflösen', onclick: () => doDisband(u) }, '🗑 Entlassen'));
+      if (fuseTargets(S, u).length) actions.append(el('button', { class: 'btn small merge', onclick: () => { sel.fuse = true; refresh(); } }, '⚗️ Verschmelzen'));
       if (mergeTargets(S, u).length) actions.append(el('button', { class: 'btn small merge', onclick: () => { sel.merge = true; refresh(); } }, '🔗 Verband bilden'));
       if (canSplit(S, u)) actions.append(el('button', { class: 'btn small', onclick: () => act({ type: 'split', unitId: u.id }) }, `✂ Aufteilen (${u.count} → ${u.count - 1} + 1)`));
       panel.append(actions);
@@ -1605,6 +1658,24 @@ function gameOver() {
   openModal(...children);
 }
 
+// Rezeptbuch der Fusion: entdeckte Rezepte mit Zutaten, unentdeckte bleiben geheim
+function openRecipes(back) {
+  const book = store.recipes();
+  const all = [...Object.entries(FUSION_RECIPES), ['?', 'chimera']];
+  const list = el('div', { class: 'slot-list' });
+  for (const [key, type] of all) {
+    const known = book.includes(type);
+    const T = UNITS[type];
+    const parts = key === '?' ? 'zwei Einheiten ohne Rezept' : key.split('+').map((k) => UNITS[k].name).join(' + ');
+    list.append(el('div', { class: 'build-row' + (known ? '' : ' empty') },
+      known ? iconCanvas(type === 'chimera' ? 'chimera:rider+warrior' : type, humanId(), 40) : el('span', { class: 'bicon' }, '❓'),
+      el('div', { class: 'binfo' }, el('b', {}, known ? `${T.name}` : 'Unbekanntes Rezept'),
+        el('span', { class: 'muted' }, known ? `${parts} · ❤ ${T.hp} ⚔ ${fmt(T.atk)} 🛡 ${fmt(T.def)} 👣 ${T.move} 🎯 ${T.range} – ${T.desc}` : 'Verschmelze verschiedene Einheiten, um es zu entdecken.'))));
+  }
+  openClosable(el('h2', {}, '📖 Rezeptbuch'), el('p', {}, `${book.length} von ${all.length} Fusionen entdeckt.`), list,
+    el('button', { class: 'btn big', onclick: () => { closeModal(); if (back) back(); } }, 'Zurück'));
+}
+
 // Speicherplätze: Spielstand speichern oder laden (10 Plätze im Browser)
 function gameLabel(st) {
   const meta = st.meta || {};
@@ -1687,6 +1758,7 @@ function gameMenu() {
         } catch { /* abgebrochen */ }
       },
     }, 'Karte teilen') : null,
+    S.fusion ? el('button', { class: 'btn big', onclick: () => openRecipes(gameMenu) }, '📖 Rezeptbuch') : null,
     el('button', { class: 'btn big', onclick: () => openSlots('save', gameMenu) }, '💾 Speichern'),
     el('button', { class: 'btn big', onclick: () => openSlots('load', gameMenu) }, '📂 Laden'),
     el('button', { class: 'btn big', onclick: () => openSettings(gameMenu) }, 'Einstellungen'),
@@ -1780,6 +1852,7 @@ function renderSetup() {
   seg('segEnemies', [[1, '1'], [2, '2'], [3, '3']], 'enemies');
   seg('segDiff', DIFFICULTIES.map((d) => [d.level, String(d.level)]), 'diff');
   seg('segFog', [[false, 'Aus'], [true, 'An']], 'fog');
+  seg('segFusion', [[false, 'Aus'], [true, 'An']], 'fusion');
   const d = DIFFICULTIES[setup.diff - 1];
   $('diffDesc').textContent = `${d.name}: ${d.desc}`;
   $('seedInput').value = setup.code;
@@ -1828,7 +1901,7 @@ function renderHelp() {
     <b>Erschüttert ⭐:</b> Wer von einem Fernkämpfer getroffen wird, hat bis zu seinem nächsten Zug nur halbe Verteidigung und schlägt nicht zurück.</p>
     <h3>Städte</h3>
     <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden; Türme und Steinwälle in ihrem Gebiet wechseln mit auf deine Seite.
-    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz und +1 auf alle Rohstoffe.</p>
+    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz (höchstens ${MAX_SLOTS}) und mehr Ertrag – das Stadtzentrum liefert je Rohstoff ${CENTER_YIELD.slice(1).join(' / ')}. So lohnen sich wenige große Städte genauso wie viele kleine Siedlungen.</p>
     <h3>Gebäude</h3>
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
     <h3>Abreißen 🗑</h3>
@@ -1864,6 +1937,9 @@ function renderHelp() {
     <p>Katapulte sind Belagerungswaffen: Gegen Städte, Türme und Wälle machen sie vollen Schaden, gegen Truppen im offenen Feld nur 60 %. Sie treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Gegenmittel: Reiter und Ritter, denn Katapulte haben keine Verteidigung und können nach einer Bewegung nicht schießen. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +10 % (höchstens +30 %): Einkesseln lohnt sich.</p>
     <h3>Schwarzer Troll</h3>
     <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel und braucht eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
+    <h3>Fusion ⚗️</h3>
+    <p>Im Freien Spiel kannst du die <b>Fusion</b> einschalten. Dann gibt es im Entwicklungsbaum (Wirtschaft) die Forschungen <b>Alchemie</b> (nach Baukunst und Plattenrüstung) und <b>Fusionskunst</b> (nach Alchemie und Gegengewicht) – ein langer, teurer Weg. Danach baust du in einer Stadt ab Stufe 4 die <b>Fusionsschmiede</b> (eine im Reich).</p>
+    <p>Stehen zwei <b>verschiedene</b> eigene Einheiten nebeneinander, beide noch unbewegt, und die angetippte Partnerin höchstens 2 Felder von der Schmiede entfernt, wählst du „⚗️ Verschmelzen“ und tippst die Partnerin an. Beide gehen in einer stärkeren Fusionseinheit auf (kostet ${costText(FUSION_COST)}, eine Fusion pro Runde, doppelter Unterhalt). Es gibt ${Object.keys(FUSION_RECIPES).length} feste Rezepte – welche, verrät das 📖 Rezeptbuch im Pause-Menü erst, wenn du sie entdeckt hast. Jedes andere Paar ergibt eine wilde <b>Chimäre</b> mit gemischten Werten (+20 %). Fusionseinheiten lassen sich nicht weiter verschmelzen, sammeln aber Stufen und Spezialisierungen wie alle anderen.</p>
     <h3>Tribok</h3>
     <p>Die schwerste Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einzelnes Feld mit vollem Schaden (kein Flächenschaden, kein Abschlag gegen Truppen), kann aber nicht auf direkte Nachbarn schießen und nicht nach einer Bewegung. Braucht eine Werkstatt und die Forschung <b>Gegengewicht</b> (nach Ballistik), ohne Mengenbegrenzung, Unterhalt 1 Nahrung + 1 Holz. Ideal, um Burgverteidiger aus sicherer Entfernung zu treffen.</p>
     <h3>Basilisk 🦎</h3>

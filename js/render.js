@@ -603,7 +603,7 @@ export class Renderer {
       ctx.fillRect(x - 30 * s, y - 40 * s, 60 * s, 60 * s);
     }
     const stone = !!(u.stone || u.stoneNow);
-    const sp = this.sprite(u.type, u.owner, exhausted && !stone, u.level, stone);
+    const sp = this.sprite(u.mix ? 'chimera:' + u.mix.parents.join('+') : u.type, u.owner, exhausted && !stone, u.level, stone);
     const B = FIG_BOX;
     if (exhausted) ctx.globalAlpha *= 0.8;
     // Verband: mehrere Figuren, so viele wie (rechnerisch) noch stehen

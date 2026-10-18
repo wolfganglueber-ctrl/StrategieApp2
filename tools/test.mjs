@@ -31,6 +31,15 @@ const t0 = Date.now();
   console.log(`Nebel-Spiel: Runde ${s.turn}, ${towers} Türme, ${techs} Forschungen`);
   check(techs > 0, 'KI forscht nicht');
 }
+// Fusionsmodus: lange Partie mit reichen KI-Spielern, Fusionen müssen regelkonform sein
+{
+  const s = createGame({ seed: 777, cols: 12, rows: 15, biome: 'plains', fusion: true, players: [{ ai: 6 }, { ai: 6 }] });
+  for (const p of s.players) p.incomeBonus = 2;
+  playOut(s, mulberry32(11), 90);
+  const fused = s.units.filter((u) => u.type !== 'tower' && u.type !== 'barrier' && u.mix !== undefined || ['horsearcher', 'shieldbreaker', 'firemage', 'gorgon', 'rocktroll', 'stormdragon', 'ram', 'chimera'].includes(u.type)).length;
+  const forges = s.cities.filter((c) => c.buildings.includes('forge')).length;
+  console.log(`Fusions-Spiel: Runde ${s.turn}, ${forges} Schmieden, ${fused} Fusionseinheiten, Forschungen ${s.players.map((p) => p.tech.includes('fusion') ? 'Fusion' : p.tech.length).join('/')}`);
+}
 for (const l of getLevels()) {
   const s = createGame({ seed: l.seed, cols: l.cols, rows: l.rows, biome: l.biome, players: [{ human: true }, ...l.ais.map((ai) => ({ ai }))] });
   check(s.cities.filter((c) => c.capital).length === l.ais.length + 1, `Level ${l.id}: Hauptstädte`);
