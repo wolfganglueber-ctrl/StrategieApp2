@@ -522,8 +522,10 @@ function unitAtScreen(x, y) {
   return S.units.find((u) => u.idx === i) || null;
 }
 
-function onHover(x, y) {
+function onHover(x, y, to) {
   if (!S || $('hud').classList.contains('hidden') || sel.cityIdx != null || sel.placeTower != null) return;
+  // Maus wandert auf das gerade aufgeklappte Info-Fenster: stehen lassen (sonst zappelt es auf und zu)
+  if (x < 0 && to && $('hud').contains(to)) return;
   // Solange eine Einheit gewählt ist, bleibt ihr Panel stehen (sonst wechselt es beim Weg zu den Knöpfen)
   if (sel.unitId != null || sel.group) { if (hoverUnit != null) setHover(null); return; }
   setHover(unitAtScreen(x, y));
@@ -540,6 +542,8 @@ function onHold(x, y) {
 }
 
 attachInput(canvas, R, onTap, onHold, onHover);
+// Verlässt die Maus das Info-Fenster nicht zur Karte hin, verschwindet die Hover-Info
+$('panel').addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && e.relatedTarget !== canvas && sel.unitId == null) setHover(null); });
 
 // ---------------------------------------------------------------- Aktionen
 function vibrate(ms) {
