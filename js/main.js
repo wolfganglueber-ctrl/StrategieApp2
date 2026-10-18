@@ -729,7 +729,7 @@ function openTrade(preGet) {
 
     openClosable(
       el('h2', {}, 'Handel'),
-      el('p', {}, rate === TRADE_RATE ? 'Kurs 2 : 1 · mit der Handelsgilde 3 : 2' : 'Kurs 3 : 2 (Handelsgilde)'),
+      el('p', {}, rate === TRADE_RATE ? 'Kurs 3 : 1 · mit der Handelsgilde 2 : 1' : 'Kurs 2 : 1 (Handelsgilde)'),
       row('Gib', give, (k) => { give = k; if (get === k) get = null; }),
       row('Erhalte', get, (k) => { get = k; if (give === k) give = null; }),
       amount,
@@ -1845,7 +1845,7 @@ function renderHelp() {
     <h3>Kartennebel</h3>
     <p>Optional: Du siehst nur, was deine Einheiten und Städte sehen. Bereits erkundete Gebiete bleiben sichtbar, aber gegnerische Einheiten darin nicht. Die KI unterliegt denselben Regeln.</p>
     <h3>Handel</h3>
-    <p>Handeln kannst du erst mit einem <b>Markt</b> in einer deiner Städte (einer pro Reich genügt – in den anderen Städten ist er ausgegraut). Dann tippst du oben auf einen Rohstoff: 2 beliebige Rohstoffe gegen 1 anderen, mit der Forschung <b>Handelsgilde</b> 3 gegen 2.</p>
+    <p>Handeln kannst du erst mit einem <b>Markt</b> in einer deiner Städte (einer pro Reich genügt – in den anderen Städten ist er ausgegraut). Dann tippst du oben auf einen Rohstoff: 3 beliebige Rohstoffe gegen 1 anderen, mit der Forschung <b>Handelsgilde</b> 2 gegen 1.</p>
     <h3>Gelände</h3>
     <p><b>Gebirge</b> und <b>Seen</b> sind unpassierbar (nur der Drache fliegt darüber). Ein <b>Wald</b>feld zu betreten kostet 2 Bewegung statt 1 – ein einzelner Schritt in den Wald geht aber immer. Verteidigungsbonus gibt es nur in Städten.</p>
     <h3>Heilung</h3>

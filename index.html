@@ -25,10 +25,13 @@
         <div class="turninfo">
           <span class="dot" id="turnDot"></span>
           <span id="turnText">Runde 1</span>
-          <button class="pill tech" id="btnTech" title="Forschung">🔬 <b id="techText">0</b><span class="badge hidden" id="techBadge">0</span></button>
-          <span class="pill units" title="Einheiten · Nahrung (und Holz), die deine Armee pro Runde verbraucht">⚔ <b id="unitText">0</b> <span class="upkeep">🌾<b id="upkeepText">−0</b><span id="upkeepWood"></span></span></span>
         </div>
-        <div class="resbar" id="resBar"></div>
+        <!-- Rohstoffe, Forschung und Armee in einer Reihe -->
+        <div class="resrow">
+          <div class="resbar" id="resBar"></div>
+          <button class="pill tech" id="btnTech" title="Forschung">🔬 <b id="techText">0</b><span class="badge hidden" id="techBadge">0</span></button>
+          <span class="pill units" title="Einheiten · Nahrung (und Holz), die deine Armee pro Runde verbraucht"><span>⚔ <b id="unitText">0</b></span><span class="upkeep">🌾<b id="upkeepText">−0</b><span id="upkeepWood"></span></span></span>
+        </div>
       </div>
     </div>
     <div id="banner" class="banner hidden"></div>
@@ -60,7 +63,7 @@
       <button class="btn big" id="btnLoad">📂 Laden</button>
       <button class="btn big" id="btnHelp">Anleitung</button>
       <button class="btn ghost" id="btnSettings">Einstellungen</button>
-      <p class="version">Version 0.37</p>
+      <p class="version">Version 0.38</p>
     </div>
   </div>
 

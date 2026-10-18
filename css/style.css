@@ -353,3 +353,30 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .panel-large .panel { max-height: min(62vh, calc(100vh - var(--hud-top, 110px) - 120px)); }
 .pill.units .upkeep { color: #fca5a5; font-size: 0.85em; margin-left: 4px; white-space: nowrap; }
 .pill.units .upkeep b { color: #fca5a5; }
+
+/* HUD: Rohstoffe, Forschung und Armee auf einer Höhe */
+.resrow { display: flex; align-items: stretch; gap: 6px; min-width: 0; }
+.resrow .resbar { flex: 1; min-width: 0; }
+.resrow .pill.tech, .resrow .pill.units { flex: none; }
+.resrow .pill.tech { font-size: 22px; padding: 2px 9px; }
+.pill.units { flex-direction: column; justify-content: center; gap: 0; padding: 2px 9px; line-height: 1.15; font-size: 14px; }
+.pill.units .upkeep { margin-left: 0; }
+@media (max-width: 500px) {
+  .resrow { gap: 4px; }
+  .resrow .pill.tech { font-size: 17px; padding: 2px 6px; }
+  .resrow .pill.tech b { font-size: 13px; }
+  .pill.units { font-size: 12px; padding: 2px 6px; }
+  .resbar { gap: 4px; }
+  .resbar .pill { font-size: 13px; padding: 3px 4px; gap: 2px; }
+  .resbar .ico { width: 20px; height: 20px; }
+  .resbar .pill small { font-size: 10px; }
+}
+/* Stadtmenü: Kauf-Kacheln immer kompakt, auf breiten Bildschirmen mehr pro Zeile */
+.recruit-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 4px; }
+.recruit { font-size: 10.5px; padding: 2px 2px 3px; gap: 0; min-width: 0; overflow: hidden; }
+.recruit .name { font-size: 11.5px; }
+.recruit canvas { width: 34px !important; height: 34px !important; margin: -3px 0 -3px; }
+.recruit .cost { font-size: 11px; gap: 3px; flex-wrap: wrap; justify-content: center; row-gap: 0; }
+.recruit .cost .ico { width: 14px; height: 14px; }
+.recruit .lock { font-size: 10px; white-space: normal; }
+.panel-small .recruit-grid { grid-template-columns: repeat(4, 1fr); }

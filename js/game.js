@@ -499,7 +499,7 @@ export function canBuild(state, pid, c, b) {
   return null;
 }
 
-// Handeln geht nur mit einem Markt (2:1); die Handelsgilde verbessert den Kurs auf 3:2. Ohne Markt: 0
+// Handeln geht nur mit einem Markt (3:1); die Handelsgilde verbessert den Kurs auf 2:1. Ohne Markt: 0
 // Preis für n Stück zum Kurs rate (bei 3:2 aufgerundet)
 export function tradeCost(rate, n) {
   return Math.ceil(rate * n - 1e-9);
