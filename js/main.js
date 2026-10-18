@@ -1379,7 +1379,7 @@ function renderCityPanel(panel, ci, occ) {
     // Reihenfolge: Wirtschaft, dann Turm und Steinwall, dann alles andere
     const tiles = cityTiles(S, ci);
     const ECO = ['farm', 'lumber', 'mine', 'market'];
-    const eco = (n, what, res) => n ? `+${n} ${res} (je ${what} im Stadtkreis)` : `+${BUILDING_FLAT} ${res} (pauschal, kein ${what} im Stadtkreis)`;
+    const eco = (n, what, res) => n ? `+${n * c.level} ${res} (${n} ${what} × Stufe ${c.level})` : `+${BUILDING_FLAT + c.level - 1} ${res} (pauschal, kein ${what} im Stadtkreis)`;
     const ecoDesc = { farm: eco(tiles.food, 'Wiese/See', 'Nahrung'), lumber: eco(tiles.wood, 'Wald', 'Holz'), mine: eco(tiles.ore, 'Hügel/Berg', 'Erz') };
     const structRows = () => {
       for (const [type, text] of [['tower', 'Schießt auf Gegner, 3 Ausbaustufen'], ['barrier', 'Blockiert den Weg, bildet Mauern']]) {
@@ -1415,9 +1415,11 @@ function renderCityPanel(panel, ci, occ) {
       const cost = upgradeCostOf(S, c);
       panel.append(el('div', { class: 'upgrade-row' },
         el('span', { class: 'muted' }, (() => {
+          // Zuwachs: Stadtzentrum + je Feld mit passendem Gebäude (Bauernhof/Holzfäller/Mine) +1
           const t = cityTiles(S, ci);
-          const parts = RES.map((k) => `+${t[k] + CENTER_YIELD[c.level + 1] - CENTER_YIELD[c.level]} ${RES_INFO[k].name}`).join(', ');
-          return `Ausbau zur ${CITY_NAMES[c.level + 1]}: ${citySlots({ level: c.level + 1 }) > citySlots(c) ? '+1 Bauplatz, ' : ''}${parts} (+1 je Feld im Stadtkreis)`;
+          const B = { food: 'farm', wood: 'lumber', ore: 'mine' };
+          const parts = RES.map((k) => `+${CENTER_YIELD[c.level + 1] - CENTER_YIELD[c.level] + (hasBuilding(c, B[k]) ? (t[k] || 1) : 0)} ${RES_INFO[k].name}`).join(', ');
+          return `Ausbau zur ${CITY_NAMES[c.level + 1]}: ${citySlots({ level: c.level + 1 }) > citySlots(c) ? '+1 Bauplatz, ' : ''}${parts}`;
         })()),
         el('button', { class: 'btn small primary', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost, p.res))));
     } else {
@@ -1928,7 +1930,7 @@ function renderHelp() {
     <b>Erschüttert ⭐:</b> Wer von einem Fernkämpfer getroffen wird, hat bis zu seinem nächsten Zug nur halbe Verteidigung und schlägt nicht zurück.</p>
     <h3>Städte</h3>
     <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden; Türme und Steinwälle in ihrem Gebiet wechseln mit auf deine Seite.
-    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz (höchstens ${MAX_SLOTS}) und mehr Ertrag: Jedes Feld im Stadtkreis liefert so viel seines Rohstoffs, wie die Stadt Stufen hat (+1 je Feld und Ausbau), und das Stadtzentrum liefert je Rohstoff ${CENTER_YIELD.slice(1).join(' / ')}. So lohnen sich wenige große Städte genauso wie viele kleine Siedlungen.</p>
+    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz (höchstens ${MAX_SLOTS}) und mehr Ertrag: Das Stadtzentrum liefert je Rohstoff ${CENTER_YIELD.slice(1).join(' / ')}. Jedes Feld im Stadtkreis liefert 1 seines Rohstoffs – erst mit Bauernhof (Wiese/See), Holzfäller (Wald) oder Mine (Hügel/Gebirge) kommt je Feld so viel dazu, wie die Stadt Stufen hat. Ob du zuerst baust oder ausbaust, ist egal. So lohnen sich wenige große Städte genauso wie viele kleine Siedlungen.</p>
     <h3>Gebäude</h3>
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
     <h3>Abreißen 🗑</h3>

@@ -464,15 +464,15 @@ export function cityYield(state, ci, territory = computeTerritory(state)) {
       for (const k of RES) inc[k] += cityCenterYield(c);
       continue;
     }
-    // Jedes Feld im Stadtkreis liefert so viel, wie die Stadt Stufen hat (Ausbau: +1 je Feld)
+    // Jedes Feld im Stadtkreis liefert 1; erst Bauernhof/Holzfäller/Mine lassen es mit der Stadtstufe wachsen
     const t = state.terrain[i];
-    inc[TERRAIN[t].res] += c.level;
+    inc[TERRAIN[t].res]++;
   }
   // Bauernhof, Holzfäller, Mine: +1 je passendem Feld im Stadtkreis (Wiese/See, Wald, Hügel/Gebirge)
   const tiles = cityTiles(state, ci, territory);
   const tech = (t) => c.owner >= 0 && hasTech(state, c.owner, t);
-  // Ohne passendes Feld im Stadtkreis gibt es pauschal +4
-  const per = (n) => n || BUILDING_FLAT;
+  // Gebäude: +Stufe je passendem Feld (Reihenfolge von Bau und Ausbau egal); ohne passendes Feld pauschal 4 (+1 je weiterer Stufe)
+  const per = (n) => (n ? n * c.level : BUILDING_FLAT + c.level - 1);
   if (hasBuilding(c, 'farm')) inc.food += per(tiles.food) + (tech('plough') ? 2 : 0) + (tech('rotation') ? 2 : 0);
   if (hasBuilding(c, 'lumber')) inc.wood += per(tiles.wood) + (tech('saw') ? 2 : 0);
   if (hasBuilding(c, 'mine')) inc.ore += per(tiles.ore) + (tech('mining') ? 2 : 0) + (tech('smelting') ? 2 : 0);
