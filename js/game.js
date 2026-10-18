@@ -144,6 +144,24 @@ export function hasSkill(u, k) {
   return !!u.skills?.includes(k);
 }
 
+// Erschüttern: Titanen und Bauwerke nie; Katapulte/Triböke nach einem Angriff, alle anderen nach zwei Angreifern pro Runde
+export function canShake(t) {
+  return !isStructure(t) && t.type !== 'troll' && t.type !== 'dragon';
+}
+export function shakeNeed(t) {
+  return t.type === 'catapult' || t.type === 'trebuchet' ? 1 : 2;
+}
+// Wie viele verschiedene Gegner das Ziel in dieser Runde schon angegriffen haben
+export function shakeHits(state, t) {
+  return t.hitKey === state.turn * 10 + state.current ? t.hitBy.length : 0;
+}
+// Würde dieser Angriff das Ziel erschüttern (falls es überlebt)?
+export function wouldShake(state, att, t) {
+  if (!canShake(t) || t.shaken) return false;
+  const hits = shakeHits(state, t) - (t.hitKey === state.turn * 10 + state.current && t.hitBy.includes(att.id) ? 1 : 0);
+  return hits + 1 >= shakeNeed(t);
+}
+
 export function canPetrify(t) {
   return !isStructure(t) && t.type !== 'troll' && t.type !== 'dragon' && !t.stone;
 }
@@ -204,6 +222,7 @@ export function combatInfo(state, att, def, fromIdx = att.idx) {
   if (hasSkill(def, 'hold') && !def.walked) defNotes.push('Stellung gehalten +20 %');
   if (dm > 1) defNotes.push(`${castleOf(state, def.idx) && !cityOn(state, def.idx) ? 'Burgfeld' : 'Stadt/Burg'} ×${Math.round(dm * 100) / 100}`);
   if (def.shaken) defNotes.push('erschüttert ×0,5');
+  else if (wouldShake(state, att, def)) atkNotes.push('erschüttert das Ziel ⭐');
   if (inAura(state, def)) defNotes.push('Schutzaura −25 % Schaden');
   if (def.hp < D.hp) defNotes.push(`angeschlagen ${def.hp}/${D.hp}`);
   if (att.hp < A.hp) atkNotes.push(`angeschlagen ${att.hp}/${A.hp}`);
@@ -853,7 +872,14 @@ export function applyAction(state, a) {
           u.walked = true;
         }
       } else {
-        if (statsOf(state, u).range > 1 && !isStructure(t)) { t.shaken = true; e.shaken = true; }
+        // Erschüttert: erst wenn mindestens zwei verschiedene Gegner das Ziel in dieser Runde angegriffen haben
+        // (Katapult und Tribok schon nach einem Angriff, Titanen nie)
+        if (canShake(t)) {
+          const key = state.turn * 10 + state.current;
+          if (t.hitKey !== key) { t.hitKey = key; t.hitBy = []; }
+          if (!t.hitBy.includes(u.id)) t.hitBy.push(u.id);
+          if (canShake(t) && t.hitBy.length >= shakeNeed(t)) { t.shaken = true; e.shaken = true; }
+        }
         // Basilisk versteinert: das Ziel setzt seinen nächsten Zug aus (Titanen und Bauwerke sind immun)
         if (UNITS[u.type].petrify && canPetrify(t)) { t.stone = 1; e.stone = true; }
       }

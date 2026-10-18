@@ -2063,7 +2063,7 @@ function renderHelp() {
     <h3>Angreifen</h3>
     <p>Wählst du eine Einheit, zeigen rote Felder alle Ziele. Die Blase über dem Ziel nennt den Schaden (↩ = Gegenschlag, ✖ = Ziel wird besiegt). Ein Tipp auf das Ziel greift an.
     Nahkämpfer rücken nach einem Sieg auf das Feld vor.<br>
-    <b>Erschüttert ⭐:</b> Wer von einem Fernkämpfer getroffen wird, hat bis zu seinem nächsten Zug nur halbe Verteidigung und schlägt nicht zurück.</p>
+    <b>Erschüttert ⭐:</b> Greifen in einer Runde mindestens zwei verschiedene Einheiten denselben Gegner an (Katapult und Tribok: schon ein Angriff), ist er bis zu seinem nächsten Zug erschüttert: halbe Verteidigung, kein Gegenschlag. Troll und Drache werden nie erschüttert. Tipp: erst zwei Fernkämpfer, dann die Nahkämpfer.</p>
     <h3>Städte</h3>
     <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden; Türme und Steinwälle in ihrem Gebiet wechseln mit auf deine Seite.
     Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz (höchstens ${MAX_SLOTS}) und mehr Ertrag: Das Stadtzentrum liefert je Rohstoff ${CENTER_YIELD.slice(1).join(' / ')}. Jedes Feld im Stadtkreis liefert 1 seines Rohstoffs – erst mit Bauernhof (Wiese/See), Holzfäller (Wald) oder Mine (Hügel/Gebirge) kommt je Feld so viel dazu, wie die Stadt Stufen hat. Ob du zuerst baust oder ausbaust, ist egal. So lohnen sich wenige große Städte genauso wie viele kleine Siedlungen.</p>

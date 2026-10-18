@@ -6,7 +6,7 @@ import {
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
-  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, unitUpOptions, unitUpList, canBuild, canPetrify,
+  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, unitUpOptions, unitUpList, canBuild, canPetrify, wouldShake,
   DMG_K, canBoost, skillOptions, getFreezeTargets,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
@@ -179,7 +179,8 @@ function attackScore(state, ctx, P, u, t, from) {
   const dv = baseValue(t), uv = baseValue(u);
   let gain = (Math.min(r.dmg, t.hp) / DT.hp) * dv * 1.2;
   // Fernkampf zuerst: erschütterte Ziele sind für Nahkämpfer leichte Beute
-  if (UT.range > 1 && !r.kill && !t.shaken) gain += 1.5;
+  // Zweiter Angreifer erschüttert: danach greifen die Nahkämpfer ohne Gegenschlag an
+  if (!r.kill && wouldShake(state, u, t)) gain += 1.5;
   if (UNITS[u.type].petrify && !r.kill && canPetrify(t)) gain += Math.min(baseValue(t) * 0.3, 8);
   if (r.kill) gain += dv + 3;
   const tc = cityOn(state, t.idx);
