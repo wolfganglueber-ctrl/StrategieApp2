@@ -478,7 +478,8 @@ export class Renderer {
       ctx.shadowBlur = 5;
       ctx.shadowOffsetX = 3;
       ctx.shadowOffsetY = 2;
-      const sc = CITY_SCALE[city.level] || 2.2;
+      // Mit Mauer wirkt die Stadt durch den Mauerring ohnehin größer – etwas kleiner zeichnen
+      const sc = (CITY_SCALE[city.level] || 2.2) * (city.buildings?.includes('wall') ? 0.8 : 1);
       drawCity(ctx, city, c.x, c.y - HEX * 0.25 * (sc - 1), HEX * sc, colorOf(city.owner));
       ctx.restore();
     }
