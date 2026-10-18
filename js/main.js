@@ -904,6 +904,22 @@ function updateAmbience() {
 }
 setInterval(updateAmbience, 900);
 
+// Größe des Bedienfelds unten: automatisch nach Gerät oder fest eingestellt
+function detectPanelSize() {
+  const touch = window.matchMedia?.('(pointer: coarse)').matches;
+  const short = Math.min(window.innerWidth, window.innerHeight);
+  if (touch && short < 600) return 'small'; // Handy
+  if (touch) return 'medium'; // Tablet
+  return 'large'; // PC
+}
+function applyPanelSize() {
+  const v = settings.panelSize && settings.panelSize !== 'auto' ? settings.panelSize : detectPanelSize();
+  document.body.classList.remove('panel-small', 'panel-medium', 'panel-large');
+  document.body.classList.add('panel-' + v);
+}
+applyPanelSize();
+window.addEventListener('resize', applyPanelSize);
+
 function applySoundSettings() {
   sound.setOptions({ sfx: settings.sound, ambience: settings.ambience });
 }
@@ -1266,7 +1282,8 @@ function renderCityPanel(panel, ci, occ) {
   const y = cityYield(S, ci);
   panel.append(el('div', { class: 'city-head' },
     el('span', { class: 'title' }, cityTitle(c)),
-    el('span', { class: 'yield' }, ...RES.map((k) => el('span', {}, icon(k), `+${y[k]}`)))));
+    el('span', { class: 'yield' }, ...RES.map((k) => el('span', {}, icon(k), `+${y[k]}`))),
+    el('button', { class: 'panel-x', 'aria-label': 'Schließen', onclick: () => { clearSel(); refresh(); } }, '✕')));
   const tabs = el('div', { class: 'ptabs' });
   for (const [k, label] of [['units', 'Einheiten'], ['build', `Gebäude ${c.buildings.length}/${citySlots(c)}`]]) {
     tabs.append(el('button', { class: cityTab === k ? 'active' : '', onclick: () => { cityTab = k; renderPanel(); } }, label));
@@ -1689,6 +1706,8 @@ function openSettings(onClose) {
     seg([[true, 'An'], [false, 'Aus']], settings.sound, (v) => { settings.sound = v; store.saveSettings(settings); applySoundSettings(); }),
     el('label', {}, 'Umgebung (Meer, Wind, Wald, Stadt)'),
     seg([[0, 'Aus'], [0.3, 'Leise'], [0.6, 'Normal'], [1, 'Laut']], settings.ambience, (v) => { settings.ambience = v; store.saveSettings(settings); applySoundSettings(); }),
+    el('label', {}, 'Größe der Menüs unten (Stadt, Einheit)'),
+    seg([['auto', 'Automatisch'], ['small', 'Klein'], ['medium', 'Mittel'], ['large', 'Groß']], settings.panelSize || 'auto', (v) => { settings.panelSize = v; store.saveSettings(settings); applyPanelSize(); }),
     el('label', {}, 'Vibration'),
     toggle('vibrate'),
     el('label', {}, 'Zugende bestätigen'),
