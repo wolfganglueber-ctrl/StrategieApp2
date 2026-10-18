@@ -1395,19 +1395,13 @@ function renderPanelContent(panel) {
     return;
   }
   if (sel.group) {
+    // Kompakt: nur Gruppe erweitern oder auflösen, damit die Karte mit Zielfeldern sichtbar bleibt
     const members = groupUnits();
-    const row = el('div', { class: 'group-row' });
-    for (const m of members) row.append(el('button', { class: 'gm', title: UNITS[m.type].name, onclick: () => toggleGroupMember(m) }, iconCanvas(m.type, m.owner, 38)));
-    panel.append(el('div', { class: 'city-head' },
-      el('span', { class: 'title' }, `👥 Gruppe · ${members.length} Einheit${members.length === 1 ? '' : 'en'} · gemeinsam ziehen & angreifen`),
-      el('span', { class: 'group-btns' },
-        el('button', { class: 'btn small', onclick: () => addNearbyToGroup() }, '+ Umgebung'),
-        el('button', { class: 'btn small' + (groupApproach ? ' active' : ''), title: 'Mitglieder rücken zum Angriff heran', onclick: () => { groupApproach = !groupApproach; refresh(); } }, groupApproach ? '⚔ Heranrücken an' : '⚔ Nur aus Stand'),
-        el('button', { class: 'btn small', onclick: () => { clearSel(); refresh(); } }, 'Auflösen'))));
-    panel.append(row);
-    panel.append(el('div', { class: 'note' }, groupApproach
-      ? 'Gegner antippen = alle greifen nacheinander an (rücken dafür heran) · helles Feld = alle ziehen · eigene Einheit = hinzufügen/entfernen · anderes leeres Feld = Gruppe auflösen'
-      : 'Gegner antippen = alle, die ihn von ihrem Feld aus erreichen, greifen an · Zielfeld = alle ziehen · eigene Einheit = hinzufügen/entfernen'));
+    panel.append(el('div', { class: 'group-bar' },
+      el('span', { class: 'title' }, `👥 ${members.length}`),
+      el('button', { class: 'btn small', title: 'Alle eigenen Einheiten in der Nähe dazunehmen', onclick: () => addNearbyToGroup() }, '+ Umgebung'),
+      el('button', { class: 'btn small', title: 'Nur Einheiten vom Typ der zuerst gewählten dazunehmen', disabled: !members.length, onclick: () => addNearbyToGroup(members[0].type) }, `+ ${members.length ? UNITS[members[0].type].name : 'Gleiche'}`),
+      el('button', { class: 'btn small', onclick: () => { clearSel(); refresh(); } }, 'Auflösen')));
     return;
   }
   const hu = hoverUnit != null ? unitById(S, hoverUnit) : null;
@@ -1813,7 +1807,7 @@ function renderHelp() {
     Einheiten, die noch etwas tun können, haben einen leuchtenden Ring.</p>
     <h3>Gemeinsam angreifen 👥</h3>
     <p>Wähle eine Einheit und tippe auf „👥 Alle in der Nähe“ (alle eigenen Einheiten im Umkreis) oder „👥 Alle Ritter“ usw. (nur gleiche Einheiten im Umkreis); am PC geht auch Shift + Klick. Danach ist der Gruppenmodus aktiv. Weitere eigene Einheiten fügst du per Tipp hinzu oder nimmst sie wieder heraus.
-    Ein Tipp auf einen Gegner: Alle greifen nacheinander an und rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt. Zauberer ziehen mit, greifen aber nicht automatisch an (sie heilen lieber). Die Gruppe bleibt danach gewählt – tippe einfach den nächsten Gegner an. Ein Tipp auf ein hell markiertes Feld bewegt die Gruppe, ein Tipp auf ein anderes leeres Feld (oder „Auflösen“) beendet sie; „Nur aus Stand“ verzichtet aufs Heranrücken.</p>
+    Ein Tipp auf einen Gegner: Alle greifen nacheinander an und rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt. Zauberer ziehen mit, greifen aber nicht automatisch an (sie heilen lieber). Die Gruppe bleibt danach gewählt – tippe einfach den nächsten Gegner an. Ein Tipp auf ein hell markiertes Feld bewegt die Gruppe, ein Tipp auf ein anderes leeres Feld (oder „Auflösen“) beendet sie. Das Gruppenmenü unten bleibt bewusst klein: „+ Umgebung“, „+ Ritter“ usw. (nur Einheiten vom Typ der zuerst gewählten) und „Auflösen“.</p>
     <h3>Verbände 🔗</h3>
     <p>Bis zu 3 gleiche Einheiten (Krieger, Schützen, Reiter, Wächter, Ritter, Katapulte) lassen sich zu einem Verband zusammenlegen – dann ziehst du sie mit einem Tipp. Wähle eine Einheit, tippe „🔗 Verband bilden“ und dann eine violett markierte gleiche Einheit direkt daneben; das Spiel fragt vorher nach. Beide dürfen in dieser Runde noch nichts getan haben, das Zusammenlegen verbraucht ihren Zug.
     Ein Verband hat die Lebenspunkte aller Mitglieder und teilt entsprechend mehr Schaden aus; je angeschlagener er ist, desto weniger Figuren stehen auf dem Sockel. Er übernimmt den besten Rang. Aber Vorsicht: Katapulte, Drachenfeuer und „Wüten“ treffen Verbände härter (+25 % je weiterem Mitglied). Mit „✂ Aufteilen“ löst du eine Einheit wieder heraus.</p>

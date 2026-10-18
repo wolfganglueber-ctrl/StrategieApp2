@@ -341,3 +341,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .panel-small .recruit .cost { flex-wrap: wrap; justify-content: center; row-gap: 0; }
 .panel-small .recruit .lock { font-size: 10px; white-space: normal; }
 .panel > .city-head:first-child { padding-right: 18px; }
+.group-bar { display: flex; align-items: center; gap: 6px; }
+.group-bar .title { flex: none; margin-right: 2px; }
+.group-bar .btn { flex: 1; padding: 6px 4px; }
