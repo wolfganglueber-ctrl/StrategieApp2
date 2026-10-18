@@ -31,7 +31,8 @@ export class Renderer {
     this.state = null;
     this.overlay = {};
     this.anims = [];
-    this.unitPos = new Map(); // id -> {x, y, s, a}
+    this.unitPos = new Map(); // id -> {x, y, s, rot}
+    this.fx = true; // Kampfeffekte
     this.hidden = new Set();
     this.cache = null;
     this.cacheDirty = true;
@@ -200,7 +201,7 @@ export class Renderer {
     return total;
   }
 
-  lunge(id, fromIdx, toIdx, ms, ranged, holdEnd = false) {
+  lunge(id, fromIdx, toIdx, ms, ranged, holdEnd = false, noShot = false) {
     if (ms <= 0) return 0;
     const a = this.center(fromIdx), b = this.center(toIdx);
     const amt = ranged ? 0.12 : 0.4;
@@ -209,7 +210,7 @@ export class Renderer {
       const e = Math.sin(p * Math.PI) * amt;
       this.unitPos.set(id, { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e });
     });
-    if (ranged) {
+    if (ranged && !noShot) {
       // Projektil
       this.addAnim(ms * 0.6, null, (ctx, p) => {
         const x = a.x + (b.x - a.x) * p, y = a.y + (b.y - a.y) * p - Math.sin(p * Math.PI) * HEX * 0.8;
@@ -252,8 +253,9 @@ export class Renderer {
   }
 
   // Einheit, die schon aus dem Zustand entfernt ist: erst normal zeigen, ab "fadeFrom" ausblenden
-  ghost(unit, ms, fadeFrom = 0, lungeTo = null) {
+  ghost(unit, ms, fadeFrom = 0, lungeTo = null, fallDir = 1) {
     if (ms <= 0) return;
+    const fx = this.fx, fall = fallDir;
     const c0 = this.center(unit.idx);
     const t = lungeTo != null ? this.center(lungeTo) : null;
     this.addAnim(ms, null, (ctx, p) => {
@@ -264,6 +266,18 @@ export class Renderer {
         y += (t.y - c0.y) * e;
       }
       const f = p < fadeFrom ? 0 : (p - fadeFrom) / (1 - fadeFrom);
+      if (fx) {
+        // Kampfeffekte: die Figur kippt um und verblasst erst danach
+        const py = y + HEX * 0.3;
+        ctx.save();
+        ctx.globalAlpha = 1 - Math.max(0, (f - 0.45) / 0.55);
+        ctx.translate(x, py);
+        ctx.rotate(easeOut(Math.min(1, f * 1.6)) * 1.35 * fall);
+        ctx.translate(-x, -py);
+        this.drawUnit(ctx, unit, x, y + f * HEX * 0.1, 1, false, f > 0 ? Math.max(0, 1 - f * 2) : 0);
+        ctx.restore();
+        return;
+      }
       ctx.globalAlpha = 1 - f;
       this.drawUnit(ctx, unit, x, y - f * HEX * 0.2, 1 - f * 0.3, false, f > 0 ? 1 - f : 0);
       ctx.globalAlpha = 1;
@@ -294,6 +308,253 @@ export class Renderer {
       ctx.stroke();
       ctx.globalAlpha = 1;
     });
+  }
+
+  // ---------- Kampfeffekte (abschaltbar in den Einstellungen) ----------
+  // Nahkampf mit Ausholen: erst zurücklehnen, dann nach vorn stoßen (Treffer bei der Hälfte), zurück
+  strike(id, fromIdx, toIdx, ms, holdEnd = false) {
+    if (ms <= 0) return 0;
+    const a = this.center(fromIdx), b = this.center(toIdx);
+    const dir = b.x >= a.x ? 1 : -1;
+    this.addAnim(ms, (p) => {
+      if (p >= 1) { if (holdEnd) this.unitPos.set(id, { ...a }); else this.unitPos.delete(id); return; }
+      let e, rot;
+      if (p < 0.32) { const k = easeOut(p / 0.32); e = -0.12 * k; rot = -0.16 * dir * k; }
+      else if (p < 0.5) { const k = (p - 0.32) / 0.18; e = -0.12 + 0.57 * k * k; rot = (-0.16 + 0.38 * k) * dir; }
+      else { const k = easeInOut((p - 0.5) / 0.5); e = 0.45 * (1 - k); rot = 0.22 * dir * (1 - k); }
+      this.unitPos.set(id, { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e, rot });
+    });
+    return ms;
+  }
+
+  // Hieb: leuchtender Bogen über dem Ziel
+  slash(idx, fromIdx, delay, color = '#fff7d6', big = false) {
+    const c = this.center(idx), f = this.center(fromIdx);
+    const ang = Math.atan2(c.y - f.y, c.x - f.x);
+    const r = HEX * (big ? 0.75 : 0.55);
+    this.addAnim(260, null, (ctx, p) => {
+      const a0 = ang - 1.3 + p * 1.6, a1 = a0 + 1.1;
+      ctx.save();
+      ctx.globalAlpha = 1 - p;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+      ctx.lineWidth = HEX * (big ? 0.24 : 0.17) * (1 - p * 0.5);
+      ctx.beginPath();
+      ctx.arc(c.x, c.y - HEX * 0.35, r, a0, a1);
+      ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.shadowBlur = 0;
+      ctx.lineWidth *= 0.4;
+      ctx.stroke();
+      ctx.restore();
+    }, delay);
+  }
+
+  // Funken/Splitter: kleine Teilchen fliegen auseinander und fallen
+  sparks(idx, delay, { n = 14, colors = ['#fff7c2', '#fcd34d', '#fb923c'], speed = 1, size = 1, gravity = 1, ms = 420, up = 0.35 } = {}) {
+    const c = this.center(idx);
+    const parts = [];
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * Math.PI * 2, v = HEX * (0.5 + Math.random() * 0.9) * speed;
+      parts.push({ vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.7 - HEX * 0.4 * speed, r: HEX * (0.045 + Math.random() * 0.05) * size, col: colors[k % colors.length] });
+    }
+    this.addAnim(ms, null, (ctx, p) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 1 - p * p;
+      for (const q of parts) {
+        const x = c.x + q.vx * p, y = c.y - HEX * up + q.vy * p + HEX * 1.2 * gravity * p * p;
+        ctx.fillStyle = q.col;
+        ctx.beginPath();
+        ctx.arc(x, y, q.r * (1 - p * 0.5), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }, delay);
+  }
+
+  // Staubwolke (Einschlag, Sturz, Schritt eines Titanen)
+  dust(idx, delay, { n = 9, size = 1, color = '170,150,120', ms = 650 } = {}) {
+    const c = this.center(idx);
+    const puffs = [];
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * Math.PI * 2;
+      puffs.push({ dx: Math.cos(a) * HEX * (0.3 + Math.random() * 0.4) * size, dy: Math.sin(a) * HEX * 0.18 * size, r: HEX * (0.16 + Math.random() * 0.14) * size });
+    }
+    this.addAnim(ms, null, (ctx, p) => {
+      const e = easeOut(p);
+      for (const q of puffs) {
+        ctx.fillStyle = `rgba(${color},${0.5 * (1 - p)})`;
+        ctx.beginPath();
+        ctx.arc(c.x + q.dx * e, c.y + HEX * 0.15 + q.dy * e - HEX * 0.25 * e, q.r * (0.6 + e * 0.8), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }, delay);
+  }
+
+  // Geschoss: Pfeil (dreht sich in Flugrichtung), Brandpfeil, Stein, Zauberkugel, Eis
+  projectile(fromIdx, toIdx, ms, delay, kind = 'arrow') {
+    if (ms <= 0) return;
+    const a = this.center(fromIdx), b = this.center(toIdx);
+    const dist = Math.hypot(b.x - a.x, b.y - a.y);
+    const arc = kind === 'stone' ? Math.max(HEX * 1.2, dist * 0.45) : kind === 'arrow' || kind === 'fire' ? dist * 0.22 : dist * 0.08;
+    const pos = (t) => ({ x: a.x + (b.x - a.x) * t, y: a.y - HEX * 0.45 + (b.y - a.y + HEX * 0.1) * t - Math.sin(t * Math.PI) * arc });
+    const glow = { fire: '#fb923c', bolt: '#c084fc', heal: '#86efac', ice: '#bae6fd', gaze: '#a3e635', blast: '#fdba74' }[kind];
+    this.addAnim(ms, null, (ctx, p) => {
+      const q = pos(p), q0 = pos(Math.max(0, p - 0.06));
+      ctx.save();
+      if (kind === 'arrow' || kind === 'fire') {
+        const ang = Math.atan2(q.y - q0.y, q.x - q0.x);
+        if (kind === 'fire') {
+          // Flammenschweif
+          ctx.globalCompositeOperation = 'lighter';
+          for (let k = 1; k <= 5; k++) {
+            const t = pos(Math.max(0, p - k * 0.035));
+            ctx.fillStyle = k < 3 ? 'rgba(253,186,116,0.7)' : 'rgba(239,68,68,0.45)';
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, HEX * (0.09 - k * 0.012), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalCompositeOperation = 'source-over';
+        }
+        ctx.translate(q.x, q.y);
+        ctx.rotate(ang);
+        const L = HEX * 0.42;
+        ctx.strokeStyle = '#5b3a1e';
+        ctx.lineWidth = HEX * 0.035;
+        ctx.beginPath();
+        ctx.moveTo(-L, 0);
+        ctx.lineTo(0, 0);
+        ctx.stroke();
+        ctx.fillStyle = kind === 'fire' ? '#fde047' : '#cbd5e1';
+        ctx.beginPath();
+        ctx.moveTo(HEX * 0.1, 0);
+        ctx.lineTo(-HEX * 0.03, -HEX * 0.05);
+        ctx.lineTo(-HEX * 0.03, HEX * 0.05);
+        ctx.fill();
+        ctx.fillStyle = '#f1f5f9';
+        ctx.fillRect(-L, -HEX * 0.05, HEX * 0.1, HEX * 0.1);
+      } else if (kind === 'stone') {
+        // Schatten am Boden, Stein dreht sich
+        const g = { x: a.x + (b.x - a.x) * p, y: a.y + (b.y - a.y) * p + HEX * 0.15 };
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.beginPath();
+        ctx.ellipse(g.x, g.y, HEX * 0.14, HEX * 0.06, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.translate(q.x, q.y);
+        ctx.rotate(p * 9);
+        ctx.fillStyle = '#6b6258';
+        ctx.beginPath();
+        ctx.moveTo(-HEX * 0.13, -HEX * 0.05);
+        ctx.lineTo(-HEX * 0.04, -HEX * 0.14);
+        ctx.lineTo(HEX * 0.11, -HEX * 0.09);
+        ctx.lineTo(HEX * 0.14, HEX * 0.05);
+        ctx.lineTo(HEX * 0.02, HEX * 0.13);
+        ctx.lineTo(-HEX * 0.11, HEX * 0.08);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.fillRect(-HEX * 0.06, -HEX * 0.08, HEX * 0.07, HEX * 0.05);
+      } else {
+        // Leuchtende Kugel mit Schweif
+        ctx.globalCompositeOperation = 'lighter';
+        for (let k = 4; k >= 0; k--) {
+          const t = pos(Math.max(0, p - k * 0.04));
+          ctx.globalAlpha = 1 - k * 0.18;
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(t.x, t.y, HEX * (0.14 - k * 0.02), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(q.x, q.y, HEX * 0.06, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }, delay);
+  }
+
+  // Feueratem: Flammenstrom vom Drachen über das Ziel hinaus (len = Felder hinter dem Ziel)
+  flames(fromIdx, toIdx, ms, delay, len = 2) {
+    const a = this.center(fromIdx), b = this.center(toIdx);
+    const d = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const ux = (b.x - a.x) / d, uy = (b.y - a.y) / d;
+    const total = d + len * HEX * SQRT3;
+    const parts = [];
+    for (let k = 0; k < 70; k++) parts.push({ t0: Math.random() * 0.55, life: 0.35 + Math.random() * 0.15, spread: (Math.random() - 0.5) * 0.5, r: HEX * (0.12 + Math.random() * 0.12) });
+    this.addAnim(ms, null, (ctx, p) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const q of parts) {
+        const t = (p - q.t0) / q.life;
+        if (t < 0 || t > 1) continue;
+        const dist = HEX * 0.3 + t * total;
+        const side = q.spread * dist * 0.35;
+        const x = a.x + ux * dist - uy * side, y = a.y - HEX * 0.5 + uy * dist + ux * side - t * HEX * 0.2;
+        ctx.globalAlpha = (1 - t) * 0.65;
+        ctx.fillStyle = t < 0.18 ? '#fde68a' : t < 0.5 ? '#f97316' : '#b91c1c';
+        ctx.beginPath();
+        ctx.arc(x, y, q.r * (0.6 + t * 1.2), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }, delay);
+  }
+
+  // Lichtfunken steigen auf (Heilen) bzw. Eissplitter (Vereisen)
+  glitter(idx, delay, color = '#86efac', n = 12, ms = 700) {
+    const c = this.center(idx);
+    const parts = [];
+    for (let k = 0; k < n; k++) parts.push({ dx: (Math.random() - 0.5) * HEX * 0.9, t0: Math.random() * 0.4, h: HEX * (0.6 + Math.random() * 0.6) });
+    this.addAnim(ms, null, (ctx, p) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = color;
+      for (const q of parts) {
+        const t = (p - q.t0) / (1 - q.t0);
+        if (t < 0) continue;
+        ctx.globalAlpha = Math.sin(t * Math.PI);
+        const x = c.x + q.dx, y = c.y - t * q.h;
+        const r = HEX * 0.06;
+        ctx.beginPath();
+        ctx.moveTo(x, y - r * 1.8);
+        ctx.lineTo(x + r * 0.6, y);
+        ctx.lineTo(x, y + r * 1.8);
+        ctx.lineTo(x - r * 0.6, y);
+        ctx.fill();
+      }
+      ctx.restore();
+    }, delay);
+  }
+
+  // Explosion: Lichtblitz, Brocken und Rauch
+  explosion(idx, delay, size = 1) {
+    const c = this.center(idx);
+    this.addAnim(260, null, (ctx, p) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 1 - p;
+      ctx.fillStyle = '#fde68a';
+      ctx.beginPath();
+      ctx.arc(c.x, c.y - HEX * 0.2, HEX * (0.3 + p * 0.6) * size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }, delay);
+    this.sparks(idx, delay, { n: 12, colors: ['#78716c', '#a8a29e', '#57534e'], speed: 1.3 * size, size: 1.6, gravity: 1.6, ms: 600, up: 0.1 });
+    this.dust(idx, delay + 60, { n: 10, size: 1.2 * size, color: '120,110,100', ms: 900 });
+  }
+
+  // Bildschirm wackelt kurz (schwere Treffer)
+  quake(amp, ms, delay = 0) {
+    this.addAnim(ms, (p) => {
+      if (p >= 1) { this.quakeOff = null; return; }
+      const k = amp * (1 - p);
+      this.quakeOff = { x: (Math.random() - 0.5) * k, y: (Math.random() - 0.5) * k };
+    }, null, delay);
   }
 
   // ---------- Zeichnen ----------
@@ -802,7 +1063,8 @@ export class Renderer {
     }
     if (!this.chunkScale) this.chunkScale = this.chunkScaleWanted();
     const z = this.cam.z * this.dpr;
-    ctx.setTransform(z, 0, 0, z, this.dpr * (this.w / 2 - this.cam.x * this.cam.z), this.dpr * (this.h / 2 - this.cam.y * this.cam.z));
+    const qo = this.quakeOff || { x: 0, y: 0 };
+    ctx.setTransform(z, 0, 0, z, this.dpr * (this.w / 2 - this.cam.x * this.cam.z + qo.x), this.dpr * (this.h / 2 - this.cam.y * this.cam.z + qo.y));
     ctx.imageSmoothingEnabled = true;
     const vr = this.visibleRange(40);
     for (let cy = Math.floor(vr.y0 / CHUNK); cy <= Math.floor(vr.y1 / CHUNK); cy++) {
@@ -919,7 +1181,16 @@ export class Renderer {
       if (c.x < vr.x0 - HEX || c.x > vr.x1 + HEX || c.y < vr.y0 - HEX * 2 || c.y > vr.y1 + HEX * 2) continue;
       const exhausted = !!o.exhausted?.has(u.id);
       const ready = !pos && !!o.ready?.has(u.id) && u.idx !== o.selected && !o.selectedSet?.has(u.idx) && (o.partial?.has(u.id) ? 'partial' : true);
-      this.drawUnit(ctx, u, c.x, c.y, pos?.s ?? 1, exhausted, pos?.flash || 0, ready, now);
+      if (pos?.rot) {
+        // Ausholen/Zuschlagen: Figur um die Füße kippen
+        const py = c.y + HEX * 0.3;
+        ctx.save();
+        ctx.translate(c.x, py);
+        ctx.rotate(pos.rot);
+        ctx.translate(-c.x, -py);
+        this.drawUnit(ctx, u, c.x, c.y, pos?.s ?? 1, exhausted, pos?.flash || 0, ready, now);
+        ctx.restore();
+      } else this.drawUnit(ctx, u, c.x, c.y, pos?.s ?? 1, exhausted, pos?.flash || 0, ready, now);
     }
 
     // Kampfvorschau über jedem Ziel

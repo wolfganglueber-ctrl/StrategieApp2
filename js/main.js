@@ -6,7 +6,7 @@ import {
   incomeOf, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, flankers, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, defenseMult,
-  canBoost, skillOptions, hasSkill, getFreezeTargets, getBombTargets, migrateState,
+  canBoost, skillOptions, hasSkill, hasPerk, getFreezeTargets, getBombTargets, migrateState,
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
@@ -29,6 +29,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const canvas = $('board');
 const R = new Renderer(canvas);
+R.fx = store.settings().fx !== false;
 let S = null;
 let settings = store.settings();
 if (settings.fogCampaign && settings.fog === false) { settings.fog = true; delete settings.fogCampaign; store.saveSettings(settings); }
@@ -1007,6 +1008,37 @@ function aiEventView(ev, f) {
   return { f: 0, pan: false };
 }
 
+// Kampfeffekte: Hiebe, Funken, Geschosse, Feuer, Staub (Einstellung „Kampfeffekte“)
+function attackFx(ev, L, hit, ranged, f) {
+  const { att, def } = ev;
+  const t = att.type;
+  const flight = L * 0.35, start = hit - flight;
+  if (t === 'dragon') {
+    R.flames(att.idx, def.idx, L * 1.1, L * 0.2, UNITS.dragon.line.length);
+    R.quake(5, 300 * f, hit);
+  } else if (ranged || t === 'tower') {
+    const fire = hasPerk(att, 'fire') || att.skills?.includes('firearrow');
+    const kind = t === 'catapult' || t === 'trebuchet' ? 'stone' : t === 'basilisk' ? 'gaze' : t === 'mage' ? 'bolt' : fire ? 'fire' : 'arrow';
+    R.projectile(att.idx, def.idx, kind === 'stone' ? flight * 1.3 : flight, kind === 'stone' ? start - flight * 0.3 : start, kind);
+    if (kind === 'stone') { R.explosion(def.idx, hit, t === 'trebuchet' ? 1.2 : 1); R.quake(4, 260 * f, hit); }
+    else if (kind === 'fire') R.sparks(def.idx, hit, { n: 12, colors: ['#fde047', '#fb923c', '#ef4444'] });
+    else if (kind === 'gaze' || kind === 'bolt') R.sparks(def.idx, hit, { n: 12, colors: kind === 'gaze' ? ['#d9f99d', '#a3e635'] : ['#f5d0fe', '#c084fc'] });
+    else R.sparks(def.idx, hit, { n: 6, colors: ['#e7e5e4', '#a8a29e'], speed: 0.6 });
+  } else {
+    const big = t === 'troll' || t === 'griffin';
+    R.slash(def.idx, att.idx, hit - 40 * f, t === 'mage' ? '#e9d5ff' : '#fff7d6', big);
+    R.sparks(def.idx, hit, { n: big ? 18 : 12 });
+    if (t === 'troll') { R.dust(def.idx, hit, { size: 1.2 }); R.quake(5, 260 * f, hit); }
+  }
+  if (ev.counter > 0 && !ranged) R.sparks(att.idx, hit + 200 * f, { n: 8 });
+  if (ev.killed) R.dust(def.idx, hit + 250 * f, { n: 8 });
+  if (ev.died) R.dust(att.idx, L + 250 * f, { n: 8 });
+  for (const h of ev.splash || []) {
+    if (t === 'dragon') R.sparks(h.idx, hit + 60 * f, { n: 8, colors: ['#fde047', '#fb923c'] });
+    else R.dust(h.idx, hit + 60 * f, { n: 5, size: 0.8 });
+  }
+}
+
 // ---------------------------------------------------------------- Klänge
 const MOVE_SOUND = { rider: 'hooves', knight: 'hooves', catapult: 'wheels', trebuchet: 'wheels', troll: 'stomp', mage: 'glide', dragon: 'wings', basilisk: 'steps' };
 
@@ -1111,9 +1143,12 @@ async function playEvent(ev, f, isAI, pan = true) {
       if (L > 0) {
         const hit = L * 0.5;
         attackSounds(ev, hit / 1000, ranged, isAI === 'quiet' ? 0.6 : 1);
-        if (ev.died) R.ghost({ ...att }, L + 450 * f, (L + 120 * f) / (L + 450 * f), def.idx);
-        else R.lunge(att.id, att.idx, def.idx, L, ranged, ev.advance != null);
-        if (ev.killed) R.ghost({ ...def, hp: 0 }, hit + 420 * f, hit / (hit + 420 * f));
+        const fall = R.center(def.idx).x >= R.center(att.idx).x ? 1 : -1;
+        if (ev.died) R.ghost({ ...att }, L + 450 * f, (L + 120 * f) / (L + 450 * f), def.idx, -fall);
+        else if (R.fx && !ranged && att.type !== 'tower') R.strike(att.id, att.idx, def.idx, L, ev.advance != null);
+        else R.lunge(att.id, att.idx, def.idx, L, ranged, ev.advance != null, R.fx);
+        if (R.fx) attackFx(ev, L, hit, ranged, f);
+        if (ev.killed) R.ghost({ ...def, hp: 0 }, hit + 420 * f, hit / (hit + 420 * f), null, fall);
         else R.shake(def.id, def.idx, 300 * f, hit);
         R.floatText(def.idx, `−${ev.dmg}`, '#fecaca', 900 * f, hit);
         if (ev.stone) {
@@ -1183,6 +1218,7 @@ async function playEvent(ev, f, isAI, pan = true) {
       if (ev.by != null && f > 0) {
         if (isAI === true) await sleep(R.ensureVisible(ev.idx, 200 * f));
         R.ring(ev.idx, '#86efac', 500 * f);
+        if (R.fx && ev.from != null) { R.projectile(ev.from, ev.idx, 200 * f, 0, 'heal'); R.glitter(ev.idx, 180 * f); }
         sound.play('heal', { pan: panOf(ev.idx), vol: isAI === 'quiet' ? 0.5 : 1 });
       }
       R.floatText(ev.idx, `+${ev.amount}`, '#86efac', 800 * Math.max(f, 0.6));
@@ -1212,6 +1248,7 @@ async function playEvent(ev, f, isAI, pan = true) {
       break;
     case 'freeze':
       if (f > 0) { R.ring(ev.from, '#7dd3fc', 400 * f); R.ring(ev.idx, '#bae6fd', 700 * f); }
+      if (f > 0 && R.fx) { R.projectile(ev.from, ev.idx, 220 * f, 0, 'ice'); R.glitter(ev.idx, 200 * f, '#bae6fd', 14); }
       sound.play('sparkle', { pan: panOf(ev.idx), vol: isAI ? 0.5 : 1 });
       R.floatText(ev.idx, '❄️ vereist', '#bae6fd', 1100 * Math.max(f, 0.6));
       await pause(isAI ? 260 : 160);
@@ -1219,6 +1256,7 @@ async function playEvent(ev, f, isAI, pan = true) {
     case 'bomb':
       R.invalidate(true, ev.idx);
       if (f > 0) { R.ring(ev.from, '#fdba74', 400 * f); R.ring(ev.idx, '#f97316', 800 * f); }
+      if (f > 0 && R.fx) { R.projectile(ev.from, ev.idx, 240 * f, 0, 'blast'); R.explosion(ev.idx, 240 * f, 1.5); R.quake(7, 350 * f, 240 * f); }
       sound.play('boom', { pan: panOf(ev.idx), vol: isAI ? 0.5 : 1 });
       R.floatText(ev.idx, '💣 Berg gesprengt', '#fdba74', 1200 * Math.max(f, 0.6));
       await pause(isAI ? 300 : 180);
@@ -1922,6 +1960,8 @@ function openSettings(onClose) {
     toggle('vibrate'),
     el('label', {}, 'Zugende bestätigen'),
     toggle('confirmEnd'),
+    el('label', {}, 'Kampfeffekte (Hiebe, Funken, Pfeile, Feuer, Staub, Wackeln)'),
+    seg([[true, 'An'], [false, 'Aus']], settings.fx !== false, (v) => { settings.fx = v; store.saveSettings(settings); R.fx = v; }),
     el('label', {}, 'Türme schießen am Zugende automatisch'),
     seg([[true, 'An'], [false, 'Aus']], settings.towerAuto !== false, (v) => { settings.towerAuto = v; store.saveSettings(settings); }),
     el('label', {}, 'Alle Level freischalten (Testmodus)'),
