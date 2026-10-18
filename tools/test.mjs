@@ -1,5 +1,5 @@
 // Schnelltests: alle Kampagnenlevel erzeugen, Zufallsspiele in allen Größen ohne Fehler durchspielen.
-import { createGame, applyAction, cloneState, statsOf, getBombTargets, migrateState } from '../js/game.js';
+import { createGame, applyAction, cloneState, statsOf, getBombTargets, migrateState, stormArea } from '../js/game.js';
 import { getGeo } from '../js/hex.js';
 import { planAction } from '../js/ai.js';
 import { getLevels } from '../js/levels.js';
@@ -77,6 +77,25 @@ const t0 = Date.now();
   old.units.push({ id: 1000, type: 'chimera', owner: 1, idx: 0, hp: 40, count: 1, mix: { parents: ['rider', 'warrior'] } }, { id: 1001, type: 'warrior', owner: 1, idx: 1, hp: 30, count: 3 });
   const mig = migrateState(old);
   check(mig && mig.units.every((u) => UNITS[u.type] && !u.count && u.hp <= statsOf(mig, u).hp), 'Alter Spielstand');
+}
+// Feuersturm des Drachen: Fläche, Schaden, Abklingzeit, Flächenbrand
+{
+  const s = createGame({ seed: 3, cols: 12, rows: 14, biome: 'plains', players: [{ ai: 3 }, { ai: 3 }] });
+  const geo = getGeo(s.cols, s.rows);
+  const c = 6 * 12 + 5;
+  s.units = s.units.filter((u) => geo.dist(u.idx, c) > 5);
+  s.units.push({ id: 900, type: 'dragon', owner: 0, idx: c, hp: 300, rank: 1, xp: 0, moved: false, attacked: false, acted: false });
+  const { area } = stormArea(s, c, geo.nb[c][0]);
+  check(area.length === 10, `Feuersturm-Fläche ${area.length}`);
+  s.units.push({ id: 901, type: 'troll', owner: 1, idx: area[9], hp: 70, rank: 1, xp: 0 });
+  s.current = 0;
+  const ev = applyAction(s, { type: 'storm', unitId: 900, toward: geo.nb[c][0] });
+  check(ev && ev.find((e) => e.k === 'storm').hits.length === 1, 'Feuersturm trifft');
+  const hp = s.units.find((u) => u.id === 901).hp;
+  applyAction(s, { type: 'end' });
+  const t = s.units.find((u) => u.id === 901);
+  check(!t || t.hp < hp, 'Flächenbrand');
+  check(s.units.find((u) => u.id === 900) && !applyAction(s, { type: 'storm', unitId: 900, toward: geo.nb[c][0] }), 'Abklingzeit');
 }
 for (const l of getLevels()) {
   const s = createGame({ seed: l.seed, cols: l.cols, rows: l.rows, biome: l.biome, players: [{ human: true }, ...l.ais.map((ai) => ({ ai }))] });

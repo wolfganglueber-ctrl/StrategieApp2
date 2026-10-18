@@ -704,6 +704,24 @@ export function startTurn(state) {
       if (old >= 0 && cityCount(state, old) === 0) eliminate(state, old, ev);
     }
   }
+  // Flächenbrand: der eigene Brand erlischt, fremde Brände verletzen eigene Einheiten darin
+  if (state.burns?.length) {
+    state.burns = state.burns.filter((b) => b.owner !== pid);
+    for (const b of state.burns) {
+      for (const u of state.units.filter((x) => x.owner === pid && b.tiles.includes(x.idx))) {
+        const dmg = STORM.burnBase + Math.ceil(statsOf(state, u).hp * STORM.burnPct);
+        const snap = snapshotUnit(u);
+        u.hp -= dmg;
+        const killed = u.hp <= 0;
+        if (killed) {
+          state.units = state.units.filter((x) => x !== u);
+          state.stats.kills[b.owner]++;
+          state.stats.losses[pid]++;
+        }
+        ev.push({ k: 'burn', id: u.id, idx: u.idx, dmg, killed, snap });
+      }
+    }
+  }
   // Heilung für Einheiten, die letzte Runde geruht haben
   for (const u of state.units) {
     if (u.owner !== pid) continue;
@@ -1122,6 +1140,32 @@ export function applyAction(state, a) {
       ev.push({ k: 'demolish', idx: u.idx, unit: u.type, snap: snapshotUnit(u), disband: true });
       break;
     }
+    case 'storm': {
+      const u = unitById(state, a.unitId);
+      if (!u || u.owner !== pid || !canStorm(state, u) || geoOf(state).dist(u.idx, a.toward) !== 1) return null;
+      const { line, area } = stormArea(state, u.idx, a.toward);
+      const hits = [];
+      for (const t of state.units.filter((x) => x.owner !== pid && area.includes(x.idx))) {
+        const dmg = stormDamage(state, u, t);
+        const hit = { id: t.id, idx: t.idx, dmg, killed: false, snap: snapshotUnit(t) };
+        t.hp -= dmg;
+        if (t.hp <= 0) {
+          hit.killed = true;
+          state.units = state.units.filter((x) => x !== t);
+          state.stats.kills[pid]++;
+          state.stats.losses[t.owner]++;
+        }
+        hits.push(hit);
+      }
+      u.moved = u.attacked = u.acted = true;
+      u.stormTurn = state.turn;
+      // Flächenbrand bis zum nächsten eigenen Zug
+      state.burns = [...(state.burns || []).filter((b) => b.owner !== pid), { owner: pid, tiles: area }];
+      ev.push({ k: 'storm', id: u.id, from: u.idx, line, area, hits });
+      const kills = hits.filter((h) => h.killed).length;
+      if (kills) gainXp(state, u, kills, ev);
+      break;
+    }
     case 'end': {
       // Türme, die noch nicht geschossen haben, feuern am Zugende selbst
       const pre = a.volley === false ? [] : towerVolley(state, pid);
@@ -1134,6 +1178,47 @@ export function applyAction(state, a) {
   }
   updateExplored(state);
   return ev;
+}
+
+// Feuersturm des Drachen: er überfliegt eine Schneise von 4 Feldern samt Nachbarn (3/4/3 = 10 Felder),
+// verbrennt alle Gegner darin und kehrt auf sein Feld zurück. Alle 3 Runden, verbraucht den ganzen Zug.
+export const STORM = { cooldown: 3, len: 4, dmg: 0.6, burnBase: 2, burnPct: 0.1 };
+export function canStorm(state, u) {
+  return !!u && u.type === 'dragon' && canMove(u) && canAttack(u) && stormWait(state, u) === 0;
+}
+// Runden bis zum nächsten Feuersturm
+export function stormWait(state, u) {
+  return u.stormTurn == null ? 0 : Math.max(0, u.stormTurn + STORM.cooldown - state.turn);
+}
+// Fläche in Richtung des Nachbarfelds toward: line = die 4 überflogenen Felder, area = alle 10 Felder
+export function stormArea(state, from, toward) {
+  const geo = geoOf(state);
+  const dq = geo.cq[toward] - geo.cq[from], dr = geo.cr[toward] - geo.cr[from];
+  const at = (q, r) => {
+    if (r < 0 || r >= state.rows) return -1;
+    const c = q + ((r - (r & 1)) >> 1);
+    return c < 0 || c >= state.cols ? -1 : r * state.cols + c;
+  };
+  const q0 = geo.cq[from], r0 = geo.cr[from];
+  const line = [], area = [];
+  for (let k = 1; k <= STORM.len; k++) {
+    const q = q0 + k * dq, r = r0 + k * dr;
+    const j = at(q, r);
+    line.push(j);
+    if (j >= 0) area.push(j);
+    if (k < STORM.len) {
+      // Seitenfelder zwischen zwei Schneisenfeldern (60° gedreht nach links und rechts)
+      for (const [sq, sr] of [[-dr, dq + dr], [dq + dr, -dq]]) {
+        const s2 = at(q + sq, r + sr);
+        if (s2 >= 0) area.push(s2);
+      }
+    }
+  }
+  return { line, area };
+}
+// Schaden des Feuersturms an einem Ziel
+export function stormDamage(state, u, t) {
+  return Math.max(1, Math.ceil(computeCombat(state, u, t, u.idx).dmg * STORM.dmg - 1e-9));
 }
 
 // Einzel-Verbesserungen: alle Einheiten außer Bauwerken

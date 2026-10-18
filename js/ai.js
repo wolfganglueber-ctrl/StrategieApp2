@@ -7,7 +7,7 @@ import {
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
   spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, unitUpOptions, unitUpList, canBuild, canPetrify, wouldShake,
-  DMG_K, canBoost, skillOptions, getFreezeTargets,
+  DMG_K, canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -224,6 +224,20 @@ function evaluateUnit(state, ctx, P, u, pid, rng) {
         const pos = positionScore(state, ctx, P, u, endIdx, hpAfter, pid);
         options.push({ score: score + pos, actions: actionsFor(u, f, t) });
       }
+    }
+  }
+  // Drache: Feuersturm über die Schneise mit der meisten Beute
+  if (canStorm(state, u)) {
+    for (const to of ctx.geo.nb[u.idx]) {
+      const { area } = stormArea(state, u.idx, to);
+      let gain = 0, n = 0;
+      for (const t of ctx.enemies) {
+        if (!area.includes(t.idx)) continue;
+        const d = stormDamage(state, u, t), hv = baseValue(t);
+        gain += (Math.min(d, t.hp) / ctx.st(t).hp) * hv * 1.2 + (d >= t.hp ? hv + 3 : 0);
+        n++;
+      }
+      if (n >= 2 && gain > 8) options.push({ score: stayBase + gain, actions: [{ type: 'storm', unitId: u.id, toward: to }] });
     }
   }
   if (UNITS[u.type].healer && canAttack(u)) {
@@ -516,7 +530,7 @@ export function planAction(state, rng = Math.random) {
     if (!best || gain > best.gain) best = { gain, action: top.actions[0], u };
   }
   if (best) {
-    if (best.action.type === 'attack' || best.action.type === 'heal' || best.action.type === 'freeze') memory.done.add(best.u.id);
+    if (best.action.type === 'attack' || best.action.type === 'heal' || best.action.type === 'freeze' || best.action.type === 'storm') memory.done.add(best.u.id);
     return best.action;
   }
   if (memory.econ++ < 40) {

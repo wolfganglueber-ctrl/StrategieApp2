@@ -6,7 +6,7 @@ import {
   incomeOf, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, flankers, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, defenseMult,
-  canBoost, skillOptions, hasSkill, hasPerk, storageCap, unitCap, getFreezeTargets, getBombTargets, migrateState,
+  canBoost, skillOptions, hasSkill, hasPerk, storageCap, unitCap, canStorm, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
@@ -394,6 +394,11 @@ function refresh() {
     o.targets = null;
     o.heals = null;
     o.special = new Set(magicTargets(u));
+    // Feuersturm: gewählte Fläche rot, betroffene Gegner als Ziele
+    if (sel.magic === 'storm' && sel.stormTo != null) {
+      o.targets = new Map();
+      for (const x of S.units) if (x.owner !== S.current && o.special.has(x.idx) && (!curVis || curVis[x.idx])) o.targets.set(x.idx, { idx: x.idx, dmg: Math.min(x.hp, stormDmgOf(u, x)), counter: 0, kill: stormDmgOf(u, x) >= x.hp, die: false });
+    }
   }
   if (sel.cityIdx != null) o.cityIdx = sel.cityIdx;
   if (sel.placeTower != null) {
@@ -452,6 +457,24 @@ function onTap(sx, sy) {
     return;
   }
   // Zauber: nur markierte Ziele, sonst abbrechen
+  if (sel.magic === 'storm') {
+    const from = unitById(S, sel.unitId);
+    if (from && sel.stormTo == null) {
+      const to = getGeoOf().nb[from.idx].find((t) => stormArea(S, from.idx, t).line.includes(i));
+      if (to != null) { sel.stormTo = to; refresh(); return; }
+    } else if (from && magicTargets(from).includes(i)) {
+      const to = sel.stormTo;
+      sel.magic = null;
+      sel.stormTo = null;
+      act({ type: 'storm', unitId: from.id, toward: to }, { undoable: false, after: () => clearSel() });
+      return;
+    }
+    sel.magic = null;
+    sel.stormTo = null;
+    toast('Feuersturm abgebrochen.');
+    refresh();
+    return;
+  }
   if (sel.magic) {
     const from = unitById(S, sel.unitId);
     if (from && magicTargets(from).includes(i)) {
@@ -524,6 +547,7 @@ function unitNotes(u) {
   if (b.length) notes.push(`⬆ Verbessert: ${b.join(', ')}.`);
   for (const k of u.skills || []) notes.push(`${SKILLS[k].icon} ${SKILLS[k].name}: ${SKILLS[k].desc}.`);
   if (u.iced || u.ice) notes.push('❄️ Vereist.');
+  if (u.type === 'dragon') notes.push(stormWait(S, u) ? `🔥 Feuersturm wieder in ${stormWait(S, u)} Runden.` : '🔥 Feuersturm bereit.');
   if (u.sentry) notes.push('💤 Hält Wache.');
   return notes.join(' ');
 }
@@ -653,8 +677,15 @@ async function doDemolish(idx, building) {
   if (ok) quickAct({ type: 'demolish', idx, building });
 }
 
-// Ziele des gerade gewählten Zaubers (Feldnummern)
+function stormDmgOf(u, t) {
+  return Math.max(1, Math.ceil(computeCombat(S, u, t, u.idx).dmg * STORM.dmg - 1e-9));
+}
+// Ziele des gerade gewählten Zaubers (Feldnummern); Feuersturm: erst die 6 Schneisen, nach der Wahl die ganze Fläche
 function magicTargets(u) {
+  if (sel.magic === 'storm') {
+    if (sel.stormTo != null) return stormArea(S, u.idx, sel.stormTo).area;
+    return getGeoOf().nb[u.idx].flatMap((to) => stormArea(S, u.idx, to).line.filter((j) => j >= 0));
+  }
   if (sel.magic === 'freeze') return getFreezeTargets(S, u).filter((x) => !curVis || curVis[x.idx]).map((x) => x.idx);
   if (sel.magic === 'bomb') return getBombTargets(S, u);
   return [];
@@ -1260,6 +1291,34 @@ async function playEvent(ev, f, isAI, pan = true) {
     case 'stone':
       if (unitById(S, ev.id)?.owner === humanId()) R.floatText(ev.idx, ev.ice ? '❄️ vereist, setzt aus' : '🪨 setzt aus', ev.ice ? '#bae6fd' : '#d6d3d1', 900);
       break;
+    case 'storm': {
+      if (f > 0) await sleep(R.ensureVisible(ev.line[1] >= 0 ? ev.line[1] : ev.from, 220 * f));
+      const ms = 2400 * f;
+      if (ms > 0) {
+        sound.play('wings', { pan: panOf(ev.from), vol: isAI === 'quiet' ? 0.5 : 1 });
+        sound.play('roar', { pan: panOf(ev.from), vol: isAI === 'quiet' ? 0.5 : 1, delay: 0.2 });
+        const { times } = R.dragonStorm(ev.id, ev.from, ev.line, ev.area, ms);
+        for (const j of ev.area) sound.play('breath', { pan: panOf(j), vol: 0.35, delay: times.get(j) / 1000 });
+        for (const h of ev.hits) {
+          const t = times.get(h.idx) ?? ms * 0.4;
+          R.floatText(h.idx, `−${h.dmg}`, '#fdba74', 1000 * f, t + 80 * f);
+          if (h.killed) R.ghost({ ...h.snap, hp: 0 }, t + 600 * f, t / (t + 600 * f));
+          else R.shake(h.id, h.idx, 300 * f, t);
+        }
+        R.floatText(ev.from, '🔥 Feuersturm!', '#fdba74', 1300 * f);
+        vibrate(60);
+        await sleep(ms);
+      }
+      if (ev.hits.length) toast(`🔥 Feuersturm: ${ev.hits.length} getroffen, ${ev.hits.filter((h) => h.killed).length} besiegt.`);
+      await pause(isAI ? 200 : 80);
+      break;
+    }
+    case 'burn':
+      if (f > 0) { R.fireBurst(ev.idx, 0); sound.play('breath', { pan: panOf(ev.idx), vol: 0.4 }); }
+      R.floatText(ev.idx, `🔥 −${ev.dmg}`, '#fdba74', 900 * Math.max(f, 0.6));
+      if (ev.killed) R.ghost({ ...ev.snap, hp: 0 }, 700 * Math.max(f, 0.4), 0.3);
+      await pause(isAI ? 200 : 120);
+      break;
     case 'freeze':
       if (f > 0) { R.ring(ev.from, '#7dd3fc', 400 * f); R.ring(ev.idx, '#bae6fd', 700 * f); }
       if (f > 0 && R.fx) { R.projectile(ev.from, ev.idx, 220 * f, 0, 'ice'); R.glitter(ev.idx, 200 * f, '#bae6fd', 14); }
@@ -1653,6 +1712,15 @@ function renderPanelContent(panel) {
       : 'Tippe ein helles Feld im Stadtgebiet an.'));
     return;
   }
+  if (sel.magic === 'storm' && sel.unitId != null) {
+    panel.append(el('div', { class: 'city-head' },
+      el('span', { class: 'title' }, '🔥 Feuersturm'),
+      el('button', { class: 'btn small', onclick: () => { sel.magic = null; sel.stormTo = null; refresh(); } }, 'Abbrechen')));
+    panel.append(el('div', { class: 'note' }, sel.stormTo == null
+      ? 'Tippe ein markiertes Feld an, um die Flugrichtung zu wählen (4 Felder weit, dazu die Nachbarfelder).'
+      : 'Die Fläche ist markiert, rot sind die getroffenen Gegner. Tippe nochmal in die Fläche, um den Feuersturm zu starten – oder daneben zum Abbrechen.'));
+    return;
+  }
   if (sel.magic && sel.unitId != null) {
     const sk = SKILLS[sel.magic];
     panel.append(el('div', { class: 'city-head' },
@@ -1700,6 +1768,10 @@ function renderPanelContent(panel) {
         el('button', { class: 'btn small' + (u.sentry ? ' active' : ''), onclick: () => act({ type: 'sentry', unitId: u.id }, { after: () => { if (unitById(S, u.id)?.sentry) clearSel(); } }) }, u.sentry ? '💤 Wache beenden' : '💤 Wache halten'));
       actions.append(el('button', { class: 'btn small raze', title: 'Einheit auflösen', onclick: () => doDisband(u) }, '🗑 Entlassen'));
       actions.append(el('button', { class: 'btn small primary', title: 'Angriff, Verteidigung, Leben und Fähigkeiten nur dieser Einheit verbessern', onclick: () => openBoost(u) }, '⬆ Verbessern'));
+      if (u.type === 'dragon') {
+        const w = stormWait(S, u);
+        actions.append(el('button', { class: 'btn small merge', disabled: !canStorm(S, u), title: 'Großangriff: überfliegt 4 Felder samt Nachbarn und setzt alles in Brand (alle 3 Runden)', onclick: () => { sel.magic = 'storm'; sel.stormTo = null; refresh(); } }, w ? `🔥 Feuersturm (in ${w} R.)` : '🔥 Feuersturm'));
+      }
       for (const k of ['freeze', 'bomb']) {
         if (!hasSkill(u, k) || !canAttack(u)) continue;
         const n = (k === 'freeze' ? getFreezeTargets(S, u).filter((x) => !curVis || curVis[x.idx]) : getBombTargets(S, u)).length;
@@ -2144,6 +2216,8 @@ function renderHelp() {
     <p>Eine Riesenechse mit tödlichem Blick: Sie greift aus 2 Feldern an, und wer getroffen wird und überlebt, <b>versteinert</b> – er setzt seinen nächsten Zug aus und schlägt bis dahin nicht zurück (grau dargestellt). Troll, Drache, Türme und Wälle sind immun. Ideal, um einen starken Gegner festzuhalten, während deine Armee angreift. Braucht ein Basiliskennest (Stadt ab Stufe 3), höchstens 2 pro Reich.</p>
     <h3>Drache 🐉</h3>
     <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), er hat Angriff 100, und sein Feueratem trifft auch die Gegner auf den 2 Feldern hinter dem Ziel (75 % und 50 %), und er heilt jede Runde 6 Leben. Er ist ein Endgegner und kostet je 300 Nahrung, Holz und Erz – bei jeder Stufe wählst du aus drei Spezialisierungen. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (in jeder Stadt baubar, aber nur eine im Reich – ein kleiner Drache auf dem Stadtturm zeigt, wo sie steht), und es gibt nur einen Drachen pro Reich.</p>
+    <h3>Feuersturm 🔥</h3>
+    <p>Der Drache hat einen Großangriff: Wähle ihn, tippe „🔥 Feuersturm“ und dann ein markiertes Feld für die Flugrichtung. Er überfliegt 4 Felder in einer Linie samt den Nachbarfeldern links und rechts (3/4/3 = 10 Felder) und brennt alles nieder: Jeder Gegner dort bekommt ${Math.round(STORM.dmg * 100)} % eines normalen Drachenangriffs, ohne Gegenschlag. Danach kehrt er auf sein Feld zurück. Die Felder brennen bis zu deinem nächsten Zug weiter – wer dort seinen Zug beginnt, verliert ${STORM.burnBase} + ${Math.round(STORM.burnPct * 100)} % seines Lebens. Der Feuersturm verbraucht den ganzen Zug (der Drache darf vorher nicht ziehen) und geht nur alle ${STORM.cooldown} Runden.</p>
     <h3>Geräusche 🔊</h3>
     <p>Kampf, Bewegung und Ereignisse sind zu hören, im Hintergrund je nach Kartenausschnitt Meeresrauschen, plätschernde Seen, Wind über den Bergen, Vögel im Wald und das Treiben der Städte. Alles wird im Gerät erzeugt und funktioniert offline. Lautstärke und Umgebung stellst du im Menü unter Einstellungen ein.</p>
     <h3>Wache halten 💤</h3>

@@ -12,6 +12,7 @@ const DEPTH = HEX * 0.3;
 const MARGIN = HEX * 1.4;
 const GREY = '#8d8a85';
 const FIG = 1.3; // Figurengröße relativ zum Feld
+const BIG = { dragon: 1.6 }; // der Drache ragt über die Nachbarfelder
 // Größe der Stadtgrafik je Stufe: Dorf und Siedlung klein, Städte wachsen mit jeder Stufe
 const CITY_SCALE = [1, 1, 1, 1.6, 1.8, 1.95, 2.05, 2.15, 2.25];
 const CHUNK = 512; // Kachelgröße für den Geländepuffer (Weltpixel)
@@ -548,6 +549,134 @@ export class Renderer {
     this.dust(idx, delay + 60, { n: 10, size: 1.2 * size, color: '120,110,100', ms: 900 });
   }
 
+  // Feuersturm: der Drache hebt ab, überfliegt die Schneise, setzt alles in Brand und landet wieder.
+  // Liefert die Dauer und für jedes Feld der Fläche den Zeitpunkt, an dem es brennt.
+  dragonStorm(id, from, line, area, ms) {
+    const geo = getGeo(this.state.cols, this.state.rows);
+    const P0 = this.center(from);
+    const first = this.center(line[0]);
+    const dx = first.x - P0.x, dy = first.y - P0.y;
+    const pt = (k) => ({ x: P0.x + dx * k, y: P0.y + dy * k });
+    const end = pt(line.length + 0.6);
+    const perp = { x: -dy, y: dx };
+    const lift = HEX * 0.9;
+    const T1 = 0.12, T2 = 0.6, T3 = 0.9;
+    const posAt = (p) => {
+      if (p < T1) { const e = easeOut(p / T1); return { x: P0.x, y: P0.y, h: lift * e, s: 1 + 0.15 * e }; }
+      if (p < T2) { const e = (p - T1) / (T2 - T1); return { x: P0.x + (end.x - P0.x) * e, y: P0.y + (end.y - P0.y) * e, h: lift, s: 1.15 }; }
+      if (p < T3) {
+        // Rückflug im Bogen
+        const e = easeInOut((p - T2) / (T3 - T2)), b = Math.sin(e * Math.PI) * 1.3;
+        return { x: end.x + (P0.x - end.x) * e + perp.x * b, y: end.y + (P0.y - end.y) * e + perp.y * b, h: lift, s: 1.15 };
+      }
+      const e = easeInOut((p - T3) / (1 - T3));
+      return { x: P0.x, y: P0.y, h: lift * (1 - e), s: 1.15 - 0.15 * e };
+    };
+    this.addAnim(ms, (p) => {
+      if (p >= 1) { this.unitPos.delete(id); return; }
+      const q = posAt(p);
+      const flap = p > T1 && p < T3 ? Math.sin(p * 70) * 0.06 : 0;
+      this.unitPos.set(id, { x: q.x, y: q.y - q.h, s: q.s + flap, rot: p > T2 && p < T3 ? -0.15 : 0, fly: q.h > lift * 0.2 });
+    }, (ctx, p) => {
+      // Schatten am Boden
+      const q = posAt(p);
+      const k = 1 - q.h / lift * 0.5;
+      ctx.fillStyle = `rgba(0,0,0,${0.18 + 0.12 * k})`;
+      ctx.beginPath();
+      ctx.ellipse(q.x, q.y + HEX * 0.35, HEX * 0.9 * k, HEX * 0.32 * k, 0, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    // Zeitpunkt je Feld: wenn der Drache darüber ist (Abstand zur Startposition)
+    const times = new Map();
+    for (const j of area) {
+      const d = geo.dist(from, j);
+      const t = T1 + ((d - 0.3) / (line.length + 0.6)) * (T2 - T1);
+      times.set(j, ms * t);
+    }
+    if (this.fx) {
+      for (const [j, t] of times) this.fireBurst(j, t);
+      this.quake(4, ms * (T2 - T1), ms * T1);
+      this.dust(from, ms * T3 + ms * 0.08, { n: 10, size: 1.4 });
+      // Feueratem: Flammenstrom unter dem Drachen während des Überflugs
+      const parts = [];
+      for (let k = 0; k < 60; k++) parts.push({ t0: T1 + Math.random() * (T2 - T1 - 0.05), life: 0.06 + Math.random() * 0.04, dx: (Math.random() - 0.5) * HEX * 0.8, r: HEX * (0.1 + Math.random() * 0.12) });
+      this.addAnim(ms, null, (ctx, p) => {
+        ctx.save();
+        for (const q of parts) {
+          const t = (p - q.t0) / q.life;
+          if (t < 0 || t > 1) continue;
+          const o = posAt(q.t0);
+          const x = o.x + q.dx * t, y = o.y - o.h * (1 - t) - HEX * 0.3;
+          ctx.globalAlpha = (1 - t) * 0.7;
+          ctx.fillStyle = t < 0.3 ? '#fde68a' : t < 0.65 ? '#f97316' : '#b91c1c';
+          ctx.beginPath();
+          ctx.arc(x, y, q.r * (0.6 + t), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      });
+    }
+    return { ms, times };
+  }
+
+  // Feuer schlägt aus einem Feld: Flammen, Glut und Rauch
+  fireBurst(idx, delay) {
+    const c = this.center(idx);
+    const fl = [];
+    for (let k = 0; k < 14; k++) fl.push({ dx: (Math.random() - 0.5) * HEX * 1.1, dy: (Math.random() - 0.5) * HEX * 0.5, h: HEX * (0.5 + Math.random() * 0.6), r: HEX * (0.1 + Math.random() * 0.1), t0: Math.random() * 0.3 });
+    this.addAnim(700, null, (ctx, p) => {
+      ctx.save();
+      ctx.globalAlpha = (1 - p) * 0.45;
+      ctx.fillStyle = '#ea580c';
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, HEX * (0.5 + p * 0.4), 0, Math.PI * 2);
+      ctx.fill();
+      for (const q of fl) {
+        const t = (p - q.t0) / (1 - q.t0);
+        if (t < 0) continue;
+        ctx.globalAlpha = (1 - t) * 0.85;
+        ctx.fillStyle = t < 0.25 ? '#fde047' : t < 0.6 ? '#f97316' : '#b91c1c';
+        ctx.beginPath();
+        ctx.arc(c.x + q.dx, c.y + q.dy - t * q.h, q.r * (1 - t * 0.5), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }, delay);
+    this.dust(idx, delay + 250, { n: 6, color: '70,60,55', ms: 900 });
+  }
+
+  // Brennende Felder (Flächenbrand bis zum nächsten Zug des Drachen): flackernde Flammen
+  drawBurns(ctx, now) {
+    for (const b of this.state.burns || []) {
+      for (const j of b.tiles) {
+        const c = this.center(j);
+        ctx.save();
+        ctx.fillStyle = 'rgba(234,88,12,0.18)';
+        hexPath(ctx, c.x, c.y, HEX - 3);
+        ctx.fill();
+        if (this.fx) {
+          ctx.globalCompositeOperation = 'lighter';
+          for (let k = 0; k < 3; k++) {
+            const fx = c.x + (hash(j * 7 + k) - 0.5) * HEX * 1.0, fy = c.y + (hash(j * 13 + k) - 0.3) * HEX * 0.6;
+            const fl = 0.75 + 0.25 * Math.sin(now / 90 + k * 2 + j);
+            const h = HEX * 0.42 * fl;
+            ctx.fillStyle = 'rgba(249,115,22,0.75)';
+            ctx.beginPath();
+            ctx.moveTo(fx - HEX * 0.12, fy);
+            ctx.quadraticCurveTo(fx - HEX * 0.1, fy - h * 0.6, fx, fy - h);
+            ctx.quadraticCurveTo(fx + HEX * 0.1, fy - h * 0.6, fx + HEX * 0.12, fy);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(253,230,138,0.7)';
+            ctx.beginPath();
+            ctx.ellipse(fx, fy - h * 0.25, HEX * 0.05, h * 0.25, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+      }
+    }
+  }
+
   // Bildschirm wackelt kurz (schwere Treffer)
   quake(amp, ms, delay = 0) {
     this.addAnim(ms, (p) => {
@@ -747,15 +876,16 @@ export class Renderer {
   }
 
   // Figuren werden einmal pro Typ/Farbe/Zoomstufe in einen Puffer gezeichnet
-  sprite(type, owner, exhausted, level, stone = false) {
+  sprite(type, owner, exhausted, level, stone = false, fly = false) {
     // Aussehen je nach Einheiten-Entwicklung des Besitzers
     const ups = this.state?.players[owner]?.unitUps?.[type] || [];
-    const k = Math.max(0.5, Math.round(this.cam.z * this.dpr * 4) / 4) * (HEX / 40) * FIG;
-    if (this.spriteScale !== k) {
+    const k0 = Math.max(0.5, Math.round(this.cam.z * this.dpr * 4) / 4) * (HEX / 40) * FIG;
+    if (this.spriteScale !== k0) {
       this.sprites = new Map();
-      this.spriteScale = k;
+      this.spriteScale = k0;
     }
-    const key = type + owner + (exhausted ? 'x' : '') + (stone ? (stone === 'ice' ? 'i' : 's') : '') + (level || '') + ups.join('');
+    const k = k0 * (BIG[type] || 1);
+    const key = type + owner + (exhausted ? 'x' : '') + (stone ? (stone === 'ice' ? 'i' : 's') : '') + (fly ? 'f' : '') + (level || '') + ups.join('');
     let sp = this.sprites.get(key);
     if (sp) return sp;
     const base = PLAYER_COLORS[owner] || NEUTRAL_COLOR;
@@ -769,7 +899,7 @@ export class Renderer {
     raw.height = H;
     const rc = raw.getContext('2d');
     rc.setTransform(k, 0, 0, k, B.left * k, B.top * k);
-    drawFigure(rc, type, col, level, false, { stage: ups.length, ups: new Set(ups) });
+    drawFigure(rc, type, col, level, fly, { stage: ups.length, ups: new Set(ups) });
     // Plastische Beleuchtung: Licht von links oben, Schatten nach rechts unten
     rc.setTransform(1, 0, 0, 1, 0, 0);
     rc.globalCompositeOperation = 'source-atop';
@@ -851,8 +981,9 @@ export class Renderer {
     return sp;
   }
 
-  drawUnit(ctx, u, x, y, scale = 1, exhausted = false, flash = 0, ready = false, now = 0) {
+  drawUnit(ctx, u, x, y, scale = 1, exhausted = false, flash = 0, ready = false, now = 0, fly = false) {
     const s = (HEX / 40) * FIG;
+    const big = BIG[u.type] || 1;
     y += 4;
     if (ready) {
       // Gelb: ganzer Zug offen · Orange gestrichelt: schon gezogen, Angriff noch möglich
@@ -874,10 +1005,10 @@ export class Renderer {
       ctx.fillRect(x - 30 * s, y - 40 * s, 60 * s, 60 * s);
     }
     const stone = u.stone || u.stoneNow ? (u.iced || u.ice ? 'ice' : true) : false;
-    const sp = this.sprite(u.type, u.owner, exhausted && !stone, u.level, stone);
+    const sp = this.sprite(u.type, u.owner, exhausted && !stone, u.level, stone, fly);
     const B = FIG_BOX;
     if (exhausted) ctx.globalAlpha *= 0.8;
-    ctx.drawImage(sp.cv, x - B.left * s * scale, y - B.top * s * scale, (B.left + B.right) * s * scale, (B.top + B.bottom) * s * scale);
+    ctx.drawImage(sp.cv, x - B.left * s * scale * big, y - B.top * s * scale * big, (B.left + B.right) * s * scale * big, (B.top + B.bottom) * s * scale * big);
     if (exhausted) ctx.globalAlpha /= 0.8;
     if (u.shaken) {
       // Erschüttert: kreisende Sterne über dem Kopf
@@ -954,7 +1085,7 @@ export class Renderer {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha *= blink * 0.45;
-        ctx.drawImage(sp.cv, x - B.left * s * scale, y - B.top * s * scale, (B.left + B.right) * s * scale, (B.top + B.bottom) * s * scale);
+        ctx.drawImage(sp.cv, x - B.left * s * scale * big, y - B.top * s * scale * big, (B.left + B.right) * s * scale * big, (B.top + B.bottom) * s * scale * big);
         ctx.restore();
       }
       for (let k = 0; k < 5; k++) {
@@ -1037,7 +1168,7 @@ export class Renderer {
       }
       this.dirty = true;
     }
-    const pulsing = this.overlay.targets?.size || this.overlay.ready?.size || this.overlay.upgrade?.size || this.state?.units.some((u) => u.shaken);
+    const pulsing = this.state?.burns?.length || this.overlay.targets?.size || this.overlay.ready?.size || this.overlay.upgrade?.size || this.state?.units.some((u) => u.shaken);
     if (!this.dirty && pulsing && now - (this.lastDraw || 0) > 40) this.dirty = true; // Pulsieren mit ~25 fps
     if (!this.dirty) return;
     this.lastDraw = now;
@@ -1169,17 +1300,20 @@ export class Renderer {
       }
     }
 
+    if (this.state.burns?.length) this.drawBurns(ctx, now);
     // Einheiten (von oben nach unten, damit vordere Figuren davor stehen)
     const s = this.state;
     this.drawWallLinks(ctx, fog);
-    const sorted = s.units.slice().sort((a, b) => a.idx - b.idx);
+    // Fliegende (z. B. Drache im Feuersturm) zuletzt, damit sie über allem schweben
+    const flying = (u) => (this.unitPos.get(u.id)?.fly ? 1 : 0);
+    const sorted = s.units.slice().sort((a, b) => flying(a) - flying(b) || a.idx - b.idx);
     for (const u of sorted) {
       if (this.hidden.has(u.id)) continue;
       if (fog && !fog.vis[u.idx] && !this.unitPos.has(u.id)) continue;
       const pos = this.unitPos.get(u.id);
       const c = pos || this.center(u.idx);
       if (c.x < vr.x0 - HEX || c.x > vr.x1 + HEX || c.y < vr.y0 - HEX * 2 || c.y > vr.y1 + HEX * 2) continue;
-      const exhausted = !!o.exhausted?.has(u.id);
+      const exhausted = !pos && !!o.exhausted?.has(u.id);
       const ready = !pos && !!o.ready?.has(u.id) && u.idx !== o.selected && !o.selectedSet?.has(u.idx) && (o.partial?.has(u.id) ? 'partial' : true);
       if (pos?.rot) {
         // Ausholen/Zuschlagen: Figur um die Füße kippen
@@ -1188,9 +1322,9 @@ export class Renderer {
         ctx.translate(c.x, py);
         ctx.rotate(pos.rot);
         ctx.translate(-c.x, -py);
-        this.drawUnit(ctx, u, c.x, c.y, pos?.s ?? 1, exhausted, pos?.flash || 0, ready, now);
+        this.drawUnit(ctx, u, c.x, c.y, pos?.s ?? 1, exhausted, pos?.flash || 0, ready, now, !!pos?.fly);
         ctx.restore();
-      } else this.drawUnit(ctx, u, c.x, c.y, pos?.s ?? 1, exhausted, pos?.flash || 0, ready, now);
+      } else this.drawUnit(ctx, u, c.x, c.y, pos?.s ?? 1, exhausted, pos?.flash || 0, ready, now, !!pos?.fly);
     }
 
     // Kampfvorschau über jedem Ziel
