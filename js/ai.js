@@ -10,12 +10,15 @@ import {
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
+// calm: so viele Runden greift die KI menschliche Spieler nicht an (außer bei Gefahr für eigene Städte)
+// expand: wie gierig sie neutrale Dörfer einsammelt · tech: wie eifrig sie forscht
 export const AI_PARAMS = {
-  1: { noise: 6, mistake: 0.35, risk: 0, lossW: 0.3, smart: false, upgrade: 0, guard: 0, idle: 0.25 },
-  2: { noise: 3, mistake: 0.12, risk: 0.3, lossW: 0.6, smart: false, upgrade: 0.25, guard: 0.5, idle: 0.05 },
-  3: { noise: 2, mistake: 0.07, risk: 0.6, lossW: 0.9, smart: true, upgrade: 0.4, guard: 0.8, idle: 0 },
-  4: { noise: 1, mistake: 0.03, risk: 0.8, lossW: 0.95, smart: true, upgrade: 0.7, guard: 0.9, idle: 0 },
-  5: { noise: 0.1, mistake: 0, risk: 1, lossW: 1, smart: true, upgrade: 1, guard: 1, idle: 0, armyCap: 1.4 },
+  1: { noise: 6, mistake: 0.35, risk: 0, lossW: 0.3, smart: false, upgrade: 0.1, guard: 0, idle: 0.3, calm: 16, expand: 0.35, tech: 0.15 },
+  2: { noise: 3, mistake: 0.15, risk: 0.3, lossW: 0.6, smart: false, upgrade: 0.25, guard: 0.5, idle: 0.12, calm: 11, expand: 0.55, tech: 0.35 },
+  3: { noise: 2, mistake: 0.07, risk: 0.6, lossW: 0.9, smart: true, upgrade: 0.45, guard: 0.8, idle: 0.03, calm: 7, expand: 0.8, tech: 0.55 },
+  4: { noise: 0.5, mistake: 0.02, risk: 0.9, lossW: 1, smart: true, upgrade: 0.85, guard: 0.95, idle: 0, calm: 3, expand: 1.1, tech: 0.85, armyCap: 1.15 },
+  5: { noise: 0.4, mistake: 0, risk: 0.95, lossW: 1, smart: true, upgrade: 0.85, guard: 1, idle: 0, calm: 0, expand: 1.2, tech: 0.9, armyCap: 1.35, aggr: 1.6 },
+  6: { noise: 0.4, mistake: 0, risk: 0.95, lossW: 1, smart: true, upgrade: 0.85, guard: 1, idle: 0, calm: 0, expand: 1.3, tech: 0.9, armyCap: 1.5, aggr: 1.6 },
 };
 
 const memory = { key: '', done: new Set() };
@@ -39,15 +42,18 @@ function buildContext(state, pid, P) {
   };
   // Kartennebel: die KI kennt nur Gegner, die sie sieht
   const vis = state.fog ? visibility(state, pid) : null;
-  const enemies = state.units.filter((u) => u.owner !== pid && (!vis || vis[u.idx]));
   const mine = state.units.filter((u) => u.owner === pid);
-  const targetCities = [];
-  const ownCities = [];
-  for (const c of state.cities) (c.owner === pid ? ownCities : targetCities).push(c);
+  const ownCities = state.cities.filter((c) => c.owner === pid);
+  // Schonfrist auf niedrigen Stufen: Menschen werden anfangs nicht angegriffen (nur wer eigenen Städten zu nahe kommt)
+  const calm = state.turn <= (P.calm || 0);
+  const spared = (owner) => calm && owner >= 0 && state.players[owner]?.human;
+  const nearOwn = (idx) => ownCities.some((c) => geo.dist(c.idx, idx) <= 2);
+  const enemies = state.units.filter((u) => u.owner !== pid && (!vis || vis[u.idx]) && (!spared(u.owner) || nearOwn(u.idx)));
+  const targetCities = state.cities.filter((c) => c.owner !== pid && !spared(c.owner));
 
   // Teure Felder nur einmal pro Zug berechnen
-  if (memory.ctxKey !== memory.key) {
-    memory.ctxKey = memory.key;
+  if (memory.ctxKey !== memory.key + (calm ? 'c' : '')) {
+    memory.ctxKey = memory.key + (calm ? 'c' : '');
     memory.distCity = bfsDistances(geo, state.terrain, targetCities.map((c) => c.idx));
     memory.distEnemy = bfsDistances(geo, state.terrain, enemies.map((u) => u.idx));
     const threat = new Array(geo.n);
@@ -99,10 +105,12 @@ function buildContext(state, pid, P) {
   const ratio = myArmy / Math.max(4, enemyArmy);
   let aggr = Math.min(2.5, Math.max(0.6, ratio));
   if (P.smart) aggr *= 1 + Math.min(0.8, Math.max(0, state.turn - 25) * 0.02);
+  aggr *= P.aggr || 1;
   const territory = memory.territory;
   const alive = new Set(state.units);
   const splashThreat = enemies.some((e) => UNITS[e.type].splash);
-  return { splashThreat, geo, occ, enemies, mine, distCity, distEnemy, threat, cityDanger, ownCities, targetCities, armyValue, myArmy, enemyArmy, aggr, territory, st, alive };
+  const enemySet = new Set(enemies);
+  return { enemySet, splashThreat, geo, occ, enemies, mine, distCity, distEnemy, threat, cityDanger, ownCities, targetCities, armyValue, myArmy, enemyArmy, aggr, territory, st, alive };
 }
 
 function expectedDamage(state, ctx, u, idx, hp) {
@@ -126,11 +134,11 @@ function positionScore(state, ctx, P, u, idx, hp, pid) {
   let s = 0;
   const dc = ctx.distCity[idx], de = ctx.distEnemy[idx];
   const near = Math.min(dc < 0 ? 99 : dc, de < 0 ? 99 : de + 1);
-  s -= near * 0.6 * (ctx.aggr > 1.2 ? 1.6 : 1);
+  s -= near * 0.6 * (ctx.aggr > 1.2 ? 1.6 : 1) * Math.min(1, P.expand ?? 1);
 
   const c = cityOn(state, idx);
-  if (c && c.owner !== pid) {
-    s += c.owner < 0 ? 5 + c.level : 7 + c.level * 2 + (c.capital ? 4 : 0);
+  if (c && c.owner !== pid && ctx.targetCities.includes(c)) {
+    s += c.owner < 0 ? (5 + c.level) * (P.expand ?? 1) : 7 + c.level * 2 + (c.capital ? 4 : 0);
   }
   if (c && c.owner === pid) {
     const danger = ctx.cityDanger.get(idx) || 0;
@@ -202,6 +210,7 @@ function evaluateUnit(state, ctx, P, u, pid, rng) {
   if (canAttack(u)) {
     for (const f of froms) {
       for (const t of getTargets(state, u, f, ctx.occ)) {
+        if (!ctx.enemySet.has(t)) continue; // Schonfrist oder im Nebel
         const { score, r } = attackScore(state, ctx, P, u, t, f);
         if (r.die) {
           options.push({ score: score, actions: actionsFor(u, f, t) });
@@ -258,7 +267,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
   const w = {
     warrior: 3,
     archer: 2.5 + (danger > 0 ? 1.5 : 0) + (ranged * 2 < melee ? 2 : 0),
-    rider: neutralLeft > 0 ? 3.5 : 1.2,
+    rider: neutralLeft > 0 ? 3.5 * (P.expand ?? 1) : 1.2,
     defender: danger > 4 ? 3 : 0.6,
     knight: 4,
     // Belagerungsgerät nur als Beimischung (siegeFull)
@@ -416,8 +425,8 @@ function economyAction(state, ctx, P, pid, rng) {
       }
     }
   }
-  // Forschung, wenn Rohstoffe übrig sind
-  if (P.upgrade > 0 && !saveTroll && rng() < P.upgrade) {
+  // Forschung, wenn Rohstoffe übrig sind (Eifer je nach Stufe)
+  if ((P.tech ?? P.upgrade) > 0 && !saveTroll && rng() < (P.tech ?? P.upgrade)) {
     const resSum = res.food + res.wood + res.ore;
     const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'rotation', 'smelting', 'stirrups', 'keep', 'tactics', 'granary', 'counterweight', 'battlements', 'medic', 'enlight', 'blessing', 'guild'].filter((t) => t !== 'guild' || tradeRate(state, pid));
     if (resSum > (wantArmy ? 70 : 35)) {

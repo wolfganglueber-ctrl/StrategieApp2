@@ -11,7 +11,7 @@ import { generateMap } from './mapgen.js';
 export const STATE_VERSION = 5;
 
 /*
- config: { seed, cols, rows, biome, players: [{ human: bool, ai: 1..5, name? }], levelId?, villageDensity? }
+ config: { seed, cols, rows, biome, players: [{ human: bool, ai: 1..6, name? }], levelId?, villageDensity? }
 */
 export function createGame(config) {
   const n = config.players.length;
@@ -32,7 +32,7 @@ export function createGame(config) {
       human: !!p.human,
       ai: p.ai || 3,
       res: { ...START_RES },
-      incomeBonus: p.incomeBonus ?? (!p.human && p.ai >= 5 ? 0.5 : 0),
+      incomeBonus: p.incomeBonus ?? (!p.human && p.ai >= 6 ? 0.5 : 0),
       alive: true,
       tech: [],
     })),
