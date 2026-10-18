@@ -284,6 +284,30 @@ class SoundEngine {
     s.stop(t + attack + dur + 0.05);
   }
 
+  // Ausklingende Teiltöne (Modalsynthese): je höher, desto kürzer; Paare leicht verstimmt für natürliches Schweben
+  ring(dest, t, base, vol, modes, pan = 0, verb = 0.25) {
+    for (const [r, a, dec] of modes) {
+      for (const det of [0, 2.5 + Math.random() * 2]) this.tone(dest, t, { f: base * r + det, dur: dec, vol: vol * a * (det ? 0.6 : 1), attack: 0.0015, pan, verb });
+    }
+  }
+
+  // Schwertklinge trifft Klinge: harter Anschlag, singende Klinge, kurzes Schleifen
+  blade(dest, t, vol, pan = 0) {
+    const base = 980 + Math.random() * 380;
+    this.noise(dest, t, { type: 'highpass', f: 2500, dur: 0.006, vol: vol * 2.2, attack: 0.0008, pan, verb: 0.1 });
+    this.noise(dest, t, { buf: this.brown, type: 'lowpass', f: 380, dur: 0.05, vol: vol * 1.6, attack: 0.001, pan });
+    this.ring(dest, t, base, vol * 0.55, [[1, 0.55, 0.85], [2.32, 1, 0.6], [4.25, 0.7, 0.38], [6.63, 0.45, 0.24], [9.38, 0.25, 0.14]], pan, 0.3);
+    this.noise(dest, t + 0.012, { type: 'bandpass', f: 6800, f2: 3200, q: 3, dur: 0.16 + Math.random() * 0.1, vol: vol * 0.55, attack: 0.01, pan, verb: 0.2 });
+  }
+
+  // Treffer auf Körper, Leder und Kettenhemd: dumpfer Schlag mit kurzem Rasseln
+  body(dest, t, vol, pan = 0) {
+    this.noise(dest, t, { buf: this.brown, type: 'lowpass', f: 520, dur: 0.11, vol: vol * 1.6, attack: 0.0015, pan, verb: 0.12 });
+    this.noise(dest, t, { type: 'bandpass', f: 240, q: 3, dur: 0.14, vol: vol * 1.2, attack: 0.002, pan });
+    this.noise(dest, t, { type: 'bandpass', f: 1300, q: 1.4, dur: 0.025, vol: vol * 0.8, attack: 0.001, pan });
+    for (let i = 0; i < 5; i++) this.noise(dest, t + 0.02 + i * (0.012 + Math.random() * 0.01), { type: 'bandpass', f: 5200 + Math.random() * 2500, q: 8, dur: 0.012, vol: vol * 0.22, pan });
+  }
+
   metal(dest, t, base, vol, decay, pan = 0) {
     for (const [r, a] of [[1, 1], [2.76, 0.6], [5.4, 0.35], [8.93, 0.2]]) {
       this.tone(dest, t, { f: base * r, dur: decay / Math.sqrt(r), vol: vol * a, attack: 0.002, pan });
@@ -417,15 +441,15 @@ class SoundEngine {
         break;
       }
       case 'clash':
-        this.clank(d, t, 0.12 * v, pan);
-        this.metal(d, t, 1100 + Math.random() * 400, 0.06 * v, 0.35, pan);
-        this.noise(d, t + 0.03, { type: 'bandpass', f: 3500, f2: 2000, q: 1.5, dur: 0.18, vol: 0.14 * v, pan });
-        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 600, dur: 0.1, vol: 0.3 * v, pan });
+        // Nahkampf: Klinge auf Klinge (manchmal ein zweiter, kürzerer Hieb), dann der Treffer
+        this.blade(d, t, 0.08 * v, pan);
+        if (Math.random() < 0.5) this.blade(d, t + 0.09 + Math.random() * 0.05, 0.045 * v, pan);
+        this.body(d, t + 0.05, 0.13 * v, pan);
         break;
       case 'hit':
-        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 700, dur: 0.14, vol: 0.7 * v, pan, verb: 0.2 });
-        this.thump(d, t, { f: 95, vol: 0.18 * v, dur: 0.15, pan, verb: 0.1 });
-        this.grains(d, t, { n: 3, spread: 0.06, fmin: 1500, fmax: 3500, vol: 0.06 * v, pan });
+        // Wucht ohne Klinge (Zauberstab, Klaue): schwerer Körpertreffer
+        this.body(d, t, 0.3 * v, pan);
+        this.thump(d, t, { f: 85, vol: 0.2 * v, dur: 0.16, pan, verb: 0.15 });
         break;
       case 'bow':
         // Langbogen: Sehne schlägt gegen den Armschutz (trockener Klatsch), tiefes kurzes Brummen des Bogens,
@@ -437,11 +461,11 @@ class SoundEngine {
         for (let i = 0; i < 6; i++) this.noise(d, t + 0.04 + i * 0.022, { type: 'bandpass', f: 4800 - i * 350, q: 6, dur: 0.012, vol: (0.06 - i * 0.008) * v * 1.5, pan });
         break;
       case 'thunk':
-        // Einschlag: dumpfes Eindringen in Holz/Schild mit kurzem Nachzittern des Schafts
-        this.noise(d, t, { type: 'highpass', f: 3000, dur: 0.008, vol: 0.25 * v, pan });
-        this.thump(d, t, { f: 150, vol: 0.32 * v, dur: 0.09, pan, verb: 0.1 });
-        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 900, dur: 0.045, vol: 0.45 * v, pan, verb: 0.12 });
-        this.pluck(d, t + 0.01, { f: 330, dur: 0.16, damp: 0.93, vol: 0.12 * v, pan, lp: 2200 });
+        // Pfeil schlägt in Holzschild oder Rüstung: trockenes Holz-„Tock“, dumpfer Körper, nachzitternder Schaft
+        this.noise(d, t, { type: 'highpass', f: 3000, dur: 0.006, vol: 0.3 * v, attack: 0.0008, pan });
+        this.ring(d, t, 380 + Math.random() * 60, 0.12 * v, [[1, 1, 0.09], [2.3, 0.6, 0.05], [4.1, 0.35, 0.03]], pan, 0.12);
+        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 700, dur: 0.05, vol: 0.4 * v, attack: 0.001, pan, verb: 0.1 });
+        this.pluck(d, t + 0.008, { f: 290 + Math.random() * 60, dur: 0.22, damp: 0.94, vol: 0.14 * v, pan, lp: 2600 });
         break;
       case 'catapult':
         // Knarzendes Holz (Ratsche), Schlag des Wurfarms, dann der Luftzug des Steins
@@ -458,10 +482,11 @@ class SoundEngine {
         this.grains(d, t + 0.05, { n: 26, spread: 0.9, fmin: 700, fmax: 4000, vol: 0.12 * v, pan });
         break;
       case 'fall':
-        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 450, dur: 0.35, vol: 0.75 * v, pan, verb: 0.3 });
-        this.thump(d, t, { f: 70, vol: 0.15 * v, dur: 0.3, pan });
-        this.clank(d, t + 0.1, 0.035 * v, pan);
-        this.grains(d, t + 0.05, { n: 5, spread: 0.25, fmin: 2000, fmax: 5000, vol: 0.04 * v, pan });
+        // Gefallener Kämpfer: Körper schlägt auf, Rüstung und Waffe scheppern nach
+        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 420, dur: 0.3, vol: 0.7 * v, attack: 0.004, pan, verb: 0.3 });
+        this.thump(d, t, { f: 65, vol: 0.16 * v, dur: 0.3, pan });
+        this.ring(d, t + 0.12, 1700 + Math.random() * 500, 0.018 * v, [[1, 1, 0.3], [2.4, 0.7, 0.2], [4.3, 0.4, 0.12]], pan, 0.3);
+        for (let i = 0; i < 6; i++) this.noise(d, t + 0.08 + i * (0.025 + Math.random() * 0.02), { type: 'bandpass', f: 4000 + Math.random() * 3000, q: 7, dur: 0.015, vol: (0.08 - i * 0.01) * v, pan });
         break;
       case 'roar':
         // Brüllen: Rauschen durch Mund-Formanten, darunter ein kehliges Grollen
@@ -469,9 +494,11 @@ class SoundEngine {
         this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 220, dur: 1.0, vol: 0.5 * v, attack: 0.1, pan, verb: 0.3 });
         break;
       case 'smash':
-        this.play('hit', { pan, vol: v * 1.3, delay: opts.delay });
-        this.thump(d, t, { f: 45, vol: 0.4 * v, dur: 0.5, pan, verb: 0.4 });
-        this.grains(d, t + 0.03, { n: 8, spread: 0.4, fmin: 600, fmax: 2500, vol: 0.07 * v, pan });
+        // Trollhammer: Steinkopf zertrümmert Schild und Rüstung, Splitter und verbeultes Metall
+        this.body(d, t, 0.45 * v, pan);
+        this.thump(d, t, { f: 42, vol: 0.45 * v, dur: 0.55, pan, verb: 0.45 });
+        this.ring(d, t + 0.005, 420 + Math.random() * 80, 0.05 * v, [[1, 1, 0.25], [2.7, 0.6, 0.14], [5.1, 0.3, 0.08]], pan, 0.3);
+        this.grains(d, t + 0.03, { n: 10, spread: 0.4, fmin: 600, fmax: 2600, vol: 0.08 * v, pan });
         break;
       case 'breath':
         // Feueratem: fauchendes, knisterndes Rauschen
