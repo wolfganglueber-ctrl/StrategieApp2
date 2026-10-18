@@ -12,6 +12,7 @@ const DEPTH = HEX * 0.3;
 const MARGIN = HEX * 1.4;
 const GREY = '#8d8a85';
 const FIG = 1.3; // Figurengröße relativ zum Feld
+const CITY_SCALE = 1.55;
 const CHUNK = 512; // Kachelgröße für den Geländepuffer (Weltpixel)
 
 const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
@@ -459,22 +460,25 @@ export class Renderer {
       for (const i of row) {
         const c = this.center(i);
         const city = cityAt.get(i);
-        if (city?.castle) continue; // Burg wird als eigenes Bild über 7 Felder gezeichnet
+        if (city) continue; // Städte werden zum Schluss groß über die Nachbarfelder gezeichnet
         if (court.has(i)) continue;
-        if (city) {
-          // Räumliche Tiefe: weicher Schatten nach rechts unten
-          ctx.save();
-          ctx.shadowColor = 'rgba(0,0,0,0.38)';
-          ctx.shadowBlur = 4;
-          ctx.shadowOffsetX = 3;
-          ctx.shadowOffsetY = 2;
-          drawCity(ctx, city, c.x, c.y, HEX, colorOf(city.owner));
-          ctx.restore();
-        }
         else if (T[i] === 'forest') drawForest(ctx, c.x, c.y, HEX, i);
         else if (T[i] === 'hill') drawHill(ctx, c.x, c.y, HEX, i);
         else if (T[i] === 'mountain') drawMountain(ctx, c.x, c.y, HEX, i);
       }
+    }
+    // Städte und Siedlungen groß (bis zur Mitte der Nachbarfelder), damit man sie auch mit Einheit darauf gut erkennt
+    for (const city of s.cities) {
+      if (city.castle) continue;
+      const c = this.center(city.idx);
+      if (c.x < x0 - HEX * 3 || c.x > x1 + HEX * 3 || c.y < y0 - HEX * 3 || c.y > y1 + HEX * 4) continue;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.38)';
+      ctx.shadowBlur = 5;
+      ctx.shadowOffsetX = 3;
+      ctx.shadowOffsetY = 2;
+      drawCity(ctx, city, c.x, c.y - HEX * 0.25, HEX * CITY_SCALE, colorOf(city.owner));
+      ctx.restore();
     }
   }
 

@@ -4,7 +4,7 @@ import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
-  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, REGIMENT_MAX, REGIMENT_TYPES, FUSION_COST, fusionResult,
+  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, REGIMENT_MAX, REGIMENT_TYPES, FUSION_COST, fusionResult, BUILDING_FLAT,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -470,9 +470,11 @@ export function cityYield(state, ci, territory = computeTerritory(state)) {
   // Bauernhof, Holzfäller, Mine: +1 je passendem Feld im Stadtkreis (Wiese/See, Wald, Hügel/Gebirge)
   const tiles = cityTiles(state, ci, territory);
   const tech = (t) => c.owner >= 0 && hasTech(state, c.owner, t);
-  if (hasBuilding(c, 'farm')) inc.food += tiles.food + (tech('plough') ? 2 : 0) + (tech('rotation') ? 2 : 0);
-  if (hasBuilding(c, 'lumber')) inc.wood += tiles.wood + (tech('saw') ? 2 : 0);
-  if (hasBuilding(c, 'mine')) inc.ore += tiles.ore + (tech('mining') ? 2 : 0) + (tech('smelting') ? 2 : 0);
+  // Ohne passendes Feld im Stadtkreis gibt es pauschal +4
+  const per = (n) => n || BUILDING_FLAT;
+  if (hasBuilding(c, 'farm')) inc.food += per(tiles.food) + (tech('plough') ? 2 : 0) + (tech('rotation') ? 2 : 0);
+  if (hasBuilding(c, 'lumber')) inc.wood += per(tiles.wood) + (tech('saw') ? 2 : 0);
+  if (hasBuilding(c, 'mine')) inc.ore += per(tiles.ore) + (tech('mining') ? 2 : 0) + (tech('smelting') ? 2 : 0);
   return inc;
 }
 

@@ -185,9 +185,9 @@ export const TRADE_RATE_GUILD = 2;
 
 // Gebäude: jede Stadt hat so viele Bauplätze wie ihre Stufe (höchstens 6)
 export const BUILDINGS = {
-  farm: { art: 'einen', name: 'Bauernhof', icon: '🌾', cost: { wood: 4 }, desc: '+1 Nahrung je Wiese/See im Stadtkreis' },
-  lumber: { art: 'einen', name: 'Holzfäller', icon: '🌲', cost: { food: 4 }, desc: '+1 Holz je Wald im Stadtkreis' },
-  mine: { art: 'eine', name: 'Mine', icon: '⛏️', cost: { food: 4, wood: 4 }, desc: '+1 Erz je Hügel/Berg im Stadtkreis' },
+  farm: { art: 'einen', name: 'Bauernhof', icon: '🌾', cost: { wood: 4 }, desc: '+1 Nahrung je Wiese/See im Stadtkreis (ohne: +4)' },
+  lumber: { art: 'einen', name: 'Holzfäller', icon: '🌲', cost: { food: 4 }, desc: '+1 Holz je Wald im Stadtkreis (ohne: +4)' },
+  mine: { art: 'eine', name: 'Mine', icon: '⛏️', cost: { food: 4, wood: 4 }, desc: '+1 Erz je Hügel/Berg im Stadtkreis (ohne: +4)' },
   barracks: { art: 'eine', name: 'Kaserne', icon: '🛡️', cost: { wood: 6, ore: 4 }, desc: 'Ritter möglich, neue Einheiten können sofort ziehen' },
   workshop: { art: 'eine', name: 'Werkstatt', icon: '⚙️', cost: { wood: 8, ore: 4 }, desc: 'Katapulte möglich' },
   wall: { art: 'eine', name: 'Mauer', icon: '🧱', cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt ×2,2' },
@@ -215,6 +215,8 @@ export function cityRadius() {
   return 2;
 }
 export const MAX_SLOTS = 6;
+// Bauernhof/Holzfäller/Mine ohne passendes Feld im Stadtkreis
+export const BUILDING_FLAT = 4;
 export function citySlots(city) {
   return Math.min(MAX_SLOTS, city.level);
 }

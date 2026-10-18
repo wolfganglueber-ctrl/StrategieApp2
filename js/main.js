@@ -13,7 +13,7 @@ import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
-  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, CENTER_YIELD, MAX_SLOTS, FUSION_COST, FUSION_RECIPES, fusionResult,
+  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, CENTER_YIELD, MAX_SLOTS, BUILDING_FLAT, FUSION_COST, FUSION_RECIPES, fusionResult,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
 import { store } from './storage.js';
@@ -1374,7 +1374,8 @@ function renderCityPanel(panel, ci, occ) {
     // Reihenfolge: Wirtschaft, dann Turm und Steinwall, dann alles andere
     const tiles = cityTiles(S, ci);
     const ECO = ['farm', 'lumber', 'mine', 'market'];
-    const ecoDesc = { farm: `+${tiles.food} Nahrung (je Wiese/See im Stadtkreis)`, lumber: `+${tiles.wood} Holz (je Wald im Stadtkreis)`, mine: `+${tiles.ore} Erz (je Hügel/Berg im Stadtkreis)` };
+    const eco = (n, what, res) => n ? `+${n} ${res} (je ${what} im Stadtkreis)` : `+${BUILDING_FLAT} ${res} (pauschal, kein ${what} im Stadtkreis)`;
+    const ecoDesc = { farm: eco(tiles.food, 'Wiese/See', 'Nahrung'), lumber: eco(tiles.wood, 'Wald', 'Holz'), mine: eco(tiles.ore, 'Hügel/Berg', 'Erz') };
     const structRows = () => {
       for (const [type, text] of [['tower', 'Schießt auf Gegner, 3 Ausbaustufen'], ['barrier', 'Blockiert den Weg, bildet Mauern']]) {
         const nt = towersOfCity(S, ci, undefined, type), max = structureLimit(S.cities[ci], type);
