@@ -994,7 +994,7 @@ export class Renderer {
     const fs = Math.max(HEX * 0.36, 13 / this.cam.z);
     ctx.font = `800 ${fs}px system-ui, sans-serif`;
     const main = (t.n > 1 ? `${t.n}× ` : '') + (t.kill ? '✖' : `−${t.dmg}`);
-    const sub = !t.kill && t.counter > 0 ? ` ↩${t.counter}` : '';
+    const sub = (t.extra ? ` 💥${t.extra}×−${Math.round(t.extraDmg / t.extra)}` : '') + (!t.kill && t.counter > 0 ? ` ↩${t.counter}` : '');
     const wMain = ctx.measureText(main).width;
     ctx.font = `700 ${fs * 0.72}px system-ui, sans-serif`;
     const wSub = sub ? ctx.measureText(sub).width : 0;

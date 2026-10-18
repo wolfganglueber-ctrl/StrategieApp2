@@ -998,8 +998,8 @@ export function canMerge(state, u, t) {
   if (u.acted || u.moved || u.attacked || t.acted || t.moved || t.attacked) return false;
   return geoOf(state).dist(u.idx, t.idx) === 1;
 }
-// Fusion: zwei verschiedene eigene Einheiten nebeneinander, beide noch unbewegt, die Partnerin im Umkreis von 2 Feldern
-// der Fusionsschmiede; einmal pro Runde, kostet Rohstoffe. Fusionseinheiten lassen sich nicht weiter verschmelzen.
+// Fusion: zwei verschiedene eigene Einheiten nebeneinander, beide noch unbewegt – überall auf der Karte, sobald das
+// Reich eine Fusionsschmiede hat; einmal pro Runde, kostet Rohstoffe. Fusionseinheiten lassen sich nicht weiter verschmelzen.
 export function canFuse(state, u, t) {
   if (!state.fusion || !u || !t || u === t || u.owner !== t.owner || u.type === t.type) return false;
   for (const x of [u, t]) if (isStructure(x) || UNITS[x.type].fused || (x.count || 1) > 1 || x.moved || x.attacked || x.acted) return false;
@@ -1007,7 +1007,7 @@ export function canFuse(state, u, t) {
   if (p.fusedTurn === state.turn || !canAfford(p.res, FUSION_COST)) return false;
   const geo = geoOf(state);
   if (geo.dist(u.idx, t.idx) !== 1) return false;
-  return state.cities.some((c) => c.owner === u.owner && hasBuilding(c, 'forge') && geo.dist(c.idx, t.idx) <= 2);
+  return state.cities.some((c) => c.owner === u.owner && hasBuilding(c, 'forge'));
 }
 export function fuseTargets(state, u) {
   return state.units.filter((t) => canFuse(state, u, t));

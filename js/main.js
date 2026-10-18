@@ -5,7 +5,7 @@ import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
   incomeOf, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
-  perkOptions, flankers, canBuild, mergeTargets, canSplit, fuseTargets, castleOf, defenseMult,
+  perkOptions, flankers, canBuild, mergeTargets, canSplit, fuseTargets, splashDamage, splashOf, castleOf, defenseMult,
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
@@ -346,7 +346,9 @@ function refresh() {
         o.targets = new Map();
         for (const x of t) {
           const r = computeCombat(S, u, x);
-          o.targets.set(x.idx, { idx: x.idx, dmg: r.dmg, counter: r.counter, kill: r.kill, die: r.die });
+          // Mitgetroffene Gegner (Flächenschaden, Feueratem in Linie)
+          const extra = (splashOf(u) || UNITS[u.type].line) ? splashDamage(S, u, x.idx, r.dmg) : [];
+          o.targets.set(x.idx, { idx: x.idx, dmg: r.dmg, counter: r.counter, kill: r.kill, die: r.die, extra: extra.length, extraDmg: extra.reduce((a, h) => a + h.dmg, 0) });
         }
       }
     }
@@ -1209,11 +1211,13 @@ function hpBar(u) {
     el('span', {}, `${u.hp}/${max}`));
 }
 
+// Tatsächliche Werte inkl. Forschung, Stufe und Spezialisierungen; Verteidigung mit Stadt-/Burgbonus des Feldes
 function statRow(u) {
   const T = statsOf(S, u);
+  const dm = UNITS[u.type].structure ? 1 : defenseMult(S, u.idx);
   return el('div', { class: 'stats-row' },
-    el('span', { title: 'Angriff' }, icon('atk'), fmt(T.atk)),
-    el('span', { title: 'Verteidigung' }, icon('def'), fmt(T.def)),
+    el('span', { title: 'Angriff (inkl. Forschung, Stufe, Spezialisierung)' }, icon('atk'), fmt(T.atk)),
+    el('span', { title: dm > 1 ? `Verteidigung ${fmt(T.def)} × ${fmt(Math.round(dm * 100) / 100)} Stadt-/Burgbonus` : 'Verteidigung' }, icon('def'), dm > 1 ? `${fmt(Math.round(T.def * dm * 10) / 10)}` : fmt(T.def), dm > 1 ? el('small', { class: 'bonus' }, '🏰') : null),
     T.move ? el('span', { title: 'Bewegung' }, icon('move'), T.move) : null,
     el('span', { title: 'Reichweite' }, icon('range'), T.range));
 }
@@ -1960,13 +1964,13 @@ function renderHelp() {
     <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel und braucht eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
     <h3>Fusion ⚗️</h3>
     <p>Im Hauptmenü (oder beim Freien Spiel) schaltest du die <b>Fusion</b> ein – sie gilt dann für neue Spiele in Kampagne und Freiem Spiel. Dann gibt es im Entwicklungsbaum (Wirtschaft) die Forschungen <b>Alchemie</b> (nach Baukunst und Plattenrüstung) und <b>Fusionskunst</b> (nach Alchemie und Gegengewicht) – ein langer, teurer Weg. Danach baust du in einer Stadt ab Stufe 4 die <b>Fusionsschmiede</b> (eine im Reich).</p>
-    <p>Stehen zwei <b>verschiedene</b> eigene Einheiten nebeneinander, beide noch unbewegt, und die angetippte Partnerin höchstens 2 Felder von der Schmiede entfernt, wählst du „⚗️ Verschmelzen“ und tippst die Partnerin an. Beide gehen in einer stärkeren Fusionseinheit auf (kostet ${costText(FUSION_COST)}, eine Fusion pro Runde, doppelter Unterhalt). Es gibt ${Object.keys(FUSION_RECIPES).length} feste Rezepte – welche, verrät das 📖 Rezeptbuch im Pause-Menü erst, wenn du sie entdeckt hast. Jedes andere Paar ergibt eine wilde <b>Chimäre</b> mit gemischten Werten (+20 %). Fusionseinheiten lassen sich nicht weiter verschmelzen, sammeln aber Stufen und Spezialisierungen wie alle anderen.</p>
+    <p>Stehen zwei <b>verschiedene</b> eigene Einheiten nebeneinander (überall auf der Karte, alle Einheiten bis zum Drachen), beide noch unbewegt, wählst du „⚗️ Verschmelzen“ und tippst die Partnerin an. Beide gehen in einer stärkeren Fusionseinheit auf (kostet ${costText(FUSION_COST)}, eine Fusion pro Runde, doppelter Unterhalt). Es gibt ${Object.keys(FUSION_RECIPES).length} feste Rezepte – welche, verrät das 📖 Rezeptbuch im Pause-Menü erst, wenn du sie entdeckt hast. Jedes andere Paar ergibt eine wilde <b>Chimäre</b> mit gemischten Werten (+20 %). Fusionseinheiten lassen sich nicht weiter verschmelzen, sammeln aber Stufen und Spezialisierungen wie alle anderen.</p>
     <h3>Tribok</h3>
     <p>Die schwerste Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einzelnes Feld mit vollem Schaden (kein Flächenschaden, kein Abschlag gegen Truppen), kann aber nicht auf direkte Nachbarn schießen und nicht nach einer Bewegung. Braucht eine Werkstatt und die Forschung <b>Gegengewicht</b> (nach Ballistik), ohne Mengenbegrenzung, Unterhalt 1 Nahrung + 1 Holz. Ideal, um Burgverteidiger aus sicherer Entfernung zu treffen.</p>
     <h3>Basilisk 🦎</h3>
     <p>Eine Riesenechse mit tödlichem Blick: Sie greift aus 2 Feldern an, und wer getroffen wird und überlebt, <b>versteinert</b> – er setzt seinen nächsten Zug aus und schlägt bis dahin nicht zurück (grau dargestellt). Troll, Drache, Türme und Wälle sind immun. Ideal, um einen starken Gegner festzuhalten, während deine Armee angreift. Braucht ein Basiliskennest (Stadt ab Stufe 3), höchstens 2 pro Reich.</p>
     <h3>Drache 🐉</h3>
-    <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), er macht doppelten Schaden, und sein Feueratem trifft auch die Gegner auf den 2 Feldern hinter dem Ziel (75 % und 50 %), und er heilt jede Runde 6 Leben. Er ist ein Endgegner und kostet je 300 Nahrung, Holz und Erz – bei jeder Stufe wählst du aus drei Spezialisierungen. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (in jeder Stadt baubar, aber nur eine im Reich – ein kleiner Drache auf dem Stadtturm zeigt, wo sie steht), und es gibt nur einen Drachen pro Reich.</p>
+    <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), er hat Angriff 25, und sein Feueratem trifft auch die Gegner auf den 2 Feldern hinter dem Ziel (75 % und 50 %), und er heilt jede Runde 6 Leben. Er ist ein Endgegner und kostet je 300 Nahrung, Holz und Erz – bei jeder Stufe wählst du aus drei Spezialisierungen. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (in jeder Stadt baubar, aber nur eine im Reich – ein kleiner Drache auf dem Stadtturm zeigt, wo sie steht), und es gibt nur einen Drachen pro Reich.</p>
     <h3>Geräusche 🔊</h3>
     <p>Kampf, Bewegung und Ereignisse sind zu hören, im Hintergrund je nach Kartenausschnitt Meeresrauschen, plätschernde Seen, Wind über den Bergen, Vögel im Wald und das Treiben der Städte. Alles wird im Gerät erzeugt und funktioniert offline. Lautstärke und Umgebung stellst du im Menü unter Einstellungen ein.</p>
     <h3>Wache halten 💤</h3>
