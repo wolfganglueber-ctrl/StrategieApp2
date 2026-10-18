@@ -3,7 +3,7 @@ import { Renderer } from './render.js';
 import { attachInput } from './input.js';
 import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
-  incomeOf, unitCount, upkeepTotal, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
+  incomeOf, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, flankers, canBuild, mergeTargets, canSplit, fuseTargets, castleOf, defenseMult,
 } from './game.js';
@@ -117,6 +117,7 @@ function enterGame() {
   $('hud').classList.remove('hidden');
   backdropShown = false;
   undoStack = [];
+  turnCam = null;
   clearSel();
   R.viewPad = { top: 100, bottom: 160 };
   const human = S.players.find((p) => p.human);
@@ -808,6 +809,7 @@ async function onEndTurn() {
   undoStack = [];
   clearSel();
   busy = true;
+  turnCam = { ...R.cam }; // nach den Gegnerzügen geht die Karte wieder hierher zurück
   const ev = applyAction(S, { type: 'end', volley: settings.towerAuto !== false });
   refresh();
   let volley = false;
@@ -859,9 +861,11 @@ async function runAI() {
   if (S.over) return gameOver();
   saveGame();
   refresh();
-  const u = S.units.find((x) => x.owner === S.current);
-  if (u) R.ensureVisible(u.idx);
+  // Zurück an die Stelle, an der du deinen Zug beendet hast
+  if (turnCam) { Object.assign(R.cam, turnCam); R.clampCam(); R.dirty = true; }
+  else { const u = S.units.find((x) => x.owner === S.current); if (u) R.ensureVisible(u.idx); }
 }
+let turnCam = null;
 
 // ---------------------------------------------------------------- Ereignisse abspielen
 async function play(events, f, isAI) {
@@ -1109,7 +1113,7 @@ async function playEvent(ev, f, isAI, pan = true) {
       await pause(600);
       break;
     case 'turn':
-      if (S.players[ev.pid].human) { hideBanner(); sound.play('bell'); }
+      if (S.players[ev.pid].human) { hideBanner(); sound.play('turnstart'); }
       break;
     case 'income':
       updateHud();
@@ -1340,6 +1344,10 @@ function renderCityPanel(panel, ci, occ) {
     tabs.append(el('button', { class: cityTab === k ? 'active' : '', onclick: () => { cityTab = k; renderPanel(); } }, label));
   }
   panel.append(tabs);
+  if (cityTab === 'build') {
+    const t = cityTiles(S, ci);
+    panel.append(el('div', { class: 'note tiles-note' }, 'Im Stadtkreis: ', icon('food'), ` ${t.food} `, icon('wood'), ` ${t.wood} `, icon('ore'), ` ${t.ore} Felder`));
+  }
   if (cityTab === 'units') {
     const grid = el('div', { class: 'recruit-grid' });
     let note = null;
@@ -1363,26 +1371,32 @@ function renderCityPanel(panel, ci, occ) {
     panel.append(el('div', { class: 'note', id: 'recruitNote' }, note ? `Rekrutieren nicht möglich: ${note}.` : `Neue Einheiten erscheinen im Stadtgebiet.${ready}`));
   } else {
     const list = el('div', { class: 'build-list' });
-    for (const [type, text] of [
-      ['tower', 'Auf einem Feld im Stadtgebiet, schießt auf Gegner. 3 Ausbaustufen. Belegt keinen Bauplatz.'],
-      ['barrier', 'Sehr stabiles Wallstück, blockiert den Weg. Mehrere nebeneinander bilden eine Mauer, die Gegner umgehen müssen.'],
-    ]) {
-      const nt = towersOfCity(S, ci, undefined, type), max = structureLimit(S.cities[ci], type);
-      list.append(el('div', { class: 'build-row tower-row' },
-        el('span', { class: 'bicon' }, iconCanvas(type, p.id, 56, 1)),
-        el('div', { class: 'binfo' }, el('b', {}, `${UNITS[type].name} (${nt}/${max})`), el('span', { class: 'muted' }, text)),
-        el('button', {
-          class: 'btn small', disabled: nt >= max || !canAfford(p.res, UNITS[type].cost),
-          onclick: () => { clearSel(); sel.placeTower = ci; sel.placeType = type; refresh(); },
-        }, costEl(UNITS[type].cost, p.res))));
-    }
-    for (const b of BUILDING_ORDER.filter((x) => !BUILDINGS[x].fusionOnly || S.fusion)) {
+    // Reihenfolge: Wirtschaft, dann Turm und Steinwall, dann alles andere
+    const tiles = cityTiles(S, ci);
+    const ECO = ['farm', 'lumber', 'mine', 'market'];
+    const ecoDesc = { farm: `+${tiles.food} Nahrung (je Wiese/See im Stadtkreis)`, lumber: `+${tiles.wood} Holz (je Wald im Stadtkreis)`, mine: `+${tiles.ore} Erz (je Hügel/Berg im Stadtkreis)` };
+    const structRows = () => {
+      for (const [type, text] of [['tower', 'Schießt auf Gegner, 3 Ausbaustufen'], ['barrier', 'Blockiert den Weg, bildet Mauern']]) {
+        const nt = towersOfCity(S, ci, undefined, type), max = structureLimit(S.cities[ci], type);
+        list.append(el('div', { class: 'build-row tower-row' },
+          el('span', { class: 'bicon' }, iconCanvas(type, p.id, 34, 1)),
+          el('div', { class: 'binfo' }, el('b', {}, `${UNITS[type].name} ${nt}/${max}`), el('span', { class: 'muted' }, text)),
+          el('button', {
+            class: 'btn small', disabled: nt >= max || !canAfford(p.res, UNITS[type].cost),
+            onclick: () => { clearSel(); sel.placeTower = ci; sel.placeType = type; refresh(); },
+          }, costEl(UNITS[type].cost, p.res))));
+      }
+    };
+    const order = BUILDING_ORDER.filter((x) => !BUILDINGS[x].fusionOnly || S.fusion);
+    const sorted = [...ECO.filter((b) => order.includes(b)), 'STRUCT', ...order.filter((b) => !ECO.includes(b))];
+    for (const b of sorted) {
+      if (b === 'STRUCT') { structRows(); continue; }
       const B = BUILDINGS[b];
       const built = hasBuilding(c, b);
       const realm = !built && canBuild(S, p.id, c, b) === 'realm';
       list.append(el('div', { class: 'build-row' + (built ? ' built' : realm ? ' realm' : '') },
         el('span', { class: 'bicon' }, B.icon),
-        el('div', { class: 'binfo' }, el('b', {}, B.name), el('span', { class: 'muted' }, B.desc)),
+        el('div', { class: 'binfo' }, el('b', {}, B.name), el('span', { class: 'muted' }, ecoDesc[b] || B.desc)),
         built ? el('span', { class: 'built-actions' }, el('span', { class: 'done' }, '✓'),
           el('button', { class: 'btn small raze', title: 'Abreißen (halbe Kosten zurück)', onclick: () => doDemolish(c.idx, b) }, '🗑'))
           : canBuild(S, p.id, c, b) === 'tech' ? el('span', { class: 'lock' }, `🔬 ${TECHS[B.tech].name}`)

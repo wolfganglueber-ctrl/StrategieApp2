@@ -522,6 +522,17 @@ class SoundEngine {
       case 'bell':
         this.bell(d, t, 392, 0.06 * v);
         break;
+      case 'turnstart':
+        // Rundenbeginn: zwei schwere Kriegstrommeln, dann ein Heerhorn-Ruf in Quinten über einem tiefen Paukenschlag
+        this.thump(d, t, { f: 55, vol: 0.38 * v, dur: 0.5, pan, verb: 0.5 });
+        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 220, dur: 0.35, vol: 0.28 * v, pan, verb: 0.4 });
+        this.thump(d, t + 0.2, { f: 58, vol: 0.3 * v, dur: 0.45, pan, verb: 0.5 });
+        for (const [f, dur, st] of [[147, 0.3, 0.42], [220, 0.3, 0.72], [294, 1.15, 1.02]]) {
+          for (const [det, a] of [[1, 0.07], [1.006, 0.06], [0.5, 0.035]]) this.brass(t + st, f * det, dur, a * v, pan);
+        }
+        this.thump(d, t + 1.02, { f: 49, vol: 0.42 * v, dur: 0.9, pan, verb: 0.6 });
+        this.noise(d, t + 1.02, { type: 'highpass', f: 6000, dur: 0.9, vol: 0.025 * v, attack: 0.05, pan, verb: 0.7 });
+        break;
       case 'sparkle':
         for (let i = 0; i < 6; i++) this.tone(d, t + i * 0.05, { f: 1500 + i * 260, dur: 0.25, vol: 0.04 * v, pan, verb: 0.6 });
         break;

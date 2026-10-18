@@ -458,7 +458,6 @@ export function upkeepTotal(state, pid) {
 export function cityYield(state, ci, territory = computeTerritory(state)) {
   const inc = { food: 0, wood: 0, ore: 0 };
   const c = state.cities[ci];
-  let forests = 0, rocks = 0;
   for (let i = 0; i < territory.length; i++) {
     if (territory[i] !== ci) continue;
     if (i === c.idx) {
@@ -467,14 +466,25 @@ export function cityYield(state, ci, territory = computeTerritory(state)) {
     }
     const t = state.terrain[i];
     inc[TERRAIN[t].res]++;
-    if (t === 'forest') forests++;
-    if (t === 'hill' || t === 'mountain') rocks++;
   }
+  // Bauernhof, Holzfäller, Mine: +1 je passendem Feld im Stadtkreis (Wiese/See, Wald, Hügel/Gebirge)
+  const tiles = cityTiles(state, ci, territory);
   const tech = (t) => c.owner >= 0 && hasTech(state, c.owner, t);
-  if (hasBuilding(c, 'farm')) inc.food += 3 + (tech('plough') ? 2 : 0) + (tech('rotation') ? 2 : 0);
-  if (hasBuilding(c, 'lumber')) inc.wood += 1 + forests + (tech('saw') ? 2 : 0);
-  if (hasBuilding(c, 'mine')) inc.ore += 2 + rocks * 2 + (tech('mining') ? 2 : 0) + (tech('smelting') ? 2 : 0);
+  if (hasBuilding(c, 'farm')) inc.food += tiles.food + (tech('plough') ? 2 : 0) + (tech('rotation') ? 2 : 0);
+  if (hasBuilding(c, 'lumber')) inc.wood += tiles.wood + (tech('saw') ? 2 : 0);
+  if (hasBuilding(c, 'mine')) inc.ore += tiles.ore + (tech('mining') ? 2 : 0) + (tech('smelting') ? 2 : 0);
   return inc;
+}
+
+// Felder im Stadtkreis je Rohstoff (ohne das Stadtzentrum)
+export function cityTiles(state, ci, territory = computeTerritory(state)) {
+  const c = state.cities[ci];
+  const n = { food: 0, wood: 0, ore: 0 };
+  for (let i = 0; i < territory.length; i++) {
+    if (territory[i] !== ci || i === c.idx) continue;
+    n[TERRAIN[state.terrain[i]].res]++;
+  }
+  return n;
 }
 
 // Freie Felder, auf denen eine Stadt neue Einheiten aufstellen kann (Zentrum zuerst)
