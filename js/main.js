@@ -1368,6 +1368,8 @@ function renderPanel() {
     panelScroll.list = panel.querySelector('.build-list')?.scrollTop || 0;
   } else panelScroll = { key, top: 0, list: 0 };
   renderPanelContent(panel);
+  // Menü unten: Höhe merken, damit man die Karte bis über das Menü hinaus scrollen kann
+  if (R.w) R.overlayPad = { top: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hud-top')) || 0, bottom: Math.max(0, window.innerHeight - document.querySelector('.bottom').getBoundingClientRect().top) };
   // Schließen-Kreuz ragt oben rechts aus dem Stadt- bzw. Einheitenmenü heraus
   $('panelX').classList.toggle('hidden', !panel.childElementCount || (sel.cityIdx == null && sel.unitId == null && sel.infoIdx == null));
   if (key) {

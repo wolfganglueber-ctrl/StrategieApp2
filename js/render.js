@@ -115,8 +115,13 @@ export class Renderer {
     const m = 24 / z;
     if (bx1 - bx0 <= vw) this.cam.x = (bx0 + bx1) / 2;
     else this.cam.x = Math.min(bx1 - vw / 2 + m, Math.max(bx0 + vw / 2 - m, this.cam.x));
-    if (by1 - by0 <= vh) this.cam.y = (by0 + by1) / 2 - off;
-    else this.cam.y = Math.min(by1 - vh / 2 + m, Math.max(by0 + vh / 2 - m, this.cam.y + off)) - off;
+    // Senkrecht: so weit scrollen, dass die äußersten Felder über dem offenen Menü unten
+    // bzw. unter der Rohstoffleiste oben sichtbar werden (overlayPad wird laufend gemessen)
+    const T = Math.max(this.viewPad.top, this.overlayPad?.top || 0), Bp = Math.max(this.viewPad.bottom, this.overlayPad?.bottom || 0);
+    const yMin = by0 + (this.h / 2 - T) / z - m, yMax = by1 - (this.h / 2 - Bp) / z + m;
+    if (by1 - by0 <= vh && yMin > yMax) this.cam.y = (by0 + by1) / 2 - off;
+    else if (yMin > yMax) this.cam.y = (yMin + yMax) / 2;
+    else this.cam.y = Math.min(yMax, Math.max(yMin, this.cam.y));
   }
 
   screenToWorld(sx, sy) {
