@@ -1414,7 +1414,11 @@ function renderCityPanel(panel, ci, occ) {
     if (c.level < CITY_MAX_LEVEL) {
       const cost = upgradeCostOf(S, c);
       panel.append(el('div', { class: 'upgrade-row' },
-        el('span', { class: 'muted' }, `Ausbau zur ${CITY_NAMES[c.level + 1]}: ${citySlots({ level: c.level + 1 }) > citySlots(c) ? '+1 Bauplatz, ' : ''}+${CENTER_YIELD[c.level + 1] - CENTER_YIELD[c.level]} auf alle Rohstoffe`),
+        el('span', { class: 'muted' }, (() => {
+          const t = cityTiles(S, ci);
+          const parts = RES.map((k) => `+${t[k] + CENTER_YIELD[c.level + 1] - CENTER_YIELD[c.level]} ${RES_INFO[k].name}`).join(', ');
+          return `Ausbau zur ${CITY_NAMES[c.level + 1]}: ${citySlots({ level: c.level + 1 }) > citySlots(c) ? '+1 Bauplatz, ' : ''}${parts} (+1 je Feld im Stadtkreis)`;
+        })()),
         el('button', { class: 'btn small primary', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost, p.res))));
     } else {
       panel.append(el('div', { class: 'note' }, 'Höchste Ausbaustufe erreicht.'));
@@ -1924,7 +1928,7 @@ function renderHelp() {
     <b>Erschüttert ⭐:</b> Wer von einem Fernkämpfer getroffen wird, hat bis zu seinem nächsten Zug nur halbe Verteidigung und schlägt nicht zurück.</p>
     <h3>Städte</h3>
     <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden; Türme und Steinwälle in ihrem Gebiet wechseln mit auf deine Seite.
-    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz (höchstens ${MAX_SLOTS}) und mehr Ertrag – das Stadtzentrum liefert je Rohstoff ${CENTER_YIELD.slice(1).join(' / ')}. So lohnen sich wenige große Städte genauso wie viele kleine Siedlungen.</p>
+    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz (höchstens ${MAX_SLOTS}) und mehr Ertrag: Jedes Feld im Stadtkreis liefert so viel seines Rohstoffs, wie die Stadt Stufen hat (+1 je Feld und Ausbau), und das Stadtzentrum liefert je Rohstoff ${CENTER_YIELD.slice(1).join(' / ')}. So lohnen sich wenige große Städte genauso wie viele kleine Siedlungen.</p>
     <h3>Gebäude</h3>
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
     <h3>Abreißen 🗑</h3>

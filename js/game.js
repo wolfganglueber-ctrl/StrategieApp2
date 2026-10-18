@@ -464,8 +464,9 @@ export function cityYield(state, ci, territory = computeTerritory(state)) {
       for (const k of RES) inc[k] += cityCenterYield(c);
       continue;
     }
+    // Jedes Feld im Stadtkreis liefert so viel, wie die Stadt Stufen hat (Ausbau: +1 je Feld)
     const t = state.terrain[i];
-    inc[TERRAIN[t].res]++;
+    inc[TERRAIN[t].res] += c.level;
   }
   // Bauernhof, Holzfäller, Mine: +1 je passendem Feld im Stadtkreis (Wiese/See, Wald, Hügel/Gebirge)
   const tiles = cityTiles(state, ci, territory);
