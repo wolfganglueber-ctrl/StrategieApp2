@@ -4,7 +4,7 @@ import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
-  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, BUILDING_FLAT, buildingFactor, STORE_BASE, STORE_PER_LEVEL, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_PCT, SKILLS, skillsFor, boostCost, skillCost,
+  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, BUILDING_FLAT, buildingFactor, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_PCT, SKILLS, skillsFor, boostCost, skillCost,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -516,13 +516,6 @@ export function computeTerritory(state) {
 }
 
 // Rohstoffertrag pro Runde, aufgeschlüsselt
-// Lagergrenze je Rohstoff
-export function storageCap(state, pid) {
-  let lv = 0;
-  for (const c of state.cities) if (c.owner === pid) lv += c.level;
-  return Math.round((STORE_BASE + STORE_PER_LEVEL * lv) * (hasTech(state, pid, 'granary') ? 1.5 : 1));
-}
-
 export function incomeOf(state, pid, territory = computeTerritory(state)) {
   const inc = { food: 0, wood: 0, ore: 0 };
   state.cities.forEach((c, ci) => {
@@ -765,13 +758,8 @@ export function startTurn(state) {
   }
   const inc = incomeOf(state, pid);
   const p = state.players[pid];
-  // Was nicht ins Lager passt, verdirbt
-  const cap = storageCap(state, pid), lost = {};
-  for (const k of RES) {
-    p.res[k] = Math.max(0, p.res[k] + inc[k]);
-    if (p.res[k] > cap) { lost[k] = p.res[k] - cap; p.res[k] = cap; }
-  }
-  ev.push({ k: 'income', pid, amount: inc, lost });
+  for (const k of RES) p.res[k] = Math.max(0, p.res[k] + inc[k]);
+  ev.push({ k: 'income', pid, amount: inc });
   checkOver(state);
   updateExplored(state);
   return ev;

@@ -142,7 +142,7 @@ export const TECHS = {
   guild: { branch: 'eco', name: 'Handelsgilde', icon: '💰', cost: { food: 45, wood: 40, ore: 30 }, req: ['plough'], desc: 'Handel 2:1 statt 3:1 (braucht einen Markt)' },
   rotation: { branch: 'eco', name: 'Dreifelderwirtschaft', icon: '🌾', cost: { wood: 20, ore: 10 }, req: ['plough'], desc: 'Bauernhöfe weitere +2 Nahrung' },
   smelting: { branch: 'eco', name: 'Erzschmelze', icon: '🔥', cost: { food: 20, wood: 20 }, req: ['mining'], desc: 'Minen weitere +2 Erz' },
-  granary: { branch: 'eco', name: 'Kornspeicher', icon: '🏚️', cost: { food: 10, wood: 26, ore: 10 }, req: ['plough'], desc: 'Unterhalt der Armee: ein Viertel weniger Nahrung, Lager +50 %' },
+  granary: { branch: 'eco', name: 'Kornspeicher', icon: '🏚️', cost: { food: 10, wood: 26, ore: 10 }, req: ['plough'], desc: 'Unterhalt der Armee: ein Viertel weniger Nahrung' },
   masonry: { branch: 'eco', name: 'Baukunst', icon: '🏛️', cost: { wood: 24, ore: 16 }, req: ['saw', 'mining'], desc: 'Stadtausbau 25 % günstiger' },
   medic: { branch: 'def', name: 'Heilkunde', icon: '🌿', cost: { food: 28 }, req: [], desc: 'Einheiten heilen 2 mehr' },
   stonework: { branch: 'def', name: 'Steinmetz', icon: '🧱', cost: { wood: 12, ore: 20 }, req: [], desc: 'Türme +6 Leben, Mauern stärker (×2,6)' },
@@ -346,9 +346,6 @@ export const BUILDING_FLAT = 4;
 export function buildingFactor(level) {
   return Math.ceil(level / 3);
 }
-// Lager: jede Stadtstufe im Reich fasst 15 mehr je Rohstoff (Kornspeicher +50 %); Überschuss verdirbt
-export const STORE_BASE = 100;
-export const STORE_PER_LEVEL = 15;
 // Versorgung: Einheiten über der Versorgung der Städte kosten doppelten, über dem 1,5-Fachen dreifachen Unterhalt
 export function citySlots(city) {
   return Math.min(MAX_SLOTS, city.level);
