@@ -27,6 +27,7 @@ const canvas = $('board');
 const R = new Renderer(canvas);
 let S = null;
 let settings = store.settings();
+if (settings.fogCampaign && settings.fog === false) { settings.fog = true; delete settings.fogCampaign; store.saveSettings(settings); }
 let sel = { unitId: null, cityIdx: null, infoIdx: null };
 let busy = false;
 let undoStack = [];
@@ -76,7 +77,7 @@ function showMenuBackdrop() {
 // ---------------------------------------------------------------- Spielstart
 function levelConfig(level) {
   return {
-    seed: level.seed, cols: level.cols, rows: level.rows, biome: level.biome, fog: !!settings.fogCampaign,
+    seed: level.seed, cols: level.cols, rows: level.rows, biome: level.biome, fog: !!settings.fog,
     players: [{ human: true }, ...level.ais.map((ai) => ({ ai }))],
   };
 }
@@ -97,7 +98,7 @@ function startSkirmish(setup) {
     biome = keys[seedFromCode(code) % keys.length];
   }
   S = createGame({
-    seed: seedFromCode(code), cols: size.cols, rows: size.rows, biome, fog: !!setup.fog, fusion: !!setup.fusion,
+    seed: seedFromCode(code), cols: size.cols, rows: size.rows, biome, fog: !!settings.fog, fusion: !!setup.fusion,
     players: [{ human: true }, ...Array.from({ length: setup.enemies }, () => ({ ai: setup.diff }))],
   });
   S.meta = { mode: 'skirmish', code, setup };
@@ -1817,8 +1818,6 @@ function openSettings(onClose) {
     seg([[true, 'An'], [false, 'Aus']], settings.towerAuto !== false, (v) => { settings.towerAuto = v; store.saveSettings(settings); }),
     el('label', {}, 'Alle Level freischalten (Testmodus)'),
     toggle('unlockAll'),
-    el('label', {}, 'Kartennebel in der Kampagne'),
-    toggle('fogCampaign'),
     el('button', { class: 'btn primary big', onclick: () => { closeModal(); if (onClose) onClose(); } }, 'Fertig'),
   );
 }
@@ -1875,7 +1874,6 @@ function renderSetup() {
   seg('segBiome', [...Object.entries(BIOMES).map(([k, v]) => [k, v.name]), ['random', 'Zufall']], 'biome');
   seg('segEnemies', [[1, '1'], [2, '2'], [3, '3']], 'enemies');
   seg('segDiff', DIFFICULTIES.map((d) => [d.level, String(d.level)]), 'diff');
-  seg('segFog', [[false, 'Aus'], [true, 'An']], 'fog');
   seg('segFusion', [[false, 'Aus'], [true, 'An']], 'fusion');
   if (setup.fusion !== !!settings.fusion) { settings.fusion = !!setup.fusion; store.saveSettings(settings); updateFusionBtn(); }
   const d = DIFFICULTIES[setup.diff - 1];
@@ -1941,7 +1939,7 @@ function renderHelp() {
     <h3>Forschung 🔬</h3>
     <p>Oben rechts öffnest du den Entwicklungsbaum. Jede Forschung gilt für dein ganzes Reich: ${TECH_ORDER.map((t) => `${TECHS[t].icon} ${TECHS[t].name} (${TECHS[t].desc})`).join(', ')}.</p>
     <h3>Kartennebel</h3>
-    <p>Optional: Du siehst nur, was deine Einheiten und Städte sehen. Bereits erkundete Gebiete bleiben sichtbar, aber gegnerische Einheiten darin nicht. Die KI unterliegt denselben Regeln.</p>
+    <p>Im Hauptmenü mit „🌫️ Nebel: An/Aus“ schaltbar (gilt für neue Spiele in Kampagne und Freiem Spiel): Du siehst nur, was deine Einheiten und Städte sehen. Bereits erkundete Gebiete bleiben sichtbar, aber gegnerische Einheiten darin nicht. Die KI unterliegt denselben Regeln.</p>
     <h3>Handel</h3>
     <p>Handeln kannst du erst mit einem <b>Markt</b> in einer deiner Städte (einer pro Reich genügt – in den anderen Städten ist er ausgegraut). Dann tippst du oben auf einen Rohstoff: 3 beliebige Rohstoffe gegen 1 anderen, mit der Forschung <b>Handelsgilde</b> 2 gegen 1.</p>
     <h3>Gelände</h3>
@@ -2001,6 +1999,15 @@ $('btnFusion').addEventListener('click', () => {
   toast(settings.fusion ? '⚗️ Fusion an: In neuen Spielen erforschst du Alchemie → Fusionskunst und baust die Fusionsschmiede.' : 'Fusion aus.', 3500);
 });
 updateFusionBtn();
+// Kartennebel: ein Schalter für Kampagne und Freies Spiel (gilt für neue Spiele)
+function updateFogBtn() { $('btnFog').textContent = `🌫️ Nebel: ${settings.fog ? 'An' : 'Aus'}`; $('btnFog').classList.toggle('primary', !!settings.fog); }
+$('btnFog').addEventListener('click', () => {
+  settings.fog = !settings.fog;
+  store.saveSettings(settings);
+  updateFogBtn();
+  toast(settings.fog ? '🌫️ Nebel an: Du siehst nur, was deine Einheiten und Städte sehen (gilt für neue Spiele).' : 'Nebel aus.', 3000);
+});
+updateFogBtn();
 $('btnContinue').addEventListener('click', () => {
   const g = store.savedGame();
   if (!g || g.v !== STATE_VERSION) { store.clearGame(); $('btnContinue').classList.add('hidden'); return; }
