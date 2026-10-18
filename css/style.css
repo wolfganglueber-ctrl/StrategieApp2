@@ -344,3 +344,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .group-bar { display: flex; align-items: center; gap: 6px; }
 .group-bar .title { flex: none; margin-right: 2px; }
 .group-bar .btn { flex: 1; padding: 6px 4px; }
+
+/* Im Spiel: Fenster beginnen unter der Rohstoffleiste, das Bedienfeld unten reicht nie bis dorthin */
+.modal.ingame { top: var(--hud-top, 0px); padding-top: 8px; align-items: start; }
+.modal.ingame .modal-box { max-height: calc(100vh - var(--hud-top, 0px) - 24px); max-height: calc(100dvh - var(--hud-top, 0px) - 24px); }
+.panel-small .panel { max-height: min(40vh, calc(100vh - var(--hud-top, 110px) - 120px)); }
+.panel-medium .panel { max-height: min(45vh, calc(100vh - var(--hud-top, 110px) - 120px)); }
+.panel-large .panel { max-height: min(62vh, calc(100vh - var(--hud-top, 110px) - 120px)); }

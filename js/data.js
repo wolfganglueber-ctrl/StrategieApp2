@@ -23,7 +23,7 @@ export const UNITS = {
   rider: { name: 'Reiter', cost: { food: 6, wood: 2 }, hp: 10, atk: 2, def: 1, move: 3, range: 1, desc: 'Schnell – ideal zum Erobern von Dörfern.' },
   defender: { name: 'Wächter', cost: { food: 3, ore: 5 }, hp: 15, atk: 1, def: 3, move: 1, range: 1, desc: 'Starke Verteidigung, schwacher Angriff.' },
   knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 3, def: 1, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
-  tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 2, def: 3, move: 0, range: 2, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
+  tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 2, def: 3, move: 0, range: 1, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
   mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5 }, hp: 10, atk: 1, def: 1, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben bekommen 25 % weniger Schaden, Flächenschaden halbiert. Heilt statt anzugreifen, bis 3 Felder weit. Höchstens einer pro Stadt.' },
   troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 7, def: 5, move: 2, range: 1, supply: 3, regen: 3, perRealm: 5, needs: 'lair', desc: 'Ein Titan: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben. Braucht eine Trollhöhle, höchstens 5 pro Reich.' },
   dragon: { name: 'Drache', cost: { food: 500, wood: 300, ore: 700 }, hp: 300, atk: 12, def: 10, move: 5, range: 1, supply: 3, regen: 6, perRealm: 1, flying: true, splash: 0.4, arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten, Feueratem trifft auch Gegner neben dem Ziel, heilt jede Runde 6 Leben. Ein Endgegner – extrem mächtig und extrem teuer; Schützen und Türme treffen ihn härter (+60 %). Bei Rang 3 und 5 je drei Fähigkeiten zur Wahl. Einer pro Reich.' },
@@ -107,12 +107,12 @@ export const HEAL = { base: 4, blessing: 2, range: 3 };
 
 // Türme: Ausbaustufen 1–3
 export const TOWER_LEVELS = [null,
-  { hp: 12, atk: 2, def: 3, range: 2 },
-  { hp: 18, atk: 3, def: 3.5, range: 2 },
-  { hp: 24, atk: 4, def: 4, range: 3 },
+  { hp: 12, atk: 2, def: 3, range: 1 },
+  { hp: 18, atk: 3, def: 3.5, range: 1 },
+  { hp: 24, atk: 4, def: 4, range: 2 },
 ];
-export const TOWER_UPGRADE = [null, { wood: 6, ore: 8 }, { wood: 8, ore: 12 }];
-export const TOWERS_PER_CITY = 2;
+export const TOWER_UPGRADE = [null, { wood: 12, ore: 16 }, { wood: 16, ore: 24 }];
+export const TOWERS_PER_CITY = 4;
 // Bauwerke im Stadtgebiet: Höchstzahl pro Stadt
 export const STRUCTURE_LIMIT = { tower: TOWERS_PER_CITY, barrier: 6 };
 // Die Burg (Hauptstadt, 7 Felder) trägt mehr Türme und einen ganzen Wallring

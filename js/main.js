@@ -123,6 +123,7 @@ function enterGame() {
   const cap = S.cities.find((c) => c.owner === human?.id && c.capital) || S.cities.find((c) => c.owner === human?.id);
   R.setState(S, true, cap?.idx);
   updateHud();
+  updateHudTop();
   saveGame();
   if (!S.players[S.current].human) runAI();
   else refresh();
@@ -1523,10 +1524,20 @@ function toast(text, ms = 2400) {
   toastTimer = setTimeout(() => t.classList.add('hidden'), ms);
 }
 
+// Im Spiel bleiben Rundenanzeige und Rohstoffe oben immer sichtbar
+function updateHudTop() {
+  const inGame = !$('hud').classList.contains('hidden');
+  const top = inGame ? Math.ceil($('resBar').getBoundingClientRect().bottom) + 6 : 0;
+  document.documentElement.style.setProperty('--hud-top', top + 'px');
+  $('modal').classList.toggle('ingame', inGame);
+}
+window.addEventListener('resize', updateHudTop);
+
 function openModal(...children) {
   const box = $('modalBox');
   box.innerHTML = '';
   box.append(...children);
+  updateHudTop();
   $('modal').classList.remove('hidden');
   $('modal').dataset.closable = '';
 }
@@ -1826,7 +1837,7 @@ function renderHelp() {
     <p>Jede Hauptstadt ist von Anfang an eine große <b>Burg</b> über 7 Felder: der Bergfried in der Mitte und 6 gepflasterte Burgfelder rundherum, umgeben von einer Ringmauer mit Ecktürmen und Torhaus. Auf allen 7 Feldern bekommen Verteidiger den Burgbonus (mindestens doppelte Verteidigung, mit der Forschung Burgausbau +25 %), du kannst also 7 Einheiten in der Burg aufstellen. In der Burg dürfen bis zu 6 Türme und 12 Steinwälle stehen – genug für einen ganzen Wallring 2 Felder vor dem Bergfried.</p>
     <p>Eroberung: Der Bergfried lässt sich erst betreten, wenn auf den 6 Burgfeldern kein Verteidiger mehr steht. Die letzte Burg fällt also nur nach einer großen Schlacht.</p>
     <h3>Türme</h3>
-    <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt). Türme bewegen sich nicht, greifen aber Gegner in Reichweite an und lassen sich in 3 Stufen ausbauen: tippe den Turm an. Hat ein Turm in deinem Zug noch nicht geschossen, feuert er beim Zugende automatisch auf das lohnendste Ziel (sichtbar animiert; in den Einstellungen abschaltbar).</p>
+    <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt, in der Burg 6). Türme bewegen sich nicht, greifen aber Gegner direkt daneben an (ab Stufe 3 bis 2 Felder weit) und lassen sich in 3 Stufen ausbauen – der Ausbau ist teuer: tippe den Turm an. Hat ein Turm in deinem Zug noch nicht geschossen, feuert er beim Zugende automatisch auf das lohnendste Ziel (sichtbar animiert; in den Einstellungen abschaltbar).</p>
     <h3>Steinwälle 🧱</h3>
     <p>Im Reiter „Gebäude“ einer Stadt setzt du Steinwälle auf freie Felder bis 2 Felder um die Stadt (bis zu 6 pro Stadt). Sie sind sehr stabil (50 Leben, Verteidigung 6), greifen nicht an, versperren aber den Weg: Gegner müssen sie umgehen oder mühsam einreißen – ideal, um Angreifer in die Reichweite deiner Türme und Schützen zu lenken. Nebeneinander gesetzte Wallstücke verbinden sich zu einer Mauer. Katapulte und Belagerer sind gegen sie besonders wirksam.</p>
     <h3>Forschung 🔬</h3>
