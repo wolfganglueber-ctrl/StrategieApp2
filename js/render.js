@@ -12,7 +12,8 @@ const DEPTH = HEX * 0.3;
 const MARGIN = HEX * 1.4;
 const GREY = '#8d8a85';
 const FIG = 1.3; // Figurengröße relativ zum Feld
-const CITY_SCALE = 1.55;
+// Größe der Stadtgrafik je Stufe: Dorf und Siedlung klein, Städte wachsen mit jeder Stufe
+const CITY_SCALE = [1, 1, 1, 1.6, 1.8, 1.95, 2.05, 2.15, 2.25];
 const CHUNK = 512; // Kachelgröße für den Geländepuffer (Weltpixel)
 
 const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
@@ -467,7 +468,7 @@ export class Renderer {
         else if (T[i] === 'mountain') drawMountain(ctx, c.x, c.y, HEX, i);
       }
     }
-    // Städte und Siedlungen groß (bis zur Mitte der Nachbarfelder), damit man sie auch mit Einheit darauf gut erkennt
+    // Städte groß über die Nachbarfelder (je höher die Stufe, desto größer), damit man sie auch mit Einheit darauf gut erkennt
     for (const city of s.cities) {
       if (city.castle) continue;
       const c = this.center(city.idx);
@@ -477,7 +478,8 @@ export class Renderer {
       ctx.shadowBlur = 5;
       ctx.shadowOffsetX = 3;
       ctx.shadowOffsetY = 2;
-      drawCity(ctx, city, c.x, c.y - HEX * 0.25, HEX * CITY_SCALE, colorOf(city.owner));
+      const sc = CITY_SCALE[city.level] || 2.2;
+      drawCity(ctx, city, c.x, c.y - HEX * 0.25 * (sc - 1), HEX * sc, colorOf(city.owner));
       ctx.restore();
     }
   }
