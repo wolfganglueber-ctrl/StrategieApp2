@@ -1038,7 +1038,7 @@ function outline(ctx, w = 1) {
 function steel(ctx, x0, x1, y0 = 0, y1 = 0) {
   const g = ctx.createLinearGradient(x0, y0, x1, y1);
   // Ab Entwicklungsstufe 4: geschwärzter Stahl
-  const c = FIG.stage >= 4 ? ['#b4b8c0', '#5b606b', '#2b2e35', '#0b0c10'] : ['#f4f7fa', '#d5dbe2', '#8f99a4', '#4f5862'];
+  const c = FIGST.stage >= 4 ? ['#b4b8c0', '#5b606b', '#2b2e35', '#0b0c10'] : ['#f4f7fa', '#d5dbe2', '#8f99a4', '#4f5862'];
   g.addColorStop(0, c[0]);
   g.addColorStop(0.3, c[1]);
   g.addColorStop(0.65, c[2]);
@@ -1047,8 +1047,8 @@ function steel(ctx, x0, x1, y0 = 0, y1 = 0) {
 }
 
 // Aktuelle Entwicklung der gezeichneten Figur (Stufe 0–5 und gewählte Ausbauten)
-let FIG = { stage: 0, ups: new Set() };
-const hasUp = (id) => FIG.ups.has(id);
+let FIGST = { stage: 0, ups: new Set() };
+const hasUp = (id) => FIGST.ups.has(id);
 
 // Haarschopf für Figuren ohne Helm
 function hair(ctx, x, y, c = '#5a3a1e') {
@@ -1061,7 +1061,7 @@ function hair(ctx, x, y, c = '#5a3a1e') {
 
 // Goldene Stufen-Steine vorn am Sockel und goldene Aura bei voller Entwicklung
 function stageMarks(ctx, r) {
-  const n = FIG.stage;
+  const n = FIGST.stage;
   if (!n) return;
   for (let k = 0; k < n; k++) {
     const x = (k - (n - 1) / 2) * 3.6, y = 9.6 + r * 0.02;
@@ -1079,7 +1079,7 @@ function stageMarks(ctx, r) {
   }
 }
 function stageAura(ctx) {
-  if (FIG.stage < 5) return;
+  if (FIGST.stage < 5) return;
   const g = ctx.createRadialGradient(0, -16, 2, 0, -16, 32);
   g.addColorStop(0, 'rgba(253,230,138,0.55)');
   g.addColorStop(0.55, 'rgba(250,204,21,0.18)');
@@ -2067,9 +2067,9 @@ function drawFusion(ctx, back, front, col) {
 }
 
 export function drawFigure(ctx, type, col, level = 1, noPedestal = false, opts = null) {
-  const prevFig = FIG;
-  FIG = opts || { stage: 0, ups: new Set() };
-  try { drawFigureInner(ctx, type, col, level, noPedestal); } finally { FIG = prevFig; }
+  const prevFig = FIGST;
+  FIGST = opts || { stage: 0, ups: new Set() };
+  try { drawFigureInner(ctx, type, col, level, noPedestal); } finally { FIGST = prevFig; }
 }
 function drawFigureInner(ctx, type, col, level, noPedestal) {
   if (type === 'tower') { drawTowerFigure(ctx, col, level); return; }
@@ -2087,12 +2087,12 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
     case 'warrior': {
       cape(ctx, 0, 6, col, 19, 7.5);
       legs(ctx, 0, 6);
-      torso(ctx, 0, 6, col, FIG.stage >= 4 ? 'plate' : 'mail');
+      torso(ctx, 0, 6, col, FIGST.stage >= 4 ? 'plate' : 'mail');
       arm(ctx, 4.8, -14, 8.5, -19, '#9aa3ad', true);
       sword(ctx, 8.5, -19, 15, -38);
       face(ctx, 0, -20.5);
       // Ohne Eisenhelm (Stufe 2) nur Haarschopf
-      if (FIG.stage >= 2) helmet(ctx, 0, -21.5, FIG.stage >= 5 ? 'great' : 'kettle', col);
+      if (FIGST.stage >= 2) helmet(ctx, 0, -21.5, FIGST.stage >= 5 ? 'great' : 'kettle', col);
       else hair(ctx, 0, -20.5);
       if (hasUp('w3a')) {
         // Beidhändig: zweites Schwert statt Schild
@@ -2134,7 +2134,7 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       ctx.beginPath();
       ctx.arc(3, -13, br, -1.2, 1.2);
       ctx.stroke();
-      ctx.strokeStyle = grad(ctx, 0, 17, FIG.stage >= 4 ? '#5b3a22' : '#b77a3e', FIG.stage >= 4 ? '#24140a' : '#6b3d14');
+      ctx.strokeStyle = grad(ctx, 0, 17, FIGST.stage >= 4 ? '#5b3a22' : '#b77a3e', FIGST.stage >= 4 ? '#24140a' : '#6b3d14');
       ctx.lineWidth = 2;
       ctx.stroke();
       const tx = 3 + br * Math.cos(-1.2), ty = -13 + br * Math.sin(-1.2), by = -13 + br * Math.sin(1.2);
@@ -2201,7 +2201,7 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       ctx.quadraticCurveTo(5, -41 + pk, 8, -47 + pk);
       ctx.fill();
       outline(ctx, 0.6);
-      if (FIG.stage >= 2) {
+      if (FIGST.stage >= 2) {
         // Hellebarden-Beil
         ctx.fillStyle = steel(ctx, 8, 13, -40 + pk, -34 + pk);
         ctx.beginPath();
@@ -2223,10 +2223,10 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       torso(ctx, 0, 6, col, 'plate');
       arm(ctx, 4.8, -14, 8, -11, '#9aa3ad', true);
       face(ctx, 0, -20.5);
-      helmet(ctx, 0, -21, FIG.stage >= 4 ? 'great' : 'nasal', col);
+      helmet(ctx, 0, -21, FIGST.stage >= 4 ? 'great' : 'nasal', col);
       // Pavese (Stufe 1) und Schildwall: größere Schilde
       if (hasUp('d3a')) kiteShield(ctx, -5, -24, 16, 31, col, 'cross');
-      else if (FIG.stage >= 1) kiteShield(ctx, -4.8, -22.5, 14.5, 28, col, 'cross');
+      else if (FIGST.stage >= 1) kiteShield(ctx, -4.8, -22.5, 14.5, 28, col, 'cross');
       else kiteShield(ctx, -4.5, -21, 13, 26, col, 'cross');
       break;
     }
@@ -2239,10 +2239,10 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       ctx.fillRect(-2.6, -22, 3.6, 9);
       ctx.fillStyle = '#3a2416';
       ctx.fillRect(-2.8, -14, 4, 3);
-      torso(ctx, -1, -11, col, FIG.stage >= 4 ? 'mail' : 'leather');
+      torso(ctx, -1, -11, col, FIGST.stage >= 4 ? 'mail' : 'leather');
       face(ctx, -1, -37.5);
-      helmet(ctx, -1, -37.5, FIG.stage >= 4 ? 'kettle' : 'hood', col);
-      if (FIG.stage >= 2) roundShield(ctx, -7, -26, 5, col);
+      helmet(ctx, -1, -37.5, FIGST.stage >= 4 ? 'kettle' : 'hood', col);
+      if (FIGST.stage >= 2) roundShield(ctx, -7, -26, 5, col);
       if (hasUp('r3b')) {
         // Plänkler: Bündel Wurfspeere auf dem Rücken
         ctx.strokeStyle = '#7a5530';
@@ -2297,7 +2297,7 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       ctx.save();
       ctx.translate(0, 6);
       // Ritter wächst mit: ohne Helm mit Schwert → Lanze → Helm und Rossharnisch → schwarze Rüstung → Ordensritter
-      const st = FIG.stage;
+      const st = FIGST.stage;
       horse(ctx, st >= 4 ? '#3a3a42' : '#e4e4ea', st >= 4 ? '#15151a' : '#8f8f99', col, st >= 2);
       ctx.fillStyle = st >= 2 ? steel(ctx, -3, 2) : cloth(ctx, -3, 2, col);
       ctx.fillRect(-2.6, -22, 3.6, 9);
@@ -2460,7 +2460,7 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
         ctx.fill();
         outline(ctx, 0.6);
       }
-      if (FIG.stage >= 5) {
+      if (FIGST.stage >= 5) {
         // Brandladung
         const fg = ctx.createRadialGradient(-13.5, -39, 0.5, -13.5, -39, 6);
         fg.addColorStop(0, 'rgba(255,240,180,0.95)');
