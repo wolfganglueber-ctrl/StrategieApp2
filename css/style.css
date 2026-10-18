@@ -407,3 +407,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .tip b.ok { color: #86efac; }
 .tip b.bad { color: #fca5a5; }
 .tip-grid span { color: var(--muted); }
+.resbar .pill.nearfull { border-color: rgba(251, 146, 60, 0.8); }
+.resbar .pill.full { border-color: #ef4444; background: rgba(239, 68, 68, 0.22); }
+#unitText.over { color: #f87171; }

@@ -4,7 +4,7 @@ import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
-  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, BUILDING_FLAT, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_PCT, SKILLS, skillsFor, boostCost, skillCost,
+  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, BUILDING_FLAT, buildingFactor, STORE_BASE, STORE_PER_LEVEL, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_PCT, SKILLS, skillsFor, boostCost, skillCost,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -516,6 +516,13 @@ export function computeTerritory(state) {
 }
 
 // Rohstoffertrag pro Runde, aufgeschlüsselt
+// Lagergrenze je Rohstoff
+export function storageCap(state, pid) {
+  let lv = 0;
+  for (const c of state.cities) if (c.owner === pid) lv += c.level;
+  return Math.round((STORE_BASE + STORE_PER_LEVEL * lv) * (hasTech(state, pid, 'granary') ? 1.5 : 1));
+}
+
 export function incomeOf(state, pid, territory = computeTerritory(state)) {
   const inc = { food: 0, wood: 0, ore: 0 };
   state.cities.forEach((c, ci) => {
@@ -531,12 +538,18 @@ export function incomeOf(state, pid, territory = computeTerritory(state)) {
   return inc;
 }
 
+// Unterhalt: bis zur Versorgung der Städte einfach, darüber doppelt, über dem 1,5-Fachen dreifach
+// (älteste Einheiten zuerst, Versorgungspunkte wie beim Truppenzähler)
 export function upkeepTotal(state, pid) {
   const up = { food: 0, wood: 0, ore: 0 };
+  const cap = unitCap(state, pid);
+  let used = 0;
   for (const u of state.units) {
-    if (u.owner !== pid) continue;
+    if (u.owner !== pid || isStructure(u)) continue;
+    used += UNITS[u.type].supply || 1;
+    const mult = used <= cap ? 1 : used <= cap * 1.5 ? 2 : 3;
     const c = upkeepOf(u.type);
-    for (const k in c) up[k] += c[k];
+    for (const k in c) up[k] += c[k] * mult;
   }
   if (hasTech(state, pid, 'granary')) up.food = Math.ceil(up.food * 0.75);
   return up;
@@ -560,7 +573,7 @@ export function cityYield(state, ci, territory = computeTerritory(state)) {
   const tiles = cityTiles(state, ci, territory);
   const tech = (t) => c.owner >= 0 && hasTech(state, c.owner, t);
   // Gebäude: +Stufe je passendem Feld (Reihenfolge von Bau und Ausbau egal); ohne passendes Feld pauschal 4 (+1 je weiterer Stufe)
-  const per = (n) => (n ? n * c.level : BUILDING_FLAT + c.level - 1);
+  const per = (n) => (n ? n * buildingFactor(c.level) : BUILDING_FLAT + c.level - 1);
   if (hasBuilding(c, 'farm')) inc.food += per(tiles.food) + (tech('plough') ? 2 : 0) + (tech('rotation') ? 2 : 0);
   if (hasBuilding(c, 'lumber')) inc.wood += per(tiles.wood) + (tech('saw') ? 2 : 0);
   if (hasBuilding(c, 'mine')) inc.ore += per(tiles.ore) + (tech('mining') ? 2 : 0) + (tech('smelting') ? 2 : 0);
@@ -734,8 +747,13 @@ export function startTurn(state) {
   }
   const inc = incomeOf(state, pid);
   const p = state.players[pid];
-  for (const k of RES) p.res[k] = Math.max(0, p.res[k] + inc[k]);
-  ev.push({ k: 'income', pid, amount: inc });
+  // Was nicht ins Lager passt, verdirbt
+  const cap = storageCap(state, pid), lost = {};
+  for (const k of RES) {
+    p.res[k] = Math.max(0, p.res[k] + inc[k]);
+    if (p.res[k] > cap) { lost[k] = p.res[k] - cap; p.res[k] = cap; }
+  }
+  ev.push({ k: 'income', pid, amount: inc, lost });
   checkOver(state);
   updateExplored(state);
   return ev;

@@ -31,8 +31,8 @@ export const UNITS = {
   dragon: { name: 'Drache', cost: { food: 150, wood: 150, ore: 150 }, hp: 300, atk: 100, def: 40, move: 5, range: 1, supply: 3, regen: 6, perRealm: 1, flying: true, line: [0.75, 0.5], arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten. Angriff 100, sein Feueratem trifft auch die Gegner auf den 2 Feldern hinter dem Ziel (75 % und 50 %). Schützen und Türme treffen ihn um 60 % härter. Nur einer pro Reich.' },
   barrier: { name: 'Steinwall', cost: { wood: 6, ore: 14 }, hp: 50, atk: 0, def: 24, move: 0, range: 0, structure: true, desc: 'Sehr stabiles Wallstück, blockiert den Weg. Im Stadtgebiet setzen; benachbarte Wallstücke verbinden sich zu einer Mauer und lenken den Gegner.' },
   basilisk: { name: 'Basilisk', cost: { food: 18, wood: 8, ore: 16 }, hp: 28, atk: 12, def: 12, move: 3, range: 2, supply: 2, perRealm: 2, petrify: true, needs: 'nest', desc: 'Versteinernder Blick aus 2 Feldern: Das Ziel setzt seinen nächsten Zug aus und schlägt nicht zurück (Troll und Drache sind immun). Höchstens 2 pro Reich.' },
-  trebuchet: { name: 'Tribok', cost: { food: 4, wood: 24, ore: 16 }, hp: 14, atk: 20, def: 0, move: 1, range: 5, minRange: 2, noMoveAttack: true, upkeep: { food: 1, wood: 1 }, needs: 'workshop', tech: 'counterweight', desc: 'Schwere Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einziges Feld (kein Flächenschaden), aber nicht direkt daneben und nicht nach Bewegung. Braucht Werkstatt und die Forschung Gegengewicht.' },
-  catapult: { name: 'Katapult', cost: { wood: 12, ore: 10 }, hp: 12, atk: 16, def: 0, move: 2, range: 3, noMoveAttack: true, splash: 0.5, fieldMult: 0.6, upkeep: { food: 1, wood: 1 }, needs: 'workshop', desc: 'Belagerungswaffe mit Reichweite 3, nicht nach Bewegung. Gegen Städte, Türme und Wälle voller Schaden, gegen Truppen im Feld nur 60 %. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Unterhalt 1 Nahrung + 1 Holz. Braucht eine Werkstatt.' },
+  trebuchet: { name: 'Tribok', cost: { food: 4, wood: 24, ore: 16 }, hp: 14, atk: 20, def: 0, move: 1, range: 5, minRange: 2, noMoveAttack: true, upkeep: { food: 2, wood: 1 }, needs: 'workshop', tech: 'counterweight', desc: 'Schwere Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einziges Feld (kein Flächenschaden), aber nicht direkt daneben und nicht nach Bewegung. Braucht Werkstatt und die Forschung Gegengewicht.' },
+  catapult: { name: 'Katapult', cost: { wood: 12, ore: 10 }, hp: 12, atk: 16, def: 0, move: 2, range: 3, noMoveAttack: true, splash: 0.5, fieldMult: 0.6, upkeep: { food: 2, wood: 1 }, needs: 'workshop', desc: 'Belagerungswaffe mit Reichweite 3, nicht nach Bewegung. Gegen Städte, Türme und Wälle voller Schaden, gegen Truppen im Feld nur 60 %. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Unterhalt 2 Nahrung + 1 Holz. Braucht eine Werkstatt.' },
 };
 // Wert einer Einheit für die KI (Rohstoffsumme / 2), danach Kaufpreise verdoppeln:
 // Einheiten sollen im Verhältnis zum Ertrag teuer sein (halb so viele wie früher)
@@ -98,7 +98,8 @@ export const CAVALRY = ['rider', 'knight', 'griffin'];
 export function upkeepOf(type) {
   const T = UNITS[type];
   if (T.structure) return {};
-  return T.upkeep || { food: T.supply || 1 };
+  // 2 Nahrung je Versorgungspunkt (Katapulte: 2 Nahrung + 1 Holz)
+  return T.upkeep || { food: 2 * (T.supply || 1) };
 }
 export const AURA = { radius: 1, radius2: 2, reduce: 0.25, splash: 0.5 };
 export const HEAL = { base: 4, blessing: 2, range: 3 };
@@ -141,7 +142,7 @@ export const TECHS = {
   guild: { branch: 'eco', name: 'Handelsgilde', icon: '💰', cost: { food: 45, wood: 40, ore: 30 }, req: ['plough'], desc: 'Handel 2:1 statt 3:1 (braucht einen Markt)' },
   rotation: { branch: 'eco', name: 'Dreifelderwirtschaft', icon: '🌾', cost: { wood: 20, ore: 10 }, req: ['plough'], desc: 'Bauernhöfe weitere +2 Nahrung' },
   smelting: { branch: 'eco', name: 'Erzschmelze', icon: '🔥', cost: { food: 20, wood: 20 }, req: ['mining'], desc: 'Minen weitere +2 Erz' },
-  granary: { branch: 'eco', name: 'Kornspeicher', icon: '🏚️', cost: { food: 10, wood: 26, ore: 10 }, req: ['plough'], desc: 'Unterhalt der Armee: ein Viertel weniger Nahrung' },
+  granary: { branch: 'eco', name: 'Kornspeicher', icon: '🏚️', cost: { food: 10, wood: 26, ore: 10 }, req: ['plough'], desc: 'Unterhalt der Armee: ein Viertel weniger Nahrung, Lager +50 %' },
   masonry: { branch: 'eco', name: 'Baukunst', icon: '🏛️', cost: { wood: 24, ore: 16 }, req: ['saw', 'mining'], desc: 'Stadtausbau 25 % günstiger' },
   medic: { branch: 'def', name: 'Heilkunde', icon: '🌿', cost: { food: 28 }, req: [], desc: 'Einheiten heilen 2 mehr' },
   stonework: { branch: 'def', name: 'Steinmetz', icon: '🧱', cost: { wood: 12, ore: 20 }, req: [], desc: 'Türme +6 Leben, Mauern stärker (×2,6)' },
@@ -310,9 +311,9 @@ export const TRADE_RATE_GUILD = 2;
 
 // Gebäude: jede Stadt hat so viele Bauplätze wie ihre Stufe (höchstens 6)
 export const BUILDINGS = {
-  farm: { art: 'einen', name: 'Bauernhof', icon: '🌾', cost: { wood: 4 }, desc: '+1 Nahrung je Wiese/See im Stadtkreis und Stadtstufe (ohne: +4, +1 je Stufe)' },
-  lumber: { art: 'einen', name: 'Holzfäller', icon: '🌲', cost: { food: 4 }, desc: '+1 Holz je Wald im Stadtkreis und Stadtstufe (ohne: +4, +1 je Stufe)' },
-  mine: { art: 'eine', name: 'Mine', icon: '⛏️', cost: { food: 4, wood: 4 }, desc: '+1 Erz je Hügel/Berg im Stadtkreis und Stadtstufe (ohne: +4, +1 je Stufe)' },
+  farm: { art: 'einen', name: 'Bauernhof', icon: '🌾', cost: { wood: 4 }, desc: '+1 Nahrung je Wiese/See im Stadtkreis, ab Stadtstufe 4 +2, ab 7 +3 (ohne: +4, +1 je Stufe)' },
+  lumber: { art: 'einen', name: 'Holzfäller', icon: '🌲', cost: { food: 4 }, desc: '+1 Holz je Wald im Stadtkreis, ab Stadtstufe 4 +2, ab 7 +3 (ohne: +4, +1 je Stufe)' },
+  mine: { art: 'eine', name: 'Mine', icon: '⛏️', cost: { food: 4, wood: 4 }, desc: '+1 Erz je Hügel/Berg im Stadtkreis, ab Stadtstufe 4 +2, ab 7 +3 (ohne: +4, +1 je Stufe)' },
   barracks: { art: 'eine', name: 'Kaserne', icon: '🛡️', cost: { wood: 6, ore: 4 }, desc: 'Ritter möglich, neue Einheiten können sofort ziehen' },
   workshop: { art: 'eine', name: 'Werkstatt', icon: '⚙️', cost: { wood: 8, ore: 4 }, desc: 'Katapulte möglich' },
   wall: { art: 'eine', name: 'Mauer', icon: '🧱', cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt ×2,2' },
@@ -326,7 +327,7 @@ export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop',
 
 // Stadtzentrum liefert von jedem Rohstoff so viel wie die Stufe
 // Ertrag des Stadtzentrums je Rohstoff: steigt mit jeder Stufe stärker, damit auch wenige große Städte genug liefern
-export const CENTER_YIELD = [0, 1, 2, 4, 6, 8, 10, 13, 16];
+export const CENTER_YIELD = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 export function cityCenterYield(city) {
   return CENTER_YIELD[city.level] ?? city.level;
 }
@@ -341,12 +342,20 @@ export function cityRadius() {
 export const MAX_SLOTS = 6;
 // Bauernhof/Holzfäller/Mine ohne passendes Feld im Stadtkreis
 export const BUILDING_FLAT = 4;
+// Bauernhof/Holzfäller/Mine: je passendem Feld +1 auf Stufe 1–3, +2 auf 4–6, +3 auf 7–8
+export function buildingFactor(level) {
+  return Math.ceil(level / 3);
+}
+// Lager: jede Stadtstufe im Reich fasst 15 mehr je Rohstoff (Kornspeicher +50 %); Überschuss verdirbt
+export const STORE_BASE = 100;
+export const STORE_PER_LEVEL = 15;
+// Versorgung: Einheiten über der Versorgung der Städte kosten doppelten, über dem 1,5-Fachen dreifachen Unterhalt
 export function citySlots(city) {
   return Math.min(MAX_SLOTS, city.level);
 }
 export function upgradeCost(city) {
-  return [null, { food: 8, wood: 8 }, { food: 14, wood: 12, ore: 6 }, { food: 22, wood: 18, ore: 14 }, { food: 30, wood: 26, ore: 22 },
-    { food: 42, wood: 38, ore: 32 }, { food: 56, wood: 50, ore: 44 }, { food: 72, wood: 64, ore: 58 }][city.level];
+  return [null, { food: 8, wood: 8 }, { food: 14, wood: 12, ore: 6 }, { food: 26, wood: 22, ore: 16 }, { food: 44, wood: 38, ore: 32 },
+    { food: 70, wood: 62, ore: 54 }, { food: 105, wood: 95, ore: 85 }, { food: 150, wood: 135, ore: 120 }][city.level];
 }
 export function cityDefense(city, stonework = false) {
   return city.buildings?.includes('wall') ? (stonework ? 2.6 : 2.2) : 1.5;

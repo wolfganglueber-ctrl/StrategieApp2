@@ -6,7 +6,7 @@ import {
   incomeOf, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, flankers, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, defenseMult,
-  canBoost, skillOptions, hasSkill, hasPerk, getFreezeTargets, getBombTargets, migrateState,
+  canBoost, skillOptions, hasSkill, hasPerk, storageCap, unitCap, getFreezeTargets, getBombTargets, migrateState,
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
@@ -14,7 +14,7 @@ import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
-  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, CENTER_YIELD, MAX_SLOTS, BUILDING_FLAT, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
+  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, CENTER_YIELD, MAX_SLOTS, BUILDING_FLAT, buildingFactor, STORE_BASE, STORE_PER_LEVEL, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
   BOOST_PCT, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
@@ -1282,9 +1282,12 @@ async function playEvent(ev, f, isAI, pan = true) {
     case 'turn':
       if (S.players[ev.pid].human) { hideBanner(); sound.play('turnstart'); }
       break;
-    case 'income':
+    case 'income': {
       updateHud();
+      const lost = RES.filter((k) => ev.lost?.[k]);
+      if (lost.length && S.players[ev.pid].human) toast(`📦 Lager voll: ${lost.map((k) => `${ev.lost[k]} ${RES_INFO[k].name}`).join(', ')} verdorben. Baue Städte aus oder gib mehr aus.`, 4000);
       break;
+    }
   }
 }
 
@@ -1318,14 +1321,19 @@ function updateHud() {
   const inc = incomeOf(S, human.id);
   const bar = $('resBar');
   bar.innerHTML = '';
+  const cap = storageCap(S, human.id);
   for (const k of RES) {
     const up = upkeepTotal(S, human.id)[k];
-    bar.append(el('button', { class: 'pill', title: `${RES_INFO[k].name}: Ertrag pro Runde nach Abzug von ${up} Unterhalt für die Armee – tippen zum Handeln`, onclick: () => openTrade(k) },
+    // Lager fast voll: orange, voll: rot (Überschuss verdirbt)
+    const full = human.res[k] >= cap ? ' full' : human.res[k] + Math.max(0, inc[k]) > cap ? ' nearfull' : '';
+    bar.append(el('button', { class: 'pill' + full, title: `${RES_INFO[k].name}: ${human.res[k]} von ${cap} im Lager, Ertrag pro Runde nach Abzug von ${up} Unterhalt für die Armee – tippen zum Handeln`, onclick: () => openTrade(k) },
       icon(k), el('b', {}, human.res[k]), el('small', { class: inc[k] < 0 ? 'neg' : '' }, inc[k] < 0 ? `${inc[k]}` : `+${inc[k]}`)));
   }
   // Armee-Unterhalt pro Runde neben der Einheitenzahl
   const up = upkeepTotal(S, human.id);
-  $('unitText').textContent = `${unitCount(S, human.id)}`;
+  const used = unitCount(S, human.id), sup = unitCap(S, human.id);
+  $('unitText').textContent = `${used}/${sup}`;
+  $('unitText').classList.toggle('over', used > sup);
   $('upkeepText').textContent = `−${up.food}`;
   $('upkeepWood').textContent = up.wood ? ` −${up.wood}🪵` : '';
   const nAvail = TECH_ORDER.filter((t) => techAvailable(S, human.id, t) && canAfford(human.res, TECHS[t].cost)).length;
@@ -1543,7 +1551,7 @@ function renderCityPanel(panel, ci, occ) {
     // Reihenfolge: Wirtschaft, dann Turm und Steinwall, dann alles andere
     const tiles = cityTiles(S, ci);
     const ECO = ['farm', 'lumber', 'mine', 'market'];
-    const eco = (n, what, res) => n ? `+${n * c.level} ${res} (${n} ${what} × Stufe ${c.level})` : `+${BUILDING_FLAT + c.level - 1} ${res} (pauschal, kein ${what} im Stadtkreis)`;
+    const eco = (n, what, res) => n ? `+${n * buildingFactor(c.level)} ${res} (${n} ${what} × ${buildingFactor(c.level)})` : `+${BUILDING_FLAT + c.level - 1} ${res} (pauschal, kein ${what} im Stadtkreis)`;
     const ecoDesc = { farm: eco(tiles.food, 'Wiese/See', 'Nahrung'), lumber: eco(tiles.wood, 'Wald', 'Holz'), mine: eco(tiles.ore, 'Hügel/Berg', 'Erz') };
     const structRows = () => {
       for (const [type, text] of [['tower', 'Schießt auf Gegner, 3 Ausbaustufen'], ['barrier', 'Blockiert den Weg, bildet Mauern']]) {
@@ -1582,7 +1590,7 @@ function renderCityPanel(panel, ci, occ) {
           // Zuwachs: Stadtzentrum + je Feld mit passendem Gebäude (Bauernhof/Holzfäller/Mine) +1
           const t = cityTiles(S, ci);
           const B = { food: 'farm', wood: 'lumber', ore: 'mine' };
-          const parts = RES.map((k) => `+${CENTER_YIELD[c.level + 1] - CENTER_YIELD[c.level] + (hasBuilding(c, B[k]) ? (t[k] || 1) : 0)} ${RES_INFO[k].name}`).join(', ');
+          const parts = RES.map((k) => `+${CENTER_YIELD[c.level + 1] - CENTER_YIELD[c.level] + (hasBuilding(c, B[k]) ? (t[k] ? t[k] * (buildingFactor(c.level + 1) - buildingFactor(c.level)) : 1) : 0)} ${RES_INFO[k].name}`).join(', ');
           return `Ausbau zur ${CITY_NAMES[c.level + 1]}: ${citySlots({ level: c.level + 1 }) > citySlots(c) ? '+1 Bauplatz, ' : ''}${parts}`;
         })()),
         el('button', { class: 'btn small primary', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost, p.res))));
@@ -2055,7 +2063,7 @@ function renderHelp() {
     <b>5. Angriff:</b> Erst die Fernkämpfer schießen lassen, dann mit Nahkämpfern zuschlagen.</p>
     <h3>Ablauf einer Runde</h3>
     <p>Jede Einheit darf pro Runde einmal ziehen und einmal angreifen (erst ziehen, dann angreifen). Über eigene Einheiten springst du hinweg – das kostet keine Bewegung.
-    Du kannst pro Runde beliebig viele Einheiten rekrutieren (begrenzt nur durch Rohstoffe). Sie erscheinen auf freien Feldern im Stadtgebiet und handeln ab der nächsten Runde – mit Kaserne sofort. Jede Einheit kostet aber <b>Unterhalt</b>: 1 Nahrung pro Runde (Basilisk 2, Troll und Drache 3, Katapult 1 Nahrung + 1 Holz). Der Ertrag oben zeigt schon den Betrag nach Abzug – wird er rot, schrumpfen deine Vorräte.
+    Du kannst pro Runde beliebig viele Einheiten rekrutieren (begrenzt nur durch Rohstoffe). Sie erscheinen auf freien Feldern im Stadtgebiet und handeln ab der nächsten Runde – mit Kaserne sofort. Jede Einheit kostet aber <b>Unterhalt</b>: 2 Nahrung pro Runde (Basilisk 4, Troll und Drache 6, Katapult und Tribok 2 Nahrung + 1 Holz), über der Versorgung deiner Städte doppelt bzw. dreifach (siehe Lager und Versorgung). Der Ertrag oben zeigt schon den Betrag nach Abzug – wird er rot, schrumpfen deine Vorräte.
     Einheiten, die noch etwas tun können, haben einen leuchtenden Ring.</p>
     <h3>Gemeinsam angreifen 👥</h3>
     <p>Wähle eine Einheit und tippe auf „👥 Alle in der Nähe“ (alle eigenen Einheiten im Umkreis) oder „👥 Alle Ritter“ usw. (nur gleiche Einheiten im Umkreis); am PC geht auch Shift + Klick. Danach ist der Gruppenmodus aktiv. Weitere eigene Einheiten fügst du per Tipp hinzu oder nimmst sie wieder heraus.
@@ -2066,7 +2074,10 @@ function renderHelp() {
     <b>Erschüttert ⭐:</b> Greifen in einer Runde mindestens zwei verschiedene Einheiten denselben Gegner an (Katapult und Tribok: schon ein Angriff), ist er bis zu seinem nächsten Zug erschüttert: halbe Verteidigung, kein Gegenschlag. Troll und Drache werden nie erschüttert. Tipp: erst zwei Fernkämpfer, dann die Nahkämpfer.</p>
     <h3>Städte</h3>
     <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden; Türme und Steinwälle in ihrem Gebiet wechseln mit auf deine Seite.
-    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz (höchstens ${MAX_SLOTS}) und mehr Ertrag: Das Stadtzentrum liefert je Rohstoff ${CENTER_YIELD.slice(1).join(' / ')}. Jedes Feld im Stadtkreis liefert 1 seines Rohstoffs – erst mit Bauernhof (Wiese/See), Holzfäller (Wald) oder Mine (Hügel/Gebirge) kommt je Feld so viel dazu, wie die Stadt Stufen hat. Ob du zuerst baust oder ausbaust, ist egal. So lohnen sich wenige große Städte genauso wie viele kleine Siedlungen.</p>
+    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz (höchstens ${MAX_SLOTS}) und mehr Ertrag: Das Stadtzentrum liefert je Rohstoff ${CENTER_YIELD.slice(1).join(' / ')}. Jedes Feld im Stadtkreis liefert 1 seines Rohstoffs – mit Bauernhof (Wiese/See), Holzfäller (Wald) oder Mine (Hügel/Gebirge) kommt je passendem Feld +1 dazu, ab Stadtstufe 4 +2, ab Stufe 7 +3. Ob du zuerst baust oder ausbaust, ist egal. Hohe Stadtstufen sind teuer – überlege, wo sich der Ausbau lohnt.</p>
+    <h3>Lager und Versorgung 📦</h3>
+    <p><b>Lager:</b> Von jedem Rohstoff kannst du höchstens ${STORE_BASE} + ${STORE_PER_LEVEL} je Stadtstufe deines Reichs lagern (Forschung Kornspeicher +50 %). Was darüber hinausgeht, verdirbt am Rundenbeginn – die Rohstoffleiste wird orange, wenn es knapp wird, und rot, wenn das Lager voll ist. Horten lohnt sich also nicht: Plane, wofür du deine Rohstoffe ausgibst – neue Einheiten, Verbesserungen, Forschung oder Stadtausbau.<br>
+    <b>Versorgung:</b> Oben neben ⚔ steht „Truppen/Versorgung“. Jede Stadt versorgt Truppen (${[1, 2, 3, 4, 5, 6, 7, 8].map((l) => citySupply({ level: l })).join(' / ')} je nach Stufe; Basilisk zählt 2, Troll und Drache 3). Jede Einheit isst 2 Nahrung pro Runde. Einheiten über der Versorgung kosten doppelten Unterhalt, über dem 1,5-Fachen dreifachen. Eine riesige Armee frisst also schnell den ganzen Ertrag – lieber wenige, gut verbesserte Einheiten.</p>
     <h3>Gebäude</h3>
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
     <h3>Abreißen 🗑</h3>
