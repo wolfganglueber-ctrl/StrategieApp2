@@ -404,3 +404,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .up-row.choice .up-card { min-width: 0; padding: 6px; gap: 4px; }
 .up-row.choice .up-card .btn { align-self: center; max-width: 100%; }
 .up-row.choice .up-card .cost { flex-wrap: wrap; justify-content: center; }
+.tip b.ok { color: #86efac; }
+.tip b.bad { color: #fca5a5; }
+.tip-grid span { color: var(--muted); }

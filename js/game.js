@@ -4,14 +4,14 @@ import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
-  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, REGIMENT_MAX, REGIMENT_TYPES, FUSION_COST, fusionResult, BUILDING_FLAT, UNIT_UPS, UP_INDEX, unitUpCost,
+  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, BUILDING_FLAT, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_PCT, SKILLS, skillsFor, boostCost, skillCost,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
-export const STATE_VERSION = 5;
+export const STATE_VERSION = 6;
 
 /*
- config: { seed, cols, rows, biome, players: [{ human: bool, ai: 1..6, name? }], levelId?, villageDensity?, fusion? }
+ config: { seed, cols, rows, biome, players: [{ human: bool, ai: 1..6, name? }], levelId?, villageDensity?, fog? }
 */
 export function createGame(config) {
   const n = config.players.length;
@@ -43,7 +43,6 @@ export function createGame(config) {
     over: null,
     stats: { kills: new Array(n).fill(0), losses: new Array(n).fill(0) },
     fog: !!config.fog,
-    fusion: !!config.fusion,
     explored: {},
   };
   if (state.fog) {
@@ -90,7 +89,6 @@ export function hasTech(state, pid, t) {
 export function statsOf(state, u) {
   const T = UNITS[u.type];
   const st = { hp: T.hp, atk: T.atk, def: T.def, move: T.move, range: T.range };
-  if (u.mix) Object.assign(st, { hp: u.mix.hp, atk: u.mix.atk, def: u.mix.def, move: u.mix.move, range: u.mix.range }); // Chimäre
   if (u.type === 'tower') {
     Object.assign(st, TOWER_LEVELS[u.level || 1]);
     if (hasTech(state, u.owner, 'stonework')) st.hp += 6;
@@ -113,21 +111,37 @@ export function statsOf(state, u) {
     for (const [k, v] of Object.entries(UP_INDEX[id]?.mod || {})) if (k in st) st[k] += v;
   }
   // Rang und Fähigkeiten
+  // Alle Werte sind ganze Zahlen: Zuschläge werden aufgerundet
   const r = (u.rank || 1) - 1;
   if (r > 0) {
-    st.hp = Math.round(st.hp * (1 + RANK_BONUS.hp * r));
-    st.atk = Math.round(st.atk * (1 + RANK_BONUS.atk * r) * 10) / 10;
-    st.def = Math.round(st.def * (1 + RANK_BONUS.def * r) * 10) / 10;
+    st.hp = ceilMul(st.hp, 1 + RANK_BONUS.hp * r);
+    st.atk = ceilMul(st.atk, 1 + RANK_BONUS.atk * r);
+    st.def = ceilMul(st.def, 1 + RANK_BONUS.def * r);
     if (r >= 1 && CAVALRY.includes(u.type)) st.move++;
     if (r >= 3) st.move++;
   }
-  if (hasPerk(u, 'tough')) st.hp = Math.round(st.hp * 1.25);
-  if (hasPerk(u, 'shieldwall')) st.def = Math.round(st.def * 1.3 * 10) / 10;
+  if (hasPerk(u, 'tough')) st.hp = ceilMul(st.hp, 1.25);
+  if (hasPerk(u, 'shieldwall')) st.def = ceilMul(st.def, 1.3);
   if (hasPerk(u, 'swift')) st.move++;
-  // Verband: Lebenspunkte aller Mitglieder
-  st.hp *= u.count || 1;
   st.move = Math.min(st.move, moveCap(u.type));
+  // Einzel-Verbesserungen dieser einen Einheit
+  if (u.boost) for (const k of ['atk', 'def', 'hp']) if (u.boost[k]) st[k] = ceilMul(st[k], 1 + BOOST_PCT[u.boost[k]] / 100);
+  if (hasSkill(u, 'range1')) st.range++;
+  if (hasSkill(u, 'range2')) st.range++;
+  // Stellung halten: nicht gezogen → +20 % Verteidigung
+  if (hasSkill(u, 'hold') && !u.walked) st.def = ceilMul(st.def, 1.2);
+  st.atk = Math.ceil(st.atk - 1e-9);
+  st.def = Math.ceil(st.def - 1e-9);
+  st.hp = Math.ceil(st.hp - 1e-9);
   return st;
+}
+
+function ceilMul(v, f) {
+  return Math.ceil(v * f - 1e-9);
+}
+
+export function hasSkill(u, k) {
+  return !!u.skills?.includes(k);
 }
 
 export function canPetrify(t) {
@@ -169,10 +183,32 @@ export function attackMult(state, att, def, fromIdx = att.idx) {
   // Drachen sind anfällig gegen Pfeile
   if (UNITS[def.type].arrowWeak && (att.type === 'archer' || att.type === 'tower')) m += 0.6;
   if (!isStructure(att)) m += (hasTech(state, att.owner, 'tactics') ? 0.15 : FLANK_BONUS) * flankers(state, att, def);
-  if (UNITS[att.type].siegeMult && (isStructure(def) || cityOn(state, def.idx) || castleOf(state, def.idx))) m *= UNITS[att.type].siegeMult;
   // Belagerungswaffen: gegen Truppen im offenen Feld schwächer
   if (UNITS[att.type].fieldMult && !isStructure(def) && !cityOn(state, def.idx)) m *= UNITS[att.type].fieldMult;
   return m;
+}
+
+// Aufschlüsselung eines Angriffs für die Anzeige (gleiche Regeln wie computeCombat/attackMult)
+export function combatInfo(state, att, def, fromIdx = att.idx) {
+  const r = computeCombat(state, att, def, fromIdx);
+  const A = statsOf(state, att), D = statsOf(state, def);
+  const atkNotes = [], defNotes = [];
+  if (hasPerk(att, 'charge') && (att.moved || fromIdx !== att.idx)) atkNotes.push('Sturmangriff +30 %');
+  if (hasPerk(att, 'siege') && (cityOn(state, def.idx) || isStructure(def))) atkNotes.push('Belagerer +30 %');
+  if (hasPerk(att, 'hunter') && (CAVALRY.includes(def.type) || def.type === 'troll' || def.type === 'dragon')) atkNotes.push('Jäger +40 %');
+  if (UNITS[def.type].arrowWeak && (att.type === 'archer' || att.type === 'tower')) atkNotes.push('Pfeile gegen Drachen +60 %');
+  const fl = isStructure(att) ? 0 : flankers(state, att, def);
+  if (fl) atkNotes.push(`Flanke ${fl}× +${Math.round((hasTech(state, att.owner, 'tactics') ? 0.15 : FLANK_BONUS) * 100 * fl)} %`);
+  if (UNITS[att.type].fieldMult && !isStructure(def) && !cityOn(state, def.idx)) atkNotes.push(`im Feld ×${UNITS[att.type].fieldMult}`);
+  const dm = defenseMult(state, def.idx);
+  if (hasSkill(def, 'hold') && !def.walked) defNotes.push('Stellung gehalten +20 %');
+  if (dm > 1) defNotes.push(`${castleOf(state, def.idx) && !cityOn(state, def.idx) ? 'Burgfeld' : 'Stadt/Burg'} ×${Math.round(dm * 100) / 100}`);
+  if (def.shaken) defNotes.push('erschüttert ×0,5');
+  if (inAura(state, def)) defNotes.push('Schutzaura −25 % Schaden');
+  if (def.hp < D.hp) defNotes.push(`angeschlagen ${def.hp}/${D.hp}`);
+  if (att.hp < A.hp) atkNotes.push(`angeschlagen ${att.hp}/${A.hp}`);
+  const extra = (splashOf(att) || UNITS[att.type].line) ? splashDamage(state, att, def.idx, r.dmg, fromIdx) : [];
+  return { ...r, atk: A.atk, atkMult: attackMult(state, att, def, fromIdx), atkNotes, def: D.def, defMult: dm, defNotes, extra, lance: hasPerk(att, 'lance') && unitRange(state, def) <= 1 };
 }
 
 // Andere eigene Einheiten direkt neben dem Ziel
@@ -188,7 +224,8 @@ export function flankers(state, att, def) {
 export function splashOf(u) {
   if (hasPerk(u, 'precise')) return 0;
   const base = Math.max(UNITS[u.type].splash || 0, hasPerk(u, 'blast') ? 0.4 : 0);
-  if (hasPerk(u, 'fire')) return base + 0.25;
+  const fire = (hasPerk(u, 'fire') ? 0.25 : 0) + (hasSkill(u, 'firearrow') ? 0.25 : 0);
+  if (fire) return base + fire;
   if (hasPerk(u, 'rampage')) return Math.max(base, 0.3);
   return base;
 }
@@ -226,7 +263,7 @@ export function visibility(state, pid) {
   const vis = new Uint8Array(geo.n);
   for (const u of state.units) {
     if (u.owner !== pid) continue;
-    const r = Math.max(2, statsOf(state, u).range) + (u.type === 'rider' || u.type === 'knight' ? 1 : 0);
+    const r = Math.max(2, statsOf(state, u).range) + (u.type === 'rider' || u.type === 'knight' || u.type === 'griffin' ? 1 : 0);
     for (const j of geo.within(u.idx, r)) vis[j] = 1;
   }
   for (const c of state.cities) {
@@ -274,7 +311,7 @@ export function upgradeCostOf(state, city) {
 
 export function techAvailable(state, pid, t) {
   const T = TECHS[t];
-  if (!T || hasTech(state, pid, t) || (T.fusionOnly && !state.fusion)) return false;
+  if (!T || hasTech(state, pid, t)) return false;
   return T.req.every((r) => hasTech(state, pid, r));
 }
 
@@ -423,23 +460,24 @@ export function getTargets(state, u, fromIdx, occ = buildOcc(state)) {
   return res;
 }
 
+// Schadensfaktor (Angriff/Verteidigung sind seit 0.57 viermal so groß wie früher, damit alles ganzzahlig ist)
+export const DMG_K = 1.125;
+
 export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp) {
   const A = statsOf(state, att), D = statsOf(state, def);
   const atk = A.atk * attackMult(state, att, def, fromIdx);
   const aF = atk * (attHp / A.hp);
-  const dF = D.def * (def.hp / D.hp) * (UNITS[att.type].ignoreWalls ? 1 : defenseMult(state, def.idx)) * (def.shaken ? 0.5 : 1);
+  const dF = D.def * (def.hp / D.hp) * defenseMult(state, def.idx) * (def.shaken ? 0.5 : 1);
   const tot = aF + dF;
-  // Verbände teilen Schaden mal Mitgliederzahl aus; Flächenwaffen treffen Verbände härter
-  const na = att.count || 1, nd = def.count || 1;
-  const crowd = nd > 1 && splashOf(att) > 0 ? 1 + 0.25 * (nd - 1) : 1;
-  const dmg = Math.round((aF / tot) * atk * 4.5 * na * crowd * (UNITS[att.type].dmgMult || 1) * (inAura(state, def) ? 1 - AURA.reduce : 1));
+  // Schaden in ganzen Zahlen (aufgerundet)
+  const dmg = Math.ceil((aF / tot) * atk * DMG_K * (inAura(state, def) ? 1 - AURA.reduce : 1) - 1e-9);
   const kill = dmg >= def.hp;
   let counter = 0;
   const geo = geoOf(state);
   // Chevalier mit langer Lanze: Nahkämpfer kommen nicht zum Gegenschlag
   const lance = hasPerk(att, 'lance') && unitRange(state, def) <= 1;
   if (!kill && !lance && !def.shaken && !def.stone && !def.stoneNow && geo.dist(fromIdx, def.idx) <= unitRange(state, def)) {
-    counter = Math.round((dF / tot) * D.def * 4.5 * nd * (inAura(state, att, fromIdx) ? 1 - AURA.reduce : 1));
+    counter = Math.ceil((dF / tot) * D.def * DMG_K * (inAura(state, att, fromIdx) ? 1 - AURA.reduce : 1) - 1e-9);
   }
   return { dmg, counter, kill, die: counter >= attHp };
 }
@@ -479,7 +517,7 @@ export function upkeepTotal(state, pid) {
   for (const u of state.units) {
     if (u.owner !== pid) continue;
     const c = upkeepOf(u.type);
-    for (const k in c) up[k] += c[k] * (u.count || 1);
+    for (const k in c) up[k] += c[k];
   }
   if (hasTech(state, pid, 'granary')) up.food = Math.ceil(up.food * 0.75);
   return up;
@@ -539,7 +577,6 @@ export function spawnSpots(state, ci, occ = buildOcc(state), territory = compute
 export function canBuild(state, pid, c, b) {
   const B = BUILDINGS[b];
   if (hasBuilding(c, b)) return 'built';
-  if (B.fusionOnly && !state.fusion) return 'off';
   if (B.tech && !hasTech(state, pid, B.tech)) return 'tech';
   if (c.level < (B.minLevel || 0)) return 'level';
   if (B.perRealm && state.cities.filter((x) => x.owner === pid && hasBuilding(x, b)).length >= B.perRealm) return 'realm';
@@ -581,7 +618,7 @@ export function unitCap(state, pid) {
 
 export function unitCount(state, pid) {
   let n = 0;
-  for (const u of state.units) if (u.owner === pid && !UNITS[u.type].structure) n += (UNITS[u.type].supply || 1) * (u.count || 1);
+  for (const u of state.units) if (u.owner === pid && !UNITS[u.type].structure) n += UNITS[u.type].supply || 1;
   return n;
 }
 
@@ -640,7 +677,7 @@ export function startTurn(state) {
     if (u.owner !== pid) continue;
     const max = statsOf(state, u).hp;
     // Trolle und zähe Einheiten heilen jede Runde, alle anderen nur nach einer Ruhepause
-    const always = (UNITS[u.type].regen || 0) + (hasPerk(u, 'tough') ? 2 : 0) + upMod(state, u, 'regen');
+    const always = (UNITS[u.type].regen || 0) + (hasPerk(u, 'tough') ? 2 : 0) + upMod(state, u, 'regen') + (hasSkill(u, 'regen') ? Math.ceil(max / 10) : 0);
     if ((!u.acted || always) && u.hp < max) {
       let h = always;
       if (!u.acted) {
@@ -651,7 +688,7 @@ export function startTurn(state) {
         }
         h += (inTerritory ? 4 : 2) + (hasTech(state, pid, 'medic') ? 2 : 0);
       }
-      h = Math.min(max - u.hp, h * (u.count || 1));
+      h = Math.min(max - u.hp, h);
       u.hp += h;
       ev.push({ k: 'heal', id: u.id, idx: u.idx, amount: h });
     }
@@ -661,16 +698,19 @@ export function startTurn(state) {
       ev.push({ k: 'wake', id: u.id, idx: u.idx });
     }
     u.moved = false;
+    u.walked = false;
     u.attacked = false;
     u.acted = false;
     u.shaken = false;
+    u.ice = false;
     // Versteinert: diesen Zug aussetzen, danach wieder frei
     if (u.stone) {
       u.stone = 0;
       u.moved = u.attacked = true;
       u.acted = true;
       u.stoneNow = true;
-      ev.push({ k: 'stone', id: u.id, idx: u.idx });
+      if (u.iced) { u.ice = true; delete u.iced; }
+      ev.push({ k: 'stone', id: u.id, idx: u.idx, ice: u.ice });
     } else u.stoneNow = false;
   }
   const inc = incomeOf(state, pid);
@@ -739,7 +779,7 @@ export function splashDamage(state, att, idx, dmg, from = att.idx) {
       if (j < 0) return;
       inLine.add(j);
       const o = state.units.find((x) => x.idx === j);
-      if (o && o.owner !== att.owner) res.push({ unit: o, dmg: Math.round(dmg * f * (inAura(state, o) ? AURA.splash : 1)) });
+      if (o && o.owner !== att.owner) res.push({ unit: o, dmg: Math.ceil(dmg * f * (inAura(state, o) ? AURA.splash : 1) - 1e-9) });
     });
   }
   if (!splashOf(att)) return res.filter((h) => h.dmg > 0);
@@ -747,7 +787,7 @@ export function splashDamage(state, att, idx, dmg, from = att.idx) {
     if (inLine.has(j)) continue;
     const o = state.units.find((x) => x.idx === j);
     if (!o || o.owner === att.owner) continue;
-    const d = Math.round(dmg * splashOf(att) * (inAura(state, o) ? AURA.splash : 1));
+    const d = Math.ceil(dmg * splashOf(att) * (inAura(state, o) ? AURA.splash : 1) - 1e-9);
     if (d > 0) res.push({ unit: o, dmg: d });
   }
   return res;
@@ -762,7 +802,7 @@ function applySplash(state, att, idx, dmg, from) {
       hit.killed = true;
       state.units = state.units.filter((x) => x !== unit);
       state.stats.kills[att.owner]++;
-      state.stats.losses[unit.owner] += unit.count || 1;
+      state.stats.losses[unit.owner]++;
     }
     out.push(hit);
   }
@@ -784,6 +824,7 @@ export function applyAction(state, a) {
       const path = pathTo(moves, u.idx, a.to);
       u.idx = a.to;
       u.moved = true;
+      u.walked = true;
       u.acted = true;
       u.sentry = false;
       ev.push({ k: 'move', id: u.id, path });
@@ -805,10 +846,11 @@ export function applyAction(state, a) {
         e.killed = true;
         state.units = state.units.filter((x) => x !== t);
         state.stats.kills[pid]++;
-        state.stats.losses[t.owner] += t.count || 1;
+        state.stats.losses[t.owner]++;
         if (UNITS[u.type].range === 1 && !isStructure(u) && !castleBlocked(state, t.idx, pid)) {
           e.advance = t.idx;
           u.idx = t.idx;
+          u.walked = true;
         }
       } else {
         if (statsOf(state, u).range > 1 && !isStructure(t)) { t.shaken = true; e.shaken = true; }
@@ -822,7 +864,7 @@ export function applyAction(state, a) {
           e.died = true;
           state.units = state.units.filter((x) => x !== u);
           state.stats.kills[t.owner]++;
-          state.stats.losses[pid] += u.count || 1;
+          state.stats.losses[pid]++;
         }
       }
       if (splashOf(u) || UNITS[u.type].line) e.splash = applySplash(state, u, defSnap.idx, r.dmg, attSnap.idx);
@@ -838,14 +880,68 @@ export function applyAction(state, a) {
       const u = unitById(state, a.unitId);
       const t = unitById(state, a.targetId);
       if (!u || !t || u.owner !== pid || !canAttack(u) || !getHealTargets(state, u).includes(t)) return null;
-      const h = Math.min(statsOf(state, t).hp - t.hp, healAmount(state, u) * (t.count || 1));
+      const h = Math.min(statsOf(state, t).hp - t.hp, healAmount(state, u));
       t.hp += h;
       if (hasTech(state, pid, 'blessing')) t.shaken = false;
       u.attacked = true;
       u.moved = true;
       u.acted = true;
       ev.push({ k: 'heal', id: t.id, idx: t.idx, amount: h, by: u.id, from: u.idx });
+      // Flächenheilung: eigene Nachbarn des Ziels bekommen 25 % ihres Lebens zurück
+      if (hasSkill(u, 'areaheal')) {
+        const geo = geoOf(state);
+        for (const o of state.units) {
+          if (o === t || o.owner !== pid || isStructure(o) || geo.dist(o.idx, t.idx) !== 1) continue;
+          const max = statsOf(state, o).hp, hh = Math.min(max - o.hp, Math.ceil(max / 4));
+          if (hh > 0) { o.hp += hh; ev.push({ k: 'heal', id: o.id, idx: o.idx, amount: hh }); }
+        }
+      }
       if (h > 0) gainXp(state, u, 1, ev); // Zauberer steigen durch Heilen auf
+      break;
+    }
+    case 'freeze': {
+      // Zauberer mit „Vereisen“: Gegner bis 3 Felder weit setzt seinen nächsten Zug aus
+      const u = unitById(state, a.unitId);
+      const t = unitById(state, a.targetId);
+      if (!u || !t || u.owner !== pid || !canAttack(u) || !getFreezeTargets(state, u).includes(t)) return null;
+      t.stone = 1;
+      t.iced = true;
+      u.attacked = u.moved = u.acted = true;
+      ev.push({ k: 'freeze', id: t.id, idx: t.idx, by: u.id, from: u.idx });
+      break;
+    }
+    case 'bomb': {
+      // Zauberer mit „Bergsprengung“: Gebirge bis 3 Felder weit wird zu Lehm
+      const u = unitById(state, a.unitId);
+      if (!u || u.owner !== pid || !canAttack(u) || !getBombTargets(state, u).includes(a.idx)) return null;
+      state.terrain[a.idx] = 'clay';
+      u.attacked = u.moved = u.acted = true;
+      ev.push({ k: 'bomb', idx: a.idx, by: u.id, from: u.idx });
+      break;
+    }
+    case 'boost': {
+      // Einzel-Verbesserung (Angriff, Verteidigung, Leben) für genau diese Einheit
+      const u = unitById(state, a.unitId);
+      if (!u || u.owner !== pid || !canBoost(u) || !['atk', 'def', 'hp'].includes(a.stat)) return null;
+      const lvl = u.boost?.[a.stat] || 0;
+      if (lvl >= 3) return null;
+      const cost = boostCost(u.type, lvl);
+      if (!canAfford(player.res, cost)) return null;
+      for (const k of RES) player.res[k] -= cost[k] || 0;
+      const before = statsOf(state, u).hp;
+      u.boost = { ...(u.boost || {}), [a.stat]: lvl + 1 };
+      u.hp += statsOf(state, u).hp - before;
+      ev.push({ k: 'boost', id: u.id, idx: u.idx, stat: a.stat, level: lvl + 1 });
+      break;
+    }
+    case 'skill': {
+      const u = unitById(state, a.unitId);
+      if (!u || u.owner !== pid || !skillOptions(u).includes(a.skill)) return null;
+      const cost = skillCost(u.type);
+      if (!canAfford(player.res, cost)) return null;
+      for (const k of RES) player.res[k] -= cost[k] || 0;
+      u.skills = [...(u.skills || []), a.skill];
+      ev.push({ k: 'skill', id: u.id, idx: u.idx, skill: a.skill });
       break;
     }
     case 'unitUp': {
@@ -982,58 +1078,11 @@ export function applyAction(state, a) {
       ev.push({ k: 'demolish', idx: u.idx, unit: u.type, snap: snapshotUnit(u), disband: true });
       break;
     }
-    case 'merge': {
-      const u = unitById(state, a.unitId), t = unitById(state, a.targetId);
-      if (!u || !t || u.owner !== pid || !canMerge(state, u, t)) return null;
-      const before = statsOf(state, t).hp;
-      if ((u.rank || 1) > (t.rank || 1)) { t.rank = u.rank; t.xp = u.xp; t.perks = u.perks; t.pick = u.pick; }
-      t.count = (t.count || 1) + (u.count || 1);
-      t.hp = Math.min(statsOf(state, t).hp, t.hp + u.hp + (statsOf(state, t).hp - before - statsOf(state, u).hp));
-      t.moved = t.attacked = t.acted = true;
-      state.units = state.units.filter((x) => x !== u);
-      ev.push({ k: 'merge', id: t.id, from: u.idx, idx: t.idx, count: t.count });
-      break;
-    }
-    case 'fuse': {
-      const u = unitById(state, a.unitId), t = unitById(state, a.targetId);
-      if (!u || !t || u.owner !== pid || !canFuse(state, u, t)) return null;
-      for (const k of RES) player.res[k] -= FUSION_COST[k] || 0;
-      player.fusedTurn = state.turn;
-      const type = fusionResult(u.type, t.type);
-      const nu = { id: state.nextUnitId++, type, owner: pid, idx: t.idx, hp: 1, moved: true, attacked: true, acted: true, rank: 1, xp: 0 };
-      if (type === 'chimera') {
-        // Wilde Fusion: beste Bewegung und Reichweite, Kampfwerte gemittelt plus 20 %
-        const A = statsOf(state, { ...u, rank: 1, perks: [] }), B = statsOf(state, { ...t, rank: 1, perks: [] });
-        nu.mix = {
-          parents: [u.type, t.type],
-          hp: Math.round(((A.hp + B.hp) / 2) * 1.2), atk: Math.round(((A.atk + B.atk) / 2) * 1.2 * 10) / 10, def: Math.round(((A.def + B.def) / 2) * 1.2 * 10) / 10,
-          move: Math.max(A.move, B.move), range: Math.max(A.range, B.range),
-        };
-      }
-      const frac = (u.hp / statsOf(state, u).hp + t.hp / statsOf(state, t).hp) / 2;
-      nu.hp = Math.max(1, Math.round(statsOf(state, nu).hp * frac));
-      state.units = state.units.filter((x) => x !== u && x !== t);
-      state.units.push(nu);
-      ev.push({ k: 'fuse', id: nu.id, idx: nu.idx, from: u.idx, type, parents: [u.type, t.type] });
-      break;
-    }
-    case 'split': {
-      const u = unitById(state, a.unitId);
-      if (!u || u.owner !== pid || !canSplit(state, u)) return null;
-      const spot = splitSpot(state, u);
-      const per = Math.max(1, Math.round(u.hp / u.count));
-      const nu = { ...u, id: state.nextUnitId++, idx: spot, count: 1, hp: per, perks: [...(u.perks || [])], sentry: false };
-      u.count--;
-      u.hp = Math.max(1, Math.min(statsOf(state, u).hp, u.hp - per));
-      state.units.push(nu);
-      ev.push({ k: 'split', id: nu.id, idx: spot, from: u.idx });
-      break;
-    }
     case 'end': {
       // Türme, die noch nicht geschossen haben, feuern am Zugende selbst
       const pre = a.volley === false ? [] : towerVolley(state, pid);
       // Ausgesetzter Zug ist vorbei: die Versteinerung löst sich
-      for (const u of state.units) if (u.owner === pid) u.stoneNow = false;
+      for (const u of state.units) if (u.owner === pid) { u.stoneNow = false; u.ice = false; }
       return pre.concat(endTurn(state));
     }
     default:
@@ -1043,38 +1092,43 @@ export function applyAction(state, a) {
   return ev;
 }
 
-// Verbände: zusammenlegen (gleicher Typ, benachbart, beide noch unbewegt) und aufteilen
-export function canMerge(state, u, t) {
-  if (!u || !t || u === t || u.owner !== t.owner || u.type !== t.type || !REGIMENT_TYPES.includes(u.type)) return false;
-  if ((u.count || 1) + (t.count || 1) > REGIMENT_MAX) return false;
-  if (u.acted || u.moved || u.attacked || t.acted || t.moved || t.attacked) return false;
-  return geoOf(state).dist(u.idx, t.idx) === 1;
+// Einzel-Verbesserungen: alle Einheiten außer Bauwerken
+export function canBoost(u) {
+  return !!u && !isStructure(u);
 }
-// Fusion: zwei verschiedene eigene Einheiten nebeneinander, beide noch unbewegt – überall auf der Karte, sobald das
-// Reich eine Fusionsschmiede hat; einmal pro Runde, kostet Rohstoffe. Fusionseinheiten lassen sich nicht weiter verschmelzen.
-export function canFuse(state, u, t) {
-  if (!state.fusion || !u || !t || u === t || u.owner !== t.owner || u.type === t.type) return false;
-  for (const x of [u, t]) if (isStructure(x) || UNITS[x.type].fused || (x.count || 1) > 1 || x.moved || x.attacked || x.acted) return false;
-  const p = state.players[u.owner];
-  if (p.fusedTurn === state.turn || !canAfford(p.res, FUSION_COST)) return false;
+// Fähigkeiten, die diese Einheit noch lernen kann
+export function skillOptions(u) {
+  if (!canBoost(u)) return [];
+  return skillsFor(u.type).filter((k) => !hasSkill(u, k) && (!SKILLS[k].req || hasSkill(u, SKILLS[k].req)));
+}
+// Zauberer: vereisbare Gegner und sprengbare Berge im Heilradius
+export function getFreezeTargets(state, u, fromIdx = u.idx) {
+  if (!hasSkill(u, 'freeze')) return [];
   const geo = geoOf(state);
-  if (geo.dist(u.idx, t.idx) !== 1) return false;
-  return state.cities.some((c) => c.owner === u.owner && hasBuilding(c, 'forge'));
+  return state.units.filter((t) => t.owner !== u.owner && canPetrify(t) && !t.stoneNow && geo.dist(fromIdx, t.idx) <= HEAL.range);
 }
-export function fuseTargets(state, u) {
-  return state.units.filter((t) => canFuse(state, u, t));
+export function getBombTargets(state, u, fromIdx = u.idx) {
+  if (!hasSkill(u, 'bomb')) return [];
+  return geoOf(state).within(fromIdx, HEAL.range).filter((j) => state.terrain[j] === 'mountain' && state.cityAt[j] < 0);
 }
 
-export function mergeTargets(state, u) {
-  return state.units.filter((t) => canMerge(state, u, t));
-}
-function splitSpot(state, u) {
-  const occ = buildOcc(state);
-  return geoOf(state).nb[u.idx].find((j) => !occ[j] && TERRAIN[state.terrain[j]].pass && state.cityAt[j] < 0)
-    ?? geoOf(state).nb[u.idx].find((j) => !occ[j] && TERRAIN[state.terrain[j]].pass);
-}
-export function canSplit(state, u) {
-  return (u.count || 1) > 1 && !u.acted && !u.moved && !u.attacked && splitSpot(state, u) != null;
+// Alte Spielstände (bis 0.56) übernehmen: Fusionseinheiten und Verbände gibt es nicht mehr
+const LEGACY_TYPES = { horsearcher: 'knight', shieldbreaker: 'warrior', firemage: 'mage', gorgon: 'basilisk', rocktroll: 'troll', stormdragon: 'dragon', ram: 'knight', chimera: 'warrior' };
+export function migrateState(s) {
+  if (!s || (s.v !== STATE_VERSION && s.v !== 5)) return null;
+  if (s.v === 5) {
+    for (const u of s.units) {
+      if (u.mix) { u.type = u.mix.parents?.[0] || 'warrior'; delete u.mix; }
+      if (!UNITS[u.type]) u.type = LEGACY_TYPES[u.type] || 'warrior';
+      delete u.count;
+    }
+    for (const c of s.cities) c.buildings = (c.buildings || []).filter((b) => BUILDINGS[b]);
+    for (const p of s.players) { p.tech = (p.tech || []).filter((t) => TECHS[t]); delete p.fusedTurn; }
+    delete s.fusion;
+    s.v = STATE_VERSION;
+    for (const u of s.units) u.hp = Math.max(1, Math.min(u.hp, statsOf(s, u).hp));
+  }
+  return s;
 }
 
 // Automatisches Turmfeuer am Zugende: lohnendstes Ziel (erst Siege, dann meister Schaden)
@@ -1087,7 +1141,7 @@ function towerVolley(state, pid) {
     for (const t of getTargets(state, tw, tw.idx)) {
       if (vis && !vis[t.idx]) continue;
       const r = computeCombat(state, tw, t);
-      const score = (r.kill ? 1000 : 0) + (Math.min(r.dmg, t.hp) / statsOf(state, t).hp) * (UNITS[t.type].value || 1) * (t.count || 1);
+      const score = (r.kill ? 1000 : 0) + (Math.min(r.dmg, t.hp) / statsOf(state, t).hp) * (UNITS[t.type].value || 1);
       if (!best || score > best.score) best = { t, score };
     }
     if (!best) continue;

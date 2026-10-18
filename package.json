@@ -1,6 +1,6 @@
 {
   "name": "hexkrone",
-  "version": "0.56.0",
+  "version": "0.57.0",
   "private": true,
   "description": "Rundenbasiertes Hex-Strategiespiel als Web-App (PWA)",
   "type": "module",

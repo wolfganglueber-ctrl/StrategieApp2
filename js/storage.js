@@ -39,9 +39,6 @@ export const store = {
   savedGame: () => get('save', null),
   saveGame: (g) => set('save', g),
   clearGame: () => del('save'),
-  // Rezeptbuch der Fusion: entdeckte Fusionseinheiten
-  recipes: () => get('recipes', []),
-  saveRecipes: (r) => set('recipes', r),
   // 10 feste Speicherplätze: { name, date, turn, state }
   SLOTS: 10,
   slot: (n) => get('slot.' + n, null),

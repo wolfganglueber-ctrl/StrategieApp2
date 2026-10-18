@@ -494,7 +494,7 @@ export class Renderer {
       this.sprites = new Map();
       this.spriteScale = k;
     }
-    const key = type + owner + (exhausted ? 'x' : '') + (stone ? 's' : '') + (level || '') + ups.join('');
+    const key = type + owner + (exhausted ? 'x' : '') + (stone ? (stone === 'ice' ? 'i' : 's') : '') + (level || '') + ups.join('');
     let sp = this.sprites.get(key);
     if (sp) return sp;
     const base = PLAYER_COLORS[owner] || NEUTRAL_COLOR;
@@ -530,10 +530,11 @@ export class Renderer {
       rc.globalCompositeOperation = 'destination-in';
       rc.drawImage(mask, 0, 0);
       rc.globalCompositeOperation = 'source-atop';
-      rc.fillStyle = 'rgba(150,145,135,0.45)';
+      // Vereist: blaues Eis statt Stein
+      rc.fillStyle = stone === 'ice' ? 'rgba(140,205,255,0.55)' : 'rgba(150,145,135,0.45)';
       rc.fillRect(0, 0, W, H);
       rc.setTransform(k, 0, 0, k, B.left * k, B.top * k);
-      rc.strokeStyle = 'rgba(40,36,32,0.7)';
+      rc.strokeStyle = stone === 'ice' ? 'rgba(235,248,255,0.9)' : 'rgba(40,36,32,0.7)';
       rc.lineWidth = 0.7;
       for (const pts of [[[-6, -30], [-3, -22], [-7, -15], [-4, -6]], [[5, -26], [8, -18], [4, -10]], [[-12, -4], [-5, 0], [3, -2]]]) {
         rc.beginPath();
@@ -611,34 +612,12 @@ export class Renderer {
       ctx.fillStyle = g;
       ctx.fillRect(x - 30 * s, y - 40 * s, 60 * s, 60 * s);
     }
-    const stone = !!(u.stone || u.stoneNow);
-    const sp = this.sprite(u.mix ? 'chimera:' + u.mix.parents.join('+') : u.type, u.owner, exhausted && !stone, u.level, stone);
+    const stone = u.stone || u.stoneNow ? (u.iced || u.ice ? 'ice' : true) : false;
+    const sp = this.sprite(u.type, u.owner, exhausted && !stone, u.level, stone);
     const B = FIG_BOX;
     if (exhausted) ctx.globalAlpha *= 0.8;
-    // Verband: mehrere Figuren, so viele wie (rechnerisch) noch stehen
-    const n = u.count || 1;
-    const alive = n > 1 ? Math.max(1, Math.min(n, Math.ceil((u.hp / statsOf(this.state, u).hp) * n - 0.01))) : 1;
-    const spots = alive === 1 ? [[0, 0, 1]] : alive === 2 ? [[-7, -2, 0.82], [6, 2, 0.82]] : [[-9, -3, 0.74], [8, -3, 0.74], [0, 3, 0.74]];
-    for (const [ox, oy, k] of spots) {
-      const sc = scale * k;
-      ctx.drawImage(sp.cv, x + ox * s - B.left * s * sc, y + oy * s - B.top * s * sc + (1 - sc) * 6 * s, (B.left + B.right) * s * sc, (B.top + B.bottom) * s * sc);
-    }
+    ctx.drawImage(sp.cv, x - B.left * s * scale, y - B.top * s * scale, (B.left + B.right) * s * scale, (B.top + B.bottom) * s * scale);
     if (exhausted) ctx.globalAlpha /= 0.8;
-    if (n > 1) {
-      const lx = x + 16 * s * scale, ly = y - 9 * s;
-      ctx.font = `800 ${10 * s}px system-ui, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(88,28,135,0.92)';
-      ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(lx - 7 * s, ly - 5.5 * s, 14 * s, 11 * s, 5 * s) : ctx.rect(lx - 7 * s, ly - 5.5 * s, 14 * s, 11 * s);
-      ctx.fill();
-      ctx.strokeStyle = '#e9d5ff';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.fillStyle = '#fff';
-      ctx.fillText(`×${n}`, lx, ly + 0.5 * s);
-    }
     if (u.shaken) {
       // Erschüttert: kreisende Sterne über dem Kopf
       const t = now / 300;
@@ -878,8 +857,8 @@ export class Renderer {
         ctx.fill();
       }
     }
-    if (o.merges) {
-      for (const i of o.merges) {
+    if (o.special) {
+      for (const i of o.special) {
         const c = this.center(i);
         ctx.fillStyle = `rgba(168,85,247,${0.22 + pulse * 0.14})`;
         hexPath(ctx, c.x, c.y, HEX - 3);

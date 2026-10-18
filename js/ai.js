@@ -2,11 +2,12 @@
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
 import {
   UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY, structureLimit,
-  costTotal, FUSION_RECIPES, UNIT_UPS, unitUpCost,
+  costTotal, UNIT_UPS, unitUpCost, boostCost, skillCost,
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
-  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, fuseTargets, unitUpOptions, unitUpList, canBuild, mergeTargets, canPetrify,
+  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, unitUpOptions, unitUpList, canBuild, canPetrify,
+  DMG_K, canBoost, skillOptions, getFreezeTargets,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -17,15 +18,16 @@ export const AI_PARAMS = {
   2: { noise: 3, mistake: 0.15, risk: 0.3, lossW: 0.6, smart: false, upgrade: 0.25, guard: 0.5, idle: 0.12, calm: 11, expand: 0.55, tech: 0.35 },
   3: { noise: 2, mistake: 0.07, risk: 0.6, lossW: 0.9, smart: true, upgrade: 0.45, guard: 0.8, idle: 0.03, calm: 7, expand: 0.8, tech: 0.55 },
   4: { noise: 0.5, mistake: 0.02, risk: 0.9, lossW: 1, smart: true, upgrade: 0.85, guard: 0.95, idle: 0, calm: 3, expand: 1.1, tech: 0.85, armyCap: 1.15 },
-  5: { noise: 0.4, mistake: 0, risk: 0.95, lossW: 1, smart: true, upgrade: 0.85, guard: 1, idle: 0, calm: 0, expand: 1.2, tech: 0.9, armyCap: 1.35, aggr: 1.6 },
-  6: { noise: 0.4, mistake: 0, risk: 0.95, lossW: 1, smart: true, upgrade: 0.85, guard: 1, idle: 0, calm: 0, expand: 1.3, tech: 0.9, armyCap: 1.5, aggr: 1.6 },
+  5: { noise: 0.4, mistake: 0, risk: 0.95, lossW: 1, smart: true, upgrade: 0.85, guard: 1, idle: 0, calm: 0, expand: 1.2, tech: 0.9, armyCap: 1.35, aggr: 1.6, boost: true },
+  6: { noise: 0.4, mistake: 0, risk: 0.95, lossW: 1, smart: true, upgrade: 0.85, guard: 1, idle: 0, calm: 0, expand: 1.3, tech: 0.9, armyCap: 1.5, aggr: 1.6, boost: true },
 };
 
 const memory = { key: '', done: new Set() };
 
 // Wert einer Einheit: Kosten, Rang und Gesundheit
 function baseValue(u) {
-  return UNITS[u.type].value * (1 + 0.25 * ((u.rank || 1) - 1)) * (u.count || 1);
+  const b = u.boost ? (u.boost.atk || 0) + (u.boost.def || 0) + (u.boost.hp || 0) : 0;
+  return UNITS[u.type].value * (1 + 0.25 * ((u.rank || 1) - 1) + 0.2 * b + 0.15 * (u.skills?.length || 0));
 }
 function unitValue(u, maxHp) {
   return baseValue(u) * (0.4 + 0.6 * (u.hp / maxHp)) + 1;
@@ -123,7 +125,7 @@ function expectedDamage(state, ctx, u, idx, hp) {
     if (!ctx.alive.has(e)) continue;
     const A = ctx.st(e);
     const aF = A.atk * (e.hp / A.hp);
-    sum += (aF / (aF + dF)) * A.atk * 4.5;
+    sum += (aF / (aF + dF)) * A.atk * DMG_K;
   }
   return sum;
 }
@@ -234,6 +236,14 @@ function evaluateUnit(state, ctx, P, u, pid, rng) {
         acts.push({ type: 'heal', unitId: u.id, targetId: t.id });
         options.push({ score: gain + positionScore(state, ctx, P, u, f, u.hp, pid), actions: acts });
       }
+      // Vereisen: gefährliche Gegner eine Runde ausschalten
+      for (const t of getFreezeTargets(state, u, f)) {
+        if (!ctx.enemySet.has(t)) continue;
+        const gain = Math.min(baseValue(t) * 0.3, 8) + (ctx.geo.dist(t.idx, f) <= 2 ? 0.5 : 0);
+        const acts = f !== u.idx ? [{ type: 'move', unitId: u.id, to: f }] : [];
+        acts.push({ type: 'freeze', unitId: u.id, targetId: t.id });
+        options.push({ score: gain + positionScore(state, ctx, P, u, f, u.hp, pid), actions: acts });
+      }
     }
   }
   for (const o of options) o.score += (rng() - 0.5) * P.noise;
@@ -252,7 +262,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
   const options = UNIT_ORDER.filter((k) => !canRecruit(state, pid, ci, k));
   if (!options.length) return null;
   if (!P.smart) {
-    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, catapult: 0.5, trebuchet: 0.5, mage: 0.5, basilisk: 1, troll: 3, dragon: 3 };
+    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, griffin: 0.5, catapult: 0.5, trebuchet: 0.5, mage: 0.5, basilisk: 1, troll: 3, dragon: 3 };
     if (ctx.mine.filter((u) => u.type === 'catapult' || u.type === 'trebuchet').length >= Math.max(1, Math.floor(ctx.mine.filter((u) => !UNITS[u.type].structure).length / 4))) w.catapult = w.trebuchet = 0;
     return weightedPick(options, (k) => w[k], rng);
   }
@@ -270,6 +280,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
     rider: neutralLeft > 0 ? 3.5 * (P.expand ?? 1) : 1.2,
     defender: danger > 4 ? 3 : 0.6,
     knight: 4,
+    griffin: 2.5,
     // Belagerungsgerät nur als Beimischung (siegeFull)
     catapult: siegeFull ? 0 : 1.5 + Math.min(enemyDef, 4) * 0.4,
     trebuchet: siegeFull ? 0 : 2,
@@ -316,7 +327,6 @@ function chooseBuilding(state, ctx, pid, ci, inc) {
     nest: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'nest')) ? 1.3 : 0.1,
     sanctum: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'sanctum')) ? 1.5 : 0.3,
     wall: (ctx.cityDanger.get(c.idx) || 0) > 3 ? 3 : 0.4,
-    forge: ctx.ownCities.some((x) => hasBuilding(x, 'forge')) ? 0 : 2.5,
     market: ctx.ownCities.some((x) => hasBuilding(x, 'market')) ? 0 : ctx.ownCities.length >= 3 ? 2 : 1,
   };
   let best = null;
@@ -361,13 +371,6 @@ function economyAction(state, ctx, P, pid, rng) {
   for (const u of ctx.mine) {
     const opts = perkOptions(u);
     if (opts.length) return { type: 'perk', unitId: u.id, perk: opts[Math.floor(rng() * opts.length)] };
-  }
-  // Fusion: bekannte Rezepte nutzen, sobald zwei passende Einheiten an der Schmiede stehen
-  if (state.fusion && P.smart && rng() < 0.7) {
-    for (const u of ctx.mine) {
-      const t = fuseTargets(state, u).find((x) => FUSION_RECIPES[[u.type, x.type].sort().join('+')]);
-      if (t) return { type: 'fuse', unitId: u.id, targetId: t.id };
-    }
   }
   // Troll: wer eine Trollhöhle hat, spart darauf
   // Titanen (Drache, Troll): wer die Höhle hat, spart darauf
@@ -436,12 +439,12 @@ function economyAction(state, ctx, P, pid, rng) {
   // Forschung, wenn Rohstoffe übrig sind (Eifer je nach Stufe)
   if ((P.tech ?? P.upgrade) > 0 && !saveTroll && rng() < (P.tech ?? P.upgrade)) {
     const resSum = res.food + res.wood + res.ore;
-    const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'rotation', 'smelting', 'stirrups', 'keep', 'tactics', 'granary', 'counterweight', 'siegecart', 'alchemy', 'fusion', 'battlements', 'medic', 'enlight', 'blessing', 'guild'].filter((t) => t !== 'guild' || tradeRate(state, pid));
+    const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'rotation', 'smelting', 'stirrups', 'keep', 'tactics', 'granary', 'counterweight', 'siegecart', 'battlements', 'medic', 'enlight', 'blessing', 'guild'].filter((t) => t !== 'guild' || tradeRate(state, pid));
     if (resSum > (wantArmy ? 70 : 35)) {
       // Einheiten-Entwicklung: die meistgenutzten Einheiten gezielt verbessern (abwechselnd mit normaler Forschung)
       if (P.smart && rng() < 0.5) {
         const counts = {};
-        for (const u of ctx.mine) if (UNIT_UPS[u.type]) counts[u.type] = (counts[u.type] || 0) + (u.count || 1);
+        for (const u of ctx.mine) if (UNIT_UPS[u.type]) counts[u.type] = (counts[u.type] || 0) + 1;
         for (const [type] of Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 2)) {
           const opts = unitUpOptions(state, pid, type);
           if (opts.length && canAfford(res, unitUpCost(type, unitUpList(state, pid, type).length))) return { type: 'unitUp', unit: type, id: opts[Math.floor(rng() * opts.length)].id };
@@ -449,6 +452,17 @@ function economyAction(state, ctx, P, pid, rng) {
       }
       for (const t of prio) {
         if (techAvailable(state, pid, t) && canAfford(res, TECHS[t].cost)) return { type: 'research', tech: t };
+      }
+      // Einzel-Verbesserungen (nur Meister und Kaiser): die wertvollsten Einheiten (hoher Rang, Titanen) gezielt stärken
+      if (P.boost && resSum > (wantArmy ? 120 : 60) && rng() < 0.5) {
+        const pick = ctx.mine.filter(canBoost).sort((a, b) => baseValue(b) - baseValue(a)).slice(0, 3);
+        for (const u of pick) {
+          const sk = skillOptions(u).filter((k) => k !== 'bomb');
+          if (sk.length && rng() < 0.4 && canAfford(res, skillCost(u.type))) return { type: 'skill', unitId: u.id, skill: sk[0] };
+          const stat = ['atk', 'hp', 'def'][Math.floor(rng() * 3)];
+          const lvl = u.boost?.[stat] || 0;
+          if (lvl < 3 && canAfford(res, boostCost(u.type, lvl))) return { type: 'boost', unitId: u.id, stat };
+        }
       }
     }
   }
@@ -477,19 +491,6 @@ export function planAction(state, rng = Math.random) {
   }
   const ctx = buildContext(state, pid, P);
 
-  // Verbände bilden: nur weit hinter der Front, damit Katapulte sie nicht treffen
-  if (P.smart && ctx.mine.length >= 6) {
-    for (const u of ctx.mine) {
-      if (memory.done.has(u.id) || u.acted || (ctx.distEnemy[u.idx] >= 0 && ctx.distEnemy[u.idx] < 7)) continue;
-      const t = mergeTargets(state, u).find((x) => !memory.done.has(x.id));
-      if (t && rng() < 0.5) {
-        memory.done.add(u.id);
-        memory.done.add(t.id);
-        return { type: 'merge', unitId: u.id, targetId: t.id };
-      }
-    }
-  }
-
   let best = null;
   for (const u of ctx.mine) {
     if (memory.done.has(u.id)) continue;
@@ -514,7 +515,7 @@ export function planAction(state, rng = Math.random) {
     if (!best || gain > best.gain) best = { gain, action: top.actions[0], u };
   }
   if (best) {
-    if (best.action.type === 'attack' || best.action.type === 'heal') memory.done.add(best.u.id);
+    if (best.action.type === 'attack' || best.action.type === 'heal' || best.action.type === 'freeze') memory.done.add(best.u.id);
     return best.action;
   }
   if (memory.econ++ < 40) {

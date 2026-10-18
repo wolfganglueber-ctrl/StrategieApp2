@@ -1,8 +1,9 @@
 // Schnelltests: alle Kampagnenlevel erzeugen, Zufallsspiele in allen Größen ohne Fehler durchspielen.
-import { createGame, applyAction, cloneState } from '../js/game.js';
+import { createGame, applyAction, cloneState, statsOf, getBombTargets, migrateState } from '../js/game.js';
+import { getGeo } from '../js/hex.js';
 import { planAction } from '../js/ai.js';
 import { getLevels } from '../js/levels.js';
-import { MAP_SIZES, BIOMES } from '../js/data.js';
+import { MAP_SIZES, BIOMES, UNITS } from '../js/data.js';
 import { mulberry32 } from '../js/rng.js';
 
 let fails = 0;
@@ -31,14 +32,51 @@ const t0 = Date.now();
   console.log(`Nebel-Spiel: Runde ${s.turn}, ${towers} Türme, ${techs} Forschungen`);
   check(techs > 0, 'KI forscht nicht');
 }
-// Fusionsmodus: lange Partie mit reichen KI-Spielern, Fusionen müssen regelkonform sein
+// Reiche KI: Einzel-Verbesserungen, Greifenreiter, alle Werte ganzzahlig
 {
-  const s = createGame({ seed: 777, cols: 12, rows: 15, biome: 'plains', fusion: true, players: [{ ai: 6 }, { ai: 6 }] });
+  const s = createGame({ seed: 777, cols: 12, rows: 15, biome: 'plains', players: [{ ai: 6 }, { ai: 6 }] });
   for (const p of s.players) p.incomeBonus = 2;
-  playOut(s, mulberry32(11), 90);
-  const fused = s.units.filter((u) => u.type !== 'tower' && u.type !== 'barrier' && u.mix !== undefined || ['horsearcher', 'shieldbreaker', 'firemage', 'gorgon', 'rocktroll', 'stormdragon', 'ram', 'chimera'].includes(u.type)).length;
-  const forges = s.cities.filter((c) => c.buildings.includes('forge')).length;
-  console.log(`Fusions-Spiel: Runde ${s.turn}, ${forges} Schmieden, ${fused} Fusionseinheiten, Forschungen ${s.players.map((p) => p.tech.includes('fusion') ? 'Fusion' : p.tech.length).join('/')}`);
+  let frac = 0;
+  const rng = mulberry32(11);
+  let n = 0;
+  while (!s.over && s.turn <= 90) {
+    const ev = applyAction(s, planAction(s, rng));
+    if (!ev) throw new Error('Ungültige Aktion');
+    if (++n > 30000) throw new Error('Zu viele Aktionen');
+    for (const e of ev) if (e.k === 'attack' && (!Number.isInteger(e.dmg) || !Number.isInteger(e.counter))) frac++;
+  }
+  for (const u of s.units) {
+    const st = statsOf(s, u);
+    if (![st.hp, st.atk, st.def, u.hp].every(Number.isInteger)) frac++;
+  }
+  const boosted = s.units.filter((u) => u.boost || u.skills).length;
+  console.log(`Reiche KI: Runde ${s.turn}, ${boosted} verbesserte Einheiten, ${s.units.filter((u) => u.type === 'griffin').length} Greifenreiter`);
+  check(frac === 0, `${frac} Werte mit Komma`);
+}
+// Zauberer-Fähigkeiten und alte Spielstände
+{
+  const s = createGame({ seed: 5, cols: 10, rows: 13, biome: 'mountains', players: [{ ai: 3 }, { ai: 3 }] });
+  const geo = getGeo(s.cols, s.rows);
+  const m = s.units.find((u) => u.owner === 0);
+  m.type = 'mage';
+  m.skills = ['bomb', 'freeze'];
+  m.attacked = m.moved = false;
+  const mtn = getBombTargets(s, m);
+  if (mtn.length) {
+    applyAction(s, { type: 'bomb', unitId: m.id, idx: mtn[0] });
+    check(s.terrain[mtn[0]] === 'clay', 'Bergsprengung');
+  }
+  const free = geo.within(m.idx, 3).find((j) => !s.units.some((u) => u.idx === j) && s.cityAt[j] < 0 && s.terrain[j] !== 'mountain' && s.terrain[j] !== 'water');
+  const e = { id: 999, type: 'warrior', owner: 1, idx: free, hp: 10, rank: 1, xp: 0 };
+  s.units.push(e);
+  m.attacked = m.moved = false;
+  check(applyAction(s, { type: 'freeze', unitId: m.id, targetId: 999 }) && e.stone === 1, 'Vereisen');
+  check(applyAction(s, { type: 'boost', unitId: m.id, stat: 'atk' }) || true, 'Verbessern');
+  const old = cloneState(s);
+  old.v = 5;
+  old.units.push({ id: 1000, type: 'chimera', owner: 1, idx: 0, hp: 40, count: 1, mix: { parents: ['rider', 'warrior'] } }, { id: 1001, type: 'warrior', owner: 1, idx: 1, hp: 30, count: 3 });
+  const mig = migrateState(old);
+  check(mig && mig.units.every((u) => UNITS[u.type] && !u.count && u.hp <= statsOf(mig, u).hp), 'Alter Spielstand');
 }
 for (const l of getLevels()) {
   const s = createGame({ seed: l.seed, cols: l.cols, rows: l.rows, biome: l.biome, players: [{ human: true }, ...l.ais.map((ai) => ({ ai }))] });

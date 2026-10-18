@@ -15,31 +15,24 @@ export const TERRAIN = {
   hill: { name: 'Hügel', pass: true, res: 'ore' },
   mountain: { name: 'Gebirge', pass: false, res: 'ore' },
   water: { name: 'See', pass: false, res: 'food' },
+  clay: { name: 'Lehm', pass: true, res: 'ore' }, // gesprengtes Gebirge
 };
 
 export const UNITS = {
-  warrior: { name: 'Krieger', cost: { food: 5, ore: 2 }, hp: 10, atk: 2, def: 2, move: 2, range: 1, desc: 'Günstig und solide.' },
-  archer: { name: 'Schütze', cost: { food: 3, wood: 5 }, hp: 10, atk: 2, def: 1, move: 2, range: 2, desc: 'Greift aus 2 Feldern Entfernung an.' },
-  rider: { name: 'Reiter', cost: { food: 6, wood: 2 }, hp: 10, atk: 2, def: 1, move: 3, range: 1, desc: 'Schnell – ideal zum Erobern von Dörfern.' },
-  defender: { name: 'Wächter', cost: { food: 3, ore: 5 }, hp: 15, atk: 1, def: 3, move: 2, range: 1, desc: 'Starke Verteidigung, schwacher Angriff.' },
-  knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 3, def: 1, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
-  tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 2, def: 3, move: 0, range: 1, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
-  mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5 }, hp: 10, atk: 1, def: 1, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben bekommen 25 % weniger Schaden, Flächenschaden halbiert. Heilt statt anzugreifen, bis 3 Felder weit. Höchstens einer pro Stadt.' },
-  troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 7, def: 5, move: 4, range: 1, supply: 3, regen: 3, perRealm: 5, needs: 'lair', desc: 'Ein Titan: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben. Braucht eine Trollhöhle, höchstens 5 pro Reich.' },
-  dragon: { name: 'Drache', cost: { food: 150, wood: 150, ore: 150 }, hp: 300, atk: 25, def: 10, move: 5, range: 1, supply: 3, regen: 6, perRealm: 1, flying: true, line: [0.75, 0.5], arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten. Angriff 25, sein Feueratem trifft auch die Gegner auf den 2 Feldern hinter dem Ziel (75 % und 50 %). Schützen und Türme treffen ihn um 60 % härter. Nur einer pro Reich.' },
-  barrier: { name: 'Steinwall', cost: { wood: 6, ore: 14 }, hp: 50, atk: 0, def: 6, move: 0, range: 0, structure: true, desc: 'Sehr stabiles Wallstück, blockiert den Weg. Im Stadtgebiet setzen; benachbarte Wallstücke verbinden sich zu einer Mauer und lenken den Gegner.' },
-  basilisk: { name: 'Basilisk', cost: { food: 18, wood: 8, ore: 16 }, hp: 28, atk: 3, def: 3, move: 3, range: 2, supply: 2, perRealm: 2, petrify: true, needs: 'nest', desc: 'Versteinernder Blick aus 2 Feldern: Das Ziel setzt seinen nächsten Zug aus und schlägt nicht zurück (Troll und Drache sind immun). Höchstens 2 pro Reich.' },
-  trebuchet: { name: 'Tribok', cost: { food: 4, wood: 24, ore: 16 }, hp: 14, atk: 5, def: 0, move: 1, range: 5, minRange: 2, noMoveAttack: true, upkeep: { food: 1, wood: 1 }, needs: 'workshop', tech: 'counterweight', desc: 'Schwere Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einziges Feld (kein Flächenschaden), aber nicht direkt daneben und nicht nach Bewegung. Braucht Werkstatt und die Forschung Gegengewicht.' },
-  // Fusionseinheiten (nur im Fusionsmodus, entstehen durch Verschmelzen in der Fusionsschmiede)
-  horsearcher: { name: 'Berittener Bogenschütze', fused: true, parents: ['knight', 'archer'], cost: { food: 11, wood: 7, ore: 6 }, hp: 24, atk: 3.5, def: 2, move: 5, range: 2, upkeep: { food: 2 }, desc: 'Fusion aus Ritter und Schütze: schnell und schießt aus 2 Feldern.' },
-  shieldbreaker: { name: 'Schildbrecher', fused: true, parents: ['warrior', 'defender'], cost: { food: 8, ore: 7 }, hp: 30, atk: 3.5, def: 4, move: 2, range: 1, ignoreWalls: true, upkeep: { food: 2 }, desc: 'Fusion aus Krieger und Wächter: sehr zäh, Stadtmauern und Burgbonus schützen den Gegner nicht.' },
-  firemage: { name: 'Feuermagier', fused: true, parents: ['mage', 'catapult'], cost: { food: 6, wood: 16, ore: 15 }, hp: 18, atk: 4.5, def: 1, move: 2, range: 2, splash: 0.5, upkeep: { food: 2, wood: 1 }, desc: 'Fusion aus Zauberer und Katapult: Feuerzauber aus 2 Feldern, trifft auch die Nachbarn des Ziels.' },
-  gorgon: { name: 'Gorgonenreiter', fused: true, parents: ['basilisk', 'rider'], cost: { food: 24, wood: 10, ore: 16 }, hp: 36, atk: 4, def: 3, move: 4, range: 1, petrify: true, upkeep: { food: 4 }, desc: 'Fusion aus Basilisk und Reiter: schnell, sein Blick versteinert im Nahkampf.' },
-  rocktroll: { name: 'Felsenwerfer-Troll', fused: true, parents: ['troll', 'catapult'], cost: { food: 45, wood: 37, ore: 60 }, hp: 90, atk: 8, def: 5, move: 2, range: 3, splash: 0.35, regen: 3, noMoveAttack: true, upkeep: { food: 6, wood: 1 }, desc: 'Fusion aus Troll und Katapult: schleudert Felsen 3 Felder weit mit Flächenschaden (nicht nach Bewegung).' },
-  stormdragon: { name: 'Sturmdrache', fused: true, parents: ['dragon', 'mage'], cost: { food: 156, wood: 154, ore: 155 }, hp: 340, atk: 13, def: 11, move: 5, range: 1, regen: 8, flying: true, splash: 0.4, arrowWeak: true, healer: true, upkeep: { food: 6 }, desc: 'Fusion aus Drache und Zauberer: fliegt, Feueratem mit Flächenschaden und heilt eigene Einheiten.' },
-  ram: { name: 'Rammbock-Ritter', fused: true, parents: ['trebuchet', 'knight'], cost: { food: 12, wood: 26, ore: 22 }, hp: 34, atk: 5, def: 3, move: 3, range: 1, siegeMult: 2, upkeep: { food: 2, wood: 2 }, desc: 'Fusion aus Tribok und Ritter: doppelter Schaden gegen Städte, Burgen, Türme und Wälle.' },
-  chimera: { name: 'Chimäre', fused: true, cost: { food: 10, wood: 5, ore: 10 }, hp: 20, atk: 3, def: 2, move: 2, range: 1, upkeep: { food: 3 }, desc: 'Wilde Fusion zweier Einheiten ohne festes Rezept: beste Bewegung und Reichweite, gemischte Kampfwerte mit Bonus.' },
-  catapult: { name: 'Katapult', cost: { wood: 12, ore: 10 }, hp: 12, atk: 4, def: 0, move: 2, range: 3, noMoveAttack: true, splash: 0.5, fieldMult: 0.6, upkeep: { food: 1, wood: 1 }, needs: 'workshop', desc: 'Belagerungswaffe mit Reichweite 3, nicht nach Bewegung. Gegen Städte, Türme und Wälle voller Schaden, gegen Truppen im Feld nur 60 %. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Unterhalt 1 Nahrung + 1 Holz. Braucht eine Werkstatt.' },
+  warrior: { name: 'Krieger', cost: { food: 5, ore: 2 }, hp: 10, atk: 8, def: 8, move: 2, range: 1, desc: 'Günstig und solide.' },
+  archer: { name: 'Schütze', cost: { food: 3, wood: 5 }, hp: 10, atk: 8, def: 4, move: 2, range: 2, desc: 'Greift aus 2 Feldern Entfernung an.' },
+  rider: { name: 'Reiter', cost: { food: 6, wood: 2 }, hp: 10, atk: 8, def: 4, move: 3, range: 1, desc: 'Schnell – ideal zum Erobern von Dörfern.' },
+  defender: { name: 'Wächter', cost: { food: 3, ore: 5 }, hp: 15, atk: 4, def: 12, move: 2, range: 1, desc: 'Starke Verteidigung, schwacher Angriff.' },
+  griffin: { name: 'Greifenreiter', cost: { food: 12, wood: 4, ore: 9 }, hp: 15, atk: 12, def: 4, move: 3, range: 1, flying: true, needs: 'barracks', desc: 'Ritter auf einem Greifen: Werte wie ein Ritter, fliegt aber über Berge, Seen und eigene Einheiten. Teurer als der Ritter, braucht eine Kaserne.' },
+  knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 12, def: 4, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
+  tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 8, def: 12, move: 0, range: 1, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
+  mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5 }, hp: 10, atk: 4, def: 4, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben bekommen 25 % weniger Schaden, Flächenschaden halbiert. Heilt statt anzugreifen, bis 3 Felder weit. Höchstens einer pro Stadt.' },
+  troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 28, def: 20, move: 4, range: 1, supply: 3, regen: 3, perRealm: 5, needs: 'lair', desc: 'Ein Titan: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben. Braucht eine Trollhöhle, höchstens 5 pro Reich.' },
+  dragon: { name: 'Drache', cost: { food: 150, wood: 150, ore: 150 }, hp: 300, atk: 100, def: 40, move: 5, range: 1, supply: 3, regen: 6, perRealm: 1, flying: true, line: [0.75, 0.5], arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten. Angriff 100, sein Feueratem trifft auch die Gegner auf den 2 Feldern hinter dem Ziel (75 % und 50 %). Schützen und Türme treffen ihn um 60 % härter. Nur einer pro Reich.' },
+  barrier: { name: 'Steinwall', cost: { wood: 6, ore: 14 }, hp: 50, atk: 0, def: 24, move: 0, range: 0, structure: true, desc: 'Sehr stabiles Wallstück, blockiert den Weg. Im Stadtgebiet setzen; benachbarte Wallstücke verbinden sich zu einer Mauer und lenken den Gegner.' },
+  basilisk: { name: 'Basilisk', cost: { food: 18, wood: 8, ore: 16 }, hp: 28, atk: 12, def: 12, move: 3, range: 2, supply: 2, perRealm: 2, petrify: true, needs: 'nest', desc: 'Versteinernder Blick aus 2 Feldern: Das Ziel setzt seinen nächsten Zug aus und schlägt nicht zurück (Troll und Drache sind immun). Höchstens 2 pro Reich.' },
+  trebuchet: { name: 'Tribok', cost: { food: 4, wood: 24, ore: 16 }, hp: 14, atk: 20, def: 0, move: 1, range: 5, minRange: 2, noMoveAttack: true, upkeep: { food: 1, wood: 1 }, needs: 'workshop', tech: 'counterweight', desc: 'Schwere Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einziges Feld (kein Flächenschaden), aber nicht direkt daneben und nicht nach Bewegung. Braucht Werkstatt und die Forschung Gegengewicht.' },
+  catapult: { name: 'Katapult', cost: { wood: 12, ore: 10 }, hp: 12, atk: 16, def: 0, move: 2, range: 3, noMoveAttack: true, splash: 0.5, fieldMult: 0.6, upkeep: { food: 1, wood: 1 }, needs: 'workshop', desc: 'Belagerungswaffe mit Reichweite 3, nicht nach Bewegung. Gegen Städte, Türme und Wälle voller Schaden, gegen Truppen im Feld nur 60 %. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Unterhalt 1 Nahrung + 1 Holz. Braucht eine Werkstatt.' },
 };
 // Wert einer Einheit für die KI (Rohstoffsumme / 2), danach Kaufpreise verdoppeln:
 // Einheiten sollen im Verhältnis zum Ertrag teuer sein (halb so viele wie früher)
@@ -50,14 +43,14 @@ for (const k of Object.keys(UNITS)) {
   UNITS[k].value = t / 2;
   if (!UNITS[k].structure) for (const r of Object.keys(UNITS[k].cost)) UNITS[k].cost[r] *= UNIT_PRICE;
 }
-export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult', 'trebuchet', 'mage', 'basilisk', 'troll', 'dragon'];
+export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'griffin', 'catapult', 'trebuchet', 'mage', 'basilisk', 'troll', 'dragon'];
 // Höchste Zugweite bei voller Entwicklung (gilt auch für Sprünge über eigene Einheiten)
-export const MOVE_CAP = { catapult: 3, trebuchet: 3, rider: 6, knight: 6, dragon: 6, horsearcher: 6, gorgon: 6, stormdragon: 6, ram: 5 };
+export const MOVE_CAP = { catapult: 3, trebuchet: 3, rider: 6, knight: 6, griffin: 6, dragon: 6 };
 export const MOVE_CAP_DEFAULT = 4;
 export function moveCap(type) {
   return MOVE_CAP[type] ?? MOVE_CAP_DEFAULT;
 }
-export const MELEE = ['warrior', 'rider', 'defender', 'knight'];
+export const MELEE = ['warrior', 'rider', 'defender', 'knight', 'griffin'];
 export const FOOT = ['warrior', 'archer', 'defender', 'mage'];
 // Ränge: je 5 besiegte Gegner eine Stufe (höchstens 3), jede Stufe bringt eine Spezialisierung – überall, für alle Einheiten
 export const RANK_NAMES = ['', 'Rekrut', 'Veteran', 'Elite', 'Held'];
@@ -87,28 +80,18 @@ export const PERK_CHOICES = {
   rider: [['charge', 'hunter'], ['swift', 'tough']],
   defender: [['shieldwall', 'hunter'], ['tough', 'siege']],
   knight: [['charge', 'shieldwall'], ['siege', 'tough']],
+  griffin: [['charge', 'hunter'], ['swift', 'tough']],
   catapult: [['fire', 'siege'], ['tough', 'swift']],
   trebuchet: [['siege', 'hunter'], ['tough', 'swift']],
   mage: [['greatheal', 'wideaura'], ['tough', 'swift']],
   troll: [['rampage', 'tough'], ['siege', 'charge']],
   basilisk: [['hunter', 'tough'], ['swift', 'siege']],
   dragon: [['fire', 'tough', 'swift'], ['siege', 'charge', 'hunter']],
-  horsearcher: [['hunter', 'swift'], ['tough', 'siege']],
-  shieldbreaker: [['shieldwall', 'charge'], ['tough', 'siege']],
-  firemage: [['fire', 'tough'], ['swift', 'siege']],
-  gorgon: [['charge', 'hunter'], ['tough', 'swift']],
-  rocktroll: [['fire', 'tough'], ['siege', 'rampage']],
-  stormdragon: [['fire', 'tough', 'swift'], ['siege', 'greatheal', 'hunter']],
-  ram: [['charge', 'siege'], ['tough', 'swift']],
-  chimera: [['tough', 'swift'], ['charge', 'hunter']],
 };
 export const PERK_RANKS = [2, 3, 4];
 export const FLANK_BONUS = 0.1;
 export const FLANK_MAX = 3;
-export const CAVALRY = ['rider', 'knight'];
-// Verbände: bis zu 3 gleiche Einheiten auf einem Feld (Titanen, Zauberer und Bauwerke nicht)
-export const REGIMENT_MAX = 3;
-export const REGIMENT_TYPES = ['warrior', 'archer', 'rider', 'defender', 'knight', 'catapult'];
+export const CAVALRY = ['rider', 'knight', 'griffin'];
 
 // Zauberer: Schutzaura und Heilen
 // Unterhalt pro Runde: jede Einheit isst (Nahrung je Versorgungspunkt), Katapulte brauchen zusätzlich Holz
@@ -122,9 +105,9 @@ export const HEAL = { base: 4, blessing: 2, range: 3 };
 
 // Türme: Ausbaustufen 1–3
 export const TOWER_LEVELS = [null,
-  { hp: 12, atk: 2, def: 3, range: 1 },
-  { hp: 18, atk: 3, def: 3.5, range: 1 },
-  { hp: 24, atk: 4, def: 4, range: 2 },
+  { hp: 12, atk: 8, def: 12, range: 1 },
+  { hp: 18, atk: 12, def: 14, range: 1 },
+  { hp: 24, atk: 16, def: 16, range: 2 },
 ];
 export const TOWER_UPGRADE = [null, { wood: 12, ore: 16 }, { wood: 16, ore: 24 }];
 export const TOWERS_PER_CITY = 4;
@@ -143,13 +126,13 @@ export const TECH_BRANCHES = [['mil', 'Militär'], ['eco', 'Wirtschaft'], ['def'
 export const TECHS = {
   bow: { branch: 'mil', name: 'Langbogen', icon: '🏹', cost: { food: 12, wood: 20 }, req: [], mod: { archer: { range: 1 } }, desc: 'Schützen +1 Reichweite' },
   horse: { branch: 'mil', name: 'Hufeisen', icon: '🐎', cost: { food: 20, ore: 12 }, req: [], mod: { rider: { move: 1 }, knight: { move: 1 } }, desc: 'Reiter und Ritter +1 Bewegung' },
-  smith: { branch: 'mil', name: 'Schmiedekunst', icon: '⚒️', cost: { wood: 12, ore: 24 }, req: [], mod: { melee: { atk: 0.5 } }, desc: 'Nahkämpfer +0,5 Angriff' },
-  armor: { branch: 'mil', name: 'Plattenrüstung', icon: '🥋', cost: { food: 16, ore: 36 }, req: ['smith'], mod: { all: { def: 0.5 } }, desc: 'Alle Einheiten +0,5 Verteidigung' },
+  smith: { branch: 'mil', name: 'Schmiedekunst', icon: '⚒️', cost: { wood: 12, ore: 24 }, req: [], mod: { melee: { atk: 2 } }, desc: 'Nahkämpfer +2 Angriff' },
+  armor: { branch: 'mil', name: 'Plattenrüstung', icon: '🥋', cost: { food: 16, ore: 36 }, req: ['smith'], mod: { all: { def: 2 } }, desc: 'Alle Einheiten +2 Verteidigung' },
   oxcart: { branch: 'mil', name: 'Ochsenkarren', icon: '🐂', cost: { food: 12, wood: 24 }, req: [], mod: { catapult: { move: 1 } }, desc: 'Katapulte +1 Bewegung' },
-  ballistics: { branch: 'mil', name: 'Ballistik', icon: '🎯', cost: { wood: 32, ore: 28 }, req: ['oxcart'], mod: { catapult: { range: 1, atk: 1 } }, desc: 'Katapulte +1 Reichweite, +1 Angriff' },
+  ballistics: { branch: 'mil', name: 'Ballistik', icon: '🎯', cost: { wood: 32, ore: 28 }, req: ['oxcart'], mod: { catapult: { range: 1, atk: 4 } }, desc: 'Katapulte +1 Reichweite, +4 Angriff' },
   counterweight: { branch: 'mil', name: 'Gegengewicht', icon: '🪨', cost: { wood: 36, ore: 30 }, req: ['ballistics'], desc: 'Ermöglicht den Tribok (Werkstatt): präziser Fernschuss bis 5 Felder' },
   siegecart: { branch: 'mil', name: 'Lafettenwagen', icon: '🛞', cost: { food: 100, wood: 100, ore: 50 }, req: ['counterweight'], mod: { trebuchet: { move: 2 } }, desc: 'Triböcke +2 Bewegung' },
-  stirrups: { branch: 'mil', name: 'Steigbügel', icon: '🏇', cost: { food: 20, ore: 24 }, req: ['horse'], mod: { knight: { atk: 1 }, rider: { atk: 0.5 } }, desc: 'Ritter +1 Angriff, Reiter +0,5 Angriff' },
+  stirrups: { branch: 'mil', name: 'Steigbügel', icon: '🏇', cost: { food: 20, ore: 24 }, req: ['horse'], mod: { knight: { atk: 4 }, rider: { atk: 2 }, griffin: { atk: 4 } }, desc: 'Ritter und Greifenreiter +4 Angriff, Reiter +2 Angriff' },
   tactics: { branch: 'mil', name: 'Schlachtordnung', icon: '🚩', cost: { food: 24, wood: 12, ore: 20 }, req: ['smith'], desc: 'Flankenbonus +15 % statt +10 % je Nachbar' },
   roads: { branch: 'mil', name: 'Straßenbau', icon: '🛤️', cost: { food: 24, wood: 24, ore: 12 }, req: ['oxcart'], mod: { foot: { move: 1 } }, desc: 'Krieger, Schützen, Wächter +1 Bewegung' },
   plough: { branch: 'eco', name: 'Pflug', icon: '🌱', cost: { wood: 16 }, req: [], desc: 'Bauernhöfe +2 Nahrung' },
@@ -166,9 +149,7 @@ export const TECHS = {
   blessing: { branch: 'def', name: 'Segen', icon: '🙏', cost: { food: 24, wood: 14 }, req: ['medic'], desc: 'Zauberer heilen 2 mehr und beenden die Erschütterung' },
   battlements: { branch: 'def', name: 'Wehrgang', icon: '🏯', cost: { wood: 20, ore: 30 }, req: ['stonework'], desc: 'Steinwälle +25 Leben' },
   keep: { branch: 'def', name: 'Burgausbau', icon: '🏰', cost: { food: 20, wood: 24, ore: 30 }, req: ['stonework'], desc: 'Alle 7 Burgfelder: Verteidigung +25 %' },
-  alchemy: { branch: 'eco', name: 'Alchemie', icon: '🧪', cost: { food: 40, wood: 30, ore: 45 }, req: ['masonry', 'armor'], fusionOnly: true, desc: 'Grundlage der Fusion (nur im Fusionsmodus)' },
-  fusion: { branch: 'eco', name: 'Fusionskunst', icon: '⚗️', cost: { food: 60, wood: 60, ore: 80 }, req: ['alchemy', 'counterweight'], fusionOnly: true, desc: 'Ermöglicht die Fusionsschmiede' },
-  towers2: { branch: 'def', name: 'Turmbaukunst', icon: '🗼', cost: { wood: 20, ore: 28 }, req: ['stonework'], mod: { tower: { range: 1, atk: 1 } }, desc: 'Türme +1 Reichweite, +1 Angriff' },
+  towers2: { branch: 'def', name: 'Turmbaukunst', icon: '🗼', cost: { wood: 20, ore: 28 }, req: ['stonework'], mod: { tower: { range: 1, atk: 4 } }, desc: 'Türme +1 Reichweite, +4 Angriff' },
 };
 export const TECH_ORDER = Object.keys(TECHS);
 
@@ -176,8 +157,9 @@ export const TECH_ORDER = Object.keys(TECHS);
 // mod: Werte (hp, atk, def, move, range, regen) · perk: Sonderfähigkeit wie bei den Rängen (siehe PERKS)
 // Jede Stufe verändert auch das Aussehen der Einheit.
 export const UP_GROUPS = [
-  ['melee', 'Nahkämpfer', ['warrior', 'rider', 'defender', 'knight']],
-  ['ranged', 'Fernkämpfer', ['archer', 'mage', 'basilisk']],
+  ['melee', 'Nahkämpfer', ['warrior', 'rider', 'defender', 'knight', 'griffin']],
+  ['ranged', 'Fernkämpfer', ['archer', 'basilisk']],
+  ['mage', 'Zauberer', ['mage']],
   ['siege', 'Katapulte', ['catapult', 'trebuchet']],
   ['titan', 'Titanen', ['troll', 'dragon']],
 ];
@@ -185,80 +167,87 @@ const U = (id, name, desc, mod = {}, perk = null) => ({ id, name, desc, mod, per
 export const UNIT_UPS = {
   warrior: [
     U('w1', 'Gesteppter Waffenrock', '+3 Leben', { hp: 3 }),
-    U('w2', 'Eisenhelm', '+0,5 Verteidigung, trägt jetzt Helm', { def: 0.5 }),
-    [U('w3a', 'Beidhändig', 'Zwei Schwerter statt Schild: +1 Angriff', { atk: 1 }), U('w3b', 'Schildkämpfer', 'Großer Schild: +1 Verteidigung, +2 Leben', { def: 1, hp: 2 })],
-    U('w4', 'Kettenhemd', '+4 Leben, +0,5 Verteidigung', { hp: 4, def: 0.5 }),
-    U('w5', 'Klingenmeister', 'Schwarze Rüstung: +1 Angriff, +1 Bewegung', { atk: 1, move: 1 }),
+    U('w2', 'Eisenhelm', '+2 Verteidigung, trägt jetzt Helm', { def: 2 }),
+    [U('w3a', 'Beidhändig', 'Zwei Schwerter statt Schild: +4 Angriff', { atk: 4 }), U('w3b', 'Schildkämpfer', 'Großer Schild: +4 Verteidigung, +2 Leben', { def: 4, hp: 2 })],
+    U('w4', 'Kettenhemd', '+4 Leben, +2 Verteidigung', { hp: 4, def: 2 }),
+    U('w5', 'Klingenmeister', 'Schwarze Rüstung: +4 Angriff, +1 Bewegung', { atk: 4, move: 1 }),
   ],
   rider: [
     U('r1', 'Sattelzeug', '+1 Bewegung', { move: 1 }),
-    U('r2', 'Rundschild', '+0,5 Verteidigung', { def: 0.5 }),
-    [U('r3a', 'Säbelreiter', 'Krummsäbel: +1 Angriff, Sturmangriff', { atk: 1 }, 'charge'), U('r3b', 'Plänkler', 'Wurfspeere: greift aus 2 Feldern an', { range: 1 })],
+    U('r2', 'Rundschild', '+2 Verteidigung', { def: 2 }),
+    [U('r3a', 'Säbelreiter', 'Krummsäbel: +4 Angriff, Sturmangriff', { atk: 4 }, 'charge'), U('r3b', 'Plänkler', 'Wurfspeere: greift aus 2 Feldern an', { range: 1 })],
     U('r4', 'Kettenpanzer', '+4 Leben', { hp: 4 }),
-    U('r5', 'Steppenfürst', 'Schwarze Rüstung: +0,5 Angriff, +1 Bewegung', { atk: 0.5, move: 1 }),
+    U('r5', 'Steppenfürst', 'Schwarze Rüstung: +2 Angriff, +1 Bewegung', { atk: 2, move: 1 }),
   ],
   defender: [
-    U('d1', 'Pavese', 'Großer Setzschild: +0,5 Verteidigung', { def: 0.5 }),
-    U('d2', 'Hellebarde', '+0,5 Angriff', { atk: 0.5 }),
-    [U('d3a', 'Schildwall', '+1,5 Verteidigung', { def: 1.5 }), U('d3b', 'Pikenier', 'Lange Pike: +40 % gegen Reiter, Ritter, Trolle, Drachen', {}, 'hunter')],
+    U('d1', 'Pavese', 'Großer Setzschild: +2 Verteidigung', { def: 2 }),
+    U('d2', 'Hellebarde', '+2 Angriff', { atk: 2 }),
+    [U('d3a', 'Schildwall', '+6 Verteidigung', { def: 6 }), U('d3b', 'Pikenier', 'Lange Pike: +40 % gegen Reiter, Ritter, Trolle, Drachen', {}, 'hunter')],
     U('d4', 'Plattenrüstung', '+5 Leben', { hp: 5 }),
-    U('d5', 'Turmwächter', 'Schwarze Rüstung: +1 Verteidigung, +1 Bewegung', { def: 1, move: 1 }),
+    U('d5', 'Turmwächter', 'Schwarze Rüstung: +4 Verteidigung, +1 Bewegung', { def: 4, move: 1 }),
   ],
   knight: [
-    U('k1', 'Lanze', 'Turnierlanze statt Schwert: +1 Angriff', { atk: 1 }),
-    U('k2', 'Plattenrüstung', 'Helm und Rossharnisch: +1 Verteidigung, +3 Leben', { def: 1, hp: 3 }),
-    [U('k3a', 'Chevalier', 'Extralange Lanze: Nahkämpfer schlagen nicht zurück, +0,5 Angriff', { atk: 0.5 }, 'lance'), U('k3b', 'Schwerer Ritter', '+6 Leben, +0,5 Verteidigung', { hp: 6, def: 0.5 })],
-    U('k4', 'Schwarzer Ritter', 'Schwarze Rüstung: +1 Angriff, +0,5 Verteidigung', { atk: 1, def: 0.5 }),
+    U('k1', 'Lanze', 'Turnierlanze statt Schwert: +4 Angriff', { atk: 4 }),
+    U('k2', 'Plattenrüstung', 'Helm und Rossharnisch: +4 Verteidigung, +3 Leben', { def: 4, hp: 3 }),
+    [U('k3a', 'Chevalier', 'Extralange Lanze: Nahkämpfer schlagen nicht zurück, +2 Angriff', { atk: 2 }, 'lance'), U('k3b', 'Schwerer Ritter', '+6 Leben, +2 Verteidigung', { hp: 6, def: 2 })],
+    U('k4', 'Schwarzer Ritter', 'Schwarze Rüstung: +4 Angriff, +2 Verteidigung', { atk: 4, def: 2 }),
     U('k5', 'Ordensritter', '+1 Bewegung, heilt jede Runde 2', { move: 1, regen: 2 }),
   ],
+  griffin: [
+    U('f1', 'Sattelgurt', '+4 Leben', { hp: 4 }),
+    U('f2', 'Greifenkrallen', '+4 Angriff', { atk: 4 }),
+    [U('f3a', 'Sturzflug', 'Sturmangriff: +30 % Angriff nach dem Ziehen', {}, 'charge'), U('f3b', 'Gepanzerter Greif', '+4 Verteidigung, +4 Leben', { def: 4, hp: 4 })],
+    U('f4', 'Weite Schwingen', '+1 Bewegung', { move: 1 }),
+    U('f5', 'Greifenkönig', '+4 Angriff, +2 Verteidigung', { atk: 4, def: 2 }),
+  ],
   archer: [
-    U('a1', 'Eibenbogen', '+0,5 Angriff', { atk: 0.5 }),
+    U('a1', 'Eibenbogen', '+2 Angriff', { atk: 2 }),
     U('a2', 'Lederkappe', '+3 Leben', { hp: 3 }),
-    [U('a3a', 'Langbogenschütze', 'Riesiger Langbogen: +1 Reichweite', { range: 1 }), U('a3b', 'Brandpfeile', '+1 Angriff, Flächenschaden 25 %', { atk: 1 }, 'fire')],
+    [U('a3a', 'Langbogenschütze', 'Riesiger Langbogen: +1 Reichweite', { range: 1 }), U('a3b', 'Brandpfeile', '+4 Angriff, Flächenschaden 25 %', { atk: 4 }, 'fire')],
     U('a4', 'Waldläufer', '+1 Bewegung', { move: 1 }),
-    U('a5', 'Meisterschütze', '+1 Angriff, +0,5 Verteidigung', { atk: 1, def: 0.5 }),
+    U('a5', 'Meisterschütze', '+4 Angriff, +2 Verteidigung', { atk: 4, def: 2 }),
   ],
   mage: [
     U('m1', 'Kristallstab', '+3 Leben', { hp: 3 }),
-    U('m2', 'Robe der Weisen', '+0,5 Verteidigung', { def: 0.5 }),
-    [U('m3a', 'Kriegsmagier', 'Feuerkugel: +2 Angriff, +1 Reichweite', { atk: 2, range: 1 }), U('m3b', 'Heiliger Hüter', 'Schutzaura 1 Feld weiter', {}, 'wideaura')],
+    U('m2', 'Robe der Weisen', '+2 Verteidigung', { def: 2 }),
+    [U('m3a', 'Kriegsmagier', 'Feuerkugel: +8 Angriff, +1 Reichweite', { atk: 8, range: 1 }), U('m3b', 'Heiliger Hüter', 'Schutzaura 1 Feld weiter', {}, 'wideaura')],
     U('m4', 'Elixier', 'Heilt 3 mehr', {}, 'greatheal'),
-    U('m5', 'Erzmagier', '+1 Angriff, +1 Verteidigung', { atk: 1, def: 1 }),
+    U('m5', 'Erzmagier', '+4 Angriff, +4 Verteidigung', { atk: 4, def: 4 }),
   ],
   basilisk: [
-    U('b1', 'Härtere Schuppen', '+0,5 Verteidigung', { def: 0.5 }),
-    U('b2', 'Giftzahn', '+1 Angriff', { atk: 1 }),
+    U('b1', 'Härtere Schuppen', '+2 Verteidigung', { def: 2 }),
+    U('b2', 'Giftzahn', '+4 Angriff', { atk: 4 }),
     [U('b3a', 'Gorgonenblick', '+1 Reichweite', { range: 1 }), U('b3b', 'Panzerechse', '+8 Leben', { hp: 8 })],
     U('b4', 'Flinke Läufe', '+1 Bewegung', { move: 1 }),
-    U('b5', 'Urbasilisk', '+1 Angriff, +6 Leben', { atk: 1, hp: 6 }),
+    U('b5', 'Urbasilisk', '+4 Angriff, +6 Leben', { atk: 4, hp: 6 }),
   ],
   catapult: [
-    U('c1', 'Spannwerk', '+0,5 Angriff', { atk: 0.5 }),
+    U('c1', 'Spannwerk', '+2 Angriff', { atk: 2 }),
     U('c2', 'Eisenbeschlag', '+4 Leben', { hp: 4 }),
-    [U('c3a', 'Präzisionswurf', '+1,5 Angriff, kein Flächenschaden', { atk: 1.5 }, 'precise'), U('c3b', 'Streugeschosse', 'Flächenschaden +25 Prozentpunkte', {}, 'fire')],
+    [U('c3a', 'Präzisionswurf', '+6 Angriff, kein Flächenschaden', { atk: 6 }, 'precise'), U('c3b', 'Streugeschosse', 'Flächenschaden +25 Prozentpunkte', {}, 'fire')],
     U('c4', 'Feldlafette', '+1 Bewegung', { move: 1 }),
-    U('c5', 'Schnellladung', '+1 Angriff, darf nach dem Ziehen schießen', { atk: 1 }, 'mobile'),
+    U('c5', 'Schnellladung', '+4 Angriff, darf nach dem Ziehen schießen', { atk: 4 }, 'mobile'),
   ],
   trebuchet: [
-    U('t1', 'Verstärkter Arm', '+1 Angriff', { atk: 1 }),
-    U('t2', 'Schutzschirm', '+5 Leben, +0,5 Verteidigung', { hp: 5, def: 0.5 }),
-    [U('t3a', 'Explosive Geschosse', 'Flächenschaden 40 % auf die Nachbarn', {}, 'blast'), U('t3b', 'Riesenkugeln', '+2 Angriff gegen das Einzelziel', { atk: 2 })],
+    U('t1', 'Verstärkter Arm', '+4 Angriff', { atk: 4 }),
+    U('t2', 'Schutzschirm', '+5 Leben, +2 Verteidigung', { hp: 5, def: 2 }),
+    [U('t3a', 'Explosive Geschosse', 'Flächenschaden 40 % auf die Nachbarn', {}, 'blast'), U('t3b', 'Riesenkugeln', '+8 Angriff gegen das Einzelziel', { atk: 8 })],
     U('t4', 'Bleigegengewicht', '+1 Reichweite', { range: 1 }),
-    U('t5', 'Belagerungsmeister', '+1 Angriff, darf nach dem Ziehen schießen', { atk: 1 }, 'mobile'),
+    U('t5', 'Belagerungsmeister', '+4 Angriff, darf nach dem Ziehen schießen', { atk: 4 }, 'mobile'),
   ],
   troll: [
-    U('o1', 'Kriegsbemalung', '+1 Angriff', { atk: 1 }),
+    U('o1', 'Kriegsbemalung', '+4 Angriff', { atk: 4 }),
     U('o2', 'Eisenkette', '+8 Leben', { hp: 8 }),
-    [U('o3a', 'Wüterich', 'Trifft auch die Nachbarn des Ziels (30 %)', {}, 'rampage'), U('o3b', 'Steinhaut', '+2 Verteidigung', { def: 2 })],
+    [U('o3a', 'Wüterich', 'Trifft auch die Nachbarn des Ziels (30 %)', {}, 'rampage'), U('o3b', 'Steinhaut', '+8 Verteidigung', { def: 8 })],
     U('o4', 'Trollblut', 'Heilt jede Runde 2 mehr', { regen: 2 }),
-    U('o5', 'Trollkönig', '+2 Angriff, +1 Bewegung', { atk: 2, move: 1 }),
+    U('o5', 'Trollkönig', '+8 Angriff, +1 Bewegung', { atk: 8, move: 1 }),
   ],
   dragon: [
-    U('g1', 'Drachenpanzer', '+2 Verteidigung', { def: 2 }),
-    U('g2', 'Glutatem', '+3 Angriff', { atk: 3 }),
+    U('g1', 'Drachenpanzer', '+8 Verteidigung', { def: 8 }),
+    U('g2', 'Glutatem', '+12 Angriff', { atk: 12 }),
     [U('g3a', 'Flammenschwall', 'Feueratem trifft auch die Nachbarn (25 %)', {}, 'fire'), U('g3b', 'Panzerdrache', '+60 Leben', { hp: 60 })],
     U('g4', 'Sturmschwingen', '+1 Bewegung', { move: 1 }),
-    U('g5', 'Ahnendrache', '+4 Angriff, heilt 4 mehr', { atk: 4, regen: 4 }),
+    U('g5', 'Ahnendrache', '+16 Angriff, heilt 4 mehr', { atk: 16, regen: 4 }),
   ],
 };
 export const UP_INDEX = {};
@@ -271,14 +260,46 @@ export function unitUpCost(type, tier) {
   return { food: Math.round(f * w), wood: Math.round(wd * w), ore: Math.round(o * w) };
 }
 
-// Fusionsmodus: zwei verschiedene Einheiten in der Fusionsschmiede verschmelzen
-export const FUSION_COST = { wood: 20, ore: 30 };
-export const FUSION_RECIPES = {
-  'archer+knight': 'horsearcher', 'defender+warrior': 'shieldbreaker', 'catapult+mage': 'firemage', 'basilisk+rider': 'gorgon',
-  'catapult+troll': 'rocktroll', 'dragon+mage': 'stormdragon', 'knight+trebuchet': 'ram',
+// Einzel-Verbesserungen: gelten nur für die eine ausgewählte Einheit (Kauf im Einheiten-Fenster).
+// Angriff, Verteidigung und Leben je 3 Stufen (+25 %, +75 %, +150 %, aufgerundet); jede Stufe kostet etwas
+// weniger als eine neue Einheit dieses Typs. Dazu Fähigkeiten je Einheitenklasse.
+export const BOOST_PCT = [0, 25, 75, 150];
+export const BOOST_COST = [60, 75, 90]; // Prozent des Kaufpreises
+export const BOOST_STATS = [['atk', 'Angriff', '⚔'], ['def', 'Verteidigung', '🛡'], ['hp', 'Leben', '❤']];
+export const SKILLS = {
+  regen: { name: 'Selbstheilung', icon: '💚', desc: 'Heilt jede Runde 10 % des maximalen Lebens' },
+  hold: { name: 'Stellung halten', icon: '🪨', desc: '+20 % Verteidigung, wenn die Einheit in ihrem Zug nicht gezogen ist' },
+  range1: { name: 'Weitschuss', icon: '🏹', desc: '+1 Reichweite' },
+  range2: { name: 'Fernschuss', icon: '🎯', desc: '+2 Reichweite (statt +1)', req: 'range1' },
+  firearrow: { name: 'Brandpfeile', icon: '🔥', desc: 'Flächenschaden: Gegner neben dem Ziel bekommen 25 % des Schadens' },
+  freeze: { name: 'Vereisen', icon: '❄️', desc: 'Statt zu heilen einen Gegner bis 3 Felder weit vereisen: er setzt eine Runde aus (Titanen sind immun)' },
+  areaheal: { name: 'Flächenheilung', icon: '✨', desc: 'Beim Heilen bekommen auch die eigenen Einheiten neben dem Ziel 25 % ihres Lebens zurück' },
+  bomb: { name: 'Bergsprengung', icon: '💣', desc: 'Statt zu heilen ein Gebirge bis 3 Felder weit sprengen: es wird zu begehbarem Lehm' },
 };
-export function fusionResult(a, b) {
-  return FUSION_RECIPES[[a, b].sort().join('+')] || 'chimera';
+export const SKILL_COST = 80; // Prozent des Kaufpreises
+// Klassen: Nahkämpfer, Fernkämpfer, Zauberer haben Fähigkeiten; Katapulte und Titanen nur Werte
+export function unitClass(type) {
+  if (MELEE.includes(type)) return 'melee';
+  if (type === 'archer' || type === 'basilisk') return 'ranged';
+  if (type === 'mage') return 'mage';
+  if (type === 'catapult' || type === 'trebuchet') return 'siege';
+  return 'titan';
+}
+const CLASS_SKILLS = { melee: ['regen', 'hold'], ranged: ['range1', 'range2', 'firearrow', 'regen'], mage: ['freeze', 'areaheal', 'bomb'] };
+export function skillsFor(type) {
+  return CLASS_SKILLS[unitClass(type)] || [];
+}
+function pctCost(type, pct) {
+  const c = {};
+  for (const [k, v] of Object.entries(UNITS[type].cost)) c[k] = Math.ceil((v * pct) / 100);
+  return c;
+}
+// Kosten der nächsten Stufe (lvl = 0..2) bzw. einer Fähigkeit
+export function boostCost(type, lvl) {
+  return pctCost(type, BOOST_COST[lvl]);
+}
+export function skillCost(type) {
+  return pctCost(type, SKILL_COST);
 }
 
 export const CITY_MAX_LEVEL = 8;
@@ -298,11 +319,10 @@ export const BUILDINGS = {
   sanctum: { art: 'einen', name: 'Turm der Weisen', icon: '🔮', cost: { wood: 6, ore: 6 }, desc: 'Zauberer möglich' },
   nest: { art: 'ein', name: 'Basiliskennest', icon: '🦎', cost: { food: 10, wood: 8, ore: 12 }, minLevel: 3, desc: 'Basilisk möglich (Stadt ab Stufe 3)' },
   lair: { art: 'eine', name: 'Trollhöhle', icon: '🦴', cost: { food: 10, wood: 12, ore: 16 }, minLevel: 4, desc: 'Schwarzer Troll möglich (Stadt ab Stufe 4)' },
-  forge: { art: 'eine', name: 'Fusionsschmiede', icon: '⚗️', cost: { food: 30, wood: 40, ore: 50 }, minLevel: 4, perRealm: 1, tech: 'fusion', fusionOnly: true, desc: 'Zwei verschiedene Einheiten überall auf der Karte zu einer stärkeren verschmelzen (einmal pro Runde)' },
   market: { art: 'einen', name: 'Markt', icon: '⚖️', cost: { food: 16, wood: 16, ore: 8 }, perRealm: 1, desc: 'Erlaubt Handel (3:1, mit Handelsgilde 2:1), einer pro Reich' },
   dragonlair: { art: 'eine', name: 'Drachenhöhle', icon: '🐉', cost: { food: 20, wood: 20, ore: 30 }, perRealm: 1, desc: 'Drache möglich (nur eine im Reich)' },
 };
-export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'sanctum', 'nest', 'lair', 'dragonlair', 'wall', 'market', 'forge'];
+export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'sanctum', 'nest', 'lair', 'dragonlair', 'wall', 'market'];
 
 // Stadtzentrum liefert von jedem Rohstoff so viel wie die Stufe
 // Ertrag des Stadtzentrums je Rohstoff: steigt mit jeder Stufe stärker, damit auch wenige große Städte genug liefern

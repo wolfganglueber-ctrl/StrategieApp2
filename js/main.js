@@ -5,7 +5,8 @@ import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
   incomeOf, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
-  perkOptions, flankers, canBuild, mergeTargets, unitUpList, unitUpOptions, canSplit, fuseTargets, splashDamage, splashOf, castleOf, defenseMult,
+  perkOptions, flankers, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, defenseMult,
+  canBoost, skillOptions, hasSkill, getFreezeTargets, getBombTargets, migrateState,
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
@@ -13,7 +14,8 @@ import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
-  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, CENTER_YIELD, MAX_SLOTS, BUILDING_FLAT, FUSION_COST, FUSION_RECIPES, fusionResult, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
+  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, CENTER_YIELD, MAX_SLOTS, BUILDING_FLAT, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
+  BOOST_PCT, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
 import { store } from './storage.js';
@@ -21,6 +23,8 @@ import { randomSeedCode, seedFromCode } from './rng.js';
 import { sound } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
+// Spielstände ab Version 5 lassen sich laden (ältere werden beim Laden umgestellt)
+const loadable = (st) => !!st && (st.v === STATE_VERSION || st.v === 5);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const canvas = $('board');
@@ -44,7 +48,7 @@ function showScreen(id, push = true) {
   if (id === 'scrMenu') {
     screenHistory = [];
     showMenuBackdrop();
-    $('btnContinue').classList.toggle('hidden', store.savedGame()?.v !== STATE_VERSION);
+    $('btnContinue').classList.toggle('hidden', !loadable(store.savedGame()));
   }
 }
 
@@ -83,7 +87,7 @@ function levelConfig(level) {
 }
 
 function startLevel(level) {
-  S = createGame({ ...levelConfig(level), fusion: !!settings.fusion });
+  S = createGame(levelConfig(level));
   S.meta = { mode: 'level', levelId: level.id };
   enterGame();
   if (level.id === 1 || !store.progress().seenIntro) showIntro();
@@ -98,7 +102,7 @@ function startSkirmish(setup) {
     biome = keys[seedFromCode(code) % keys.length];
   }
   S = createGame({
-    seed: seedFromCode(code), cols: size.cols, rows: size.rows, biome, fog: !!settings.fog, fusion: !!setup.fusion,
+    seed: seedFromCode(code), cols: size.cols, rows: size.rows, biome, fog: !!settings.fog,
     players: [{ human: true }, ...Array.from({ length: setup.enemies }, () => ({ ai: setup.diff }))],
   });
   S.meta = { mode: 'skirmish', code, setup };
@@ -137,7 +141,7 @@ function saveGame() {
 
 // ---------------------------------------------------------------- Auswahl & Overlay
 function clearSel() {
-  sel = { unitId: null, cityIdx: null, infoIdx: null, placeTower: null, placeType: 'tower', group: null, merge: false };
+  sel = { unitId: null, cityIdx: null, infoIdx: null, placeTower: null, placeType: 'tower', group: null, magic: null };
 }
 
 // ---------------------------------------------------------------- Gruppen
@@ -369,15 +373,12 @@ function refresh() {
     }
     if (targets.size) o.targets = targets;
   }
-  if (sel.merge && u) {
+  // Zauber des Zauberers: violett markierte Ziele (Gegner zum Vereisen, Berge zum Sprengen)
+  if (sel.magic && u) {
     o.moves = null;
     o.targets = null;
-    o.merges = new Set(mergeTargets(S, u).map((x) => x.idx));
-  }
-  if (sel.fuse && u) {
-    o.moves = null;
-    o.targets = null;
-    o.merges = new Set(fuseTargets(S, u).map((x) => x.idx));
+    o.heals = null;
+    o.special = new Set(magicTargets(u));
   }
   if (sel.cityIdx != null) o.cityIdx = sel.cityIdx;
   if (sel.placeTower != null) {
@@ -394,6 +395,7 @@ function refresh() {
 
 function onTap(sx, sy) {
   if (!S || busy || $('hud').classList.contains('hidden')) return;
+  $('combatTip')?.remove();
   hoverUnit = null;
   if (!humanTurn()) return;
   const i = R.pick(sx, sy);
@@ -434,21 +436,18 @@ function onTap(sx, sy) {
     refresh();
     return;
   }
-  // Verschmelzen: nur markierte Partner, mit Rückfrage
-  if (sel.fuse) {
+  // Zauber: nur markierte Ziele, sonst abbrechen
+  if (sel.magic) {
     const from = unitById(S, sel.unitId);
-    if (from && u && fuseTargets(S, from).includes(u)) { doFuse(from, u); return; }
-    sel.fuse = false;
-    toast('Verschmelzen abgebrochen.');
-    refresh();
-    return;
-  }
-  // Verband bilden: nur violett markierte Nachbarn, mit Rückfrage
-  if (sel.merge) {
-    const from = unitById(S, sel.unitId);
-    if (from && u && mergeTargets(S, from).includes(u)) { doMerge(from, u); return; }
-    sel.merge = false;
-    toast('Verband bilden abgebrochen.');
+    if (from && magicTargets(from).includes(i)) {
+      const kind = sel.magic;
+      sel.magic = null;
+      if (kind === 'freeze') act({ type: 'freeze', unitId: from.id, targetId: S.units.find((x) => x.idx === i).id }, { after: () => clearSel() });
+      else act({ type: 'bomb', unitId: from.id, idx: i }, { after: () => clearSel() });
+      return;
+    }
+    sel.magic = null;
+    toast('Zauber abgebrochen.');
     refresh();
     return;
   }
@@ -506,6 +505,10 @@ function unitNotes(u) {
     notes.push(r < MAX_RANK ? `${UNITS[u.type].healer ? 'Heilungen' : 'Besiegte Gegner'}: ${u.xp || 0}/${RANK_XP[r + 1]} bis ${RANK_NAMES[r + 1]}.` : 'Höchste Stufe erreicht.');
   }
   for (const p of u.perks || []) notes.push(`${PERKS[p].icon} ${PERKS[p].name}: ${PERKS[p].desc}.`);
+  const b = BOOST_STATS.filter(([k]) => u.boost?.[k]).map(([k, name, ic]) => `${ic} ${name} +${BOOST_PCT[u.boost[k]]} %`);
+  if (b.length) notes.push(`⬆ Verbessert: ${b.join(', ')}.`);
+  for (const k of u.skills || []) notes.push(`${SKILLS[k].icon} ${SKILLS[k].name}: ${SKILLS[k].desc}.`);
+  if (u.iced || u.ice) notes.push('❄️ Vereist.');
   if (u.sentry) notes.push('💤 Hält Wache.');
   return notes.join(' ');
 }
@@ -530,13 +533,47 @@ function onHover(x, y, to) {
   if (!S || $('hud').classList.contains('hidden') || sel.cityIdx != null || sel.placeTower != null) return;
   // Maus wandert auf das gerade aufgeklappte Info-Fenster: stehen lassen (sonst zappelt es auf und zu)
   if (x < 0 && to && $('hud').contains(to)) return;
-  // Solange eine Einheit gewählt ist, bleibt ihr Panel stehen (sonst wechselt es beim Weg zu den Knöpfen)
-  if (sel.unitId != null || sel.group) { if (hoverUnit != null) setHover(null); return; }
+  // Solange eine Einheit gewählt ist, bleibt ihr Panel stehen; über Gegnern erscheint der Kampf-Tooltip
+  if (sel.unitId != null || sel.group) { if (hoverUnit != null) setHover(null); if (x >= 0) showCombatTip(x, y); else $('combatTip')?.remove(); return; }
+  $('combatTip')?.remove();
   setHover(unitAtScreen(x, y));
 }
 
 let holdTimer = null;
+// Kampf-Tooltip: aufgeschlüsselter Schaden gegen einen Gegner (PC: Maus darüber, Handy: lange drücken)
+function combatTarget(x, y) {
+  const selU = sel.unitId != null ? unitById(S, sel.unitId) : null;
+  const t = unitAtScreen(x, y);
+  if (!selU || !t || selU.owner !== S.current || t.owner === S.current || !R.overlay.targets?.has(t.idx)) return null;
+  return { a: selU, t };
+}
+function showCombatTip(x, y) {
+  const ct = combatTarget(x, y);
+  let tip = $('combatTip');
+  if (!ct) { if (tip) tip.remove(); return false; }
+  const occ = buildOcc(S);
+  const from = unitTargets(ct.a, occ).includes(ct.t) && getTargets(S, ct.a, ct.a.idx, occ).includes(ct.t) ? ct.a.idx : (attackSpot(ct.a, ct.t, occ) ?? ct.a.idx);
+  const c = combatInfo(S, ct.a, ct.t, from);
+  if (!tip) { tip = el('div', { id: 'combatTip', class: 'tip' }); document.body.append(tip); }
+  tip.innerHTML = '';
+  tip.append(
+    el('div', { class: 'tip-title' }, `⚔ ${UNITS[ct.a.type].name} → ${UNITS[ct.t.type].name}`),
+    el('div', { class: 'tip-grid' },
+      el('div', {}, el('span', {}, 'Schaden'), el('b', { class: c.kill ? 'ok' : 'bad' }, c.kill ? `−${c.dmg} ✖ besiegt` : `−${c.dmg} (bleibt ${ct.t.hp - c.dmg})`)),
+      el('div', {}, el('span', {}, 'Gegenschlag'), el('b', {}, c.kill ? '–' : c.lance ? '– (lange Lanze)' : c.counter ? `−${c.counter}${c.die ? ' ✖ fällt' : ''}` : '–')),
+      el('div', {}, el('span', {}, 'Dein Angriff'), el('b', {}, `${fmt(c.atk)} × ${fmt(Math.round(c.atkMult * 100) / 100)}`)),
+      el('div', {}, el('span', {}, 'Gegner-Verteidigung'), el('b', {}, `${fmt(c.def)}${c.defMult > 1 ? ` × ${fmt(Math.round(c.defMult * 100) / 100)}` : ''}`)),
+      c.extra.length ? el('div', {}, el('span', {}, 'Mitgetroffen'), el('b', {}, c.extra.map((h) => `${UNITS[h.unit.type].name} −${h.dmg}`).join(', '))) : null),
+    c.atkNotes.length ? el('div', { class: 'tip-desc' }, '⬆ ' + c.atkNotes.join(' · ')) : null,
+    c.defNotes.length ? el('div', { class: 'tip-desc' }, '🛡 ' + c.defNotes.join(' · ')) : null);
+  const w = 250;
+  tip.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, x + 16)) + 'px';
+  tip.style.top = Math.max(8, y - 140) + 'px';
+  return true;
+}
+
 function onHold(x, y) {
+  if (showCombatTip(x, y)) { vibrate(15); clearTimeout(holdTimer); holdTimer = setTimeout(() => $('combatTip')?.remove(), 5000); return; }
   const u = unitAtScreen(x, y);
   if (!u || sel.cityIdx != null) return;
   vibrate(15);
@@ -601,9 +638,64 @@ async function doDemolish(idx, building) {
   if (ok) quickAct({ type: 'demolish', idx, building });
 }
 
+// Ziele des gerade gewählten Zaubers (Feldnummern)
+function magicTargets(u) {
+  if (sel.magic === 'freeze') return getFreezeTargets(S, u).filter((x) => !curVis || curVis[x.idx]).map((x) => x.idx);
+  if (sel.magic === 'bomb') return getBombTargets(S, u);
+  return [];
+}
+
+// Einzel-Verbesserungen einer Einheit: Angriff, Verteidigung, Leben (je 3 Stufen) und Fähigkeiten
+function openBoost(u0) {
+  const draw = () => {
+    const u = unitById(S, u0.id);
+    if (!u) { closeModal(); return; }
+    const p = S.players[u.owner];
+    const my = humanTurn() && u.owner === S.current;
+    const st = statsOf(S, u);
+    const buy = (a) => {
+      const box = $('modalBox'), top = box.scrollTop;
+      if (quickAct(a, false)) { draw(); $('modalBox').scrollTop = top; }
+    };
+    const list = el('div', { class: 'tech-list' });
+    for (const [k, name, ic] of BOOST_STATS) {
+      const lvl = u.boost?.[k] || 0;
+      const next = { ...u, boost: { ...(u.boost || {}), [k]: lvl + 1 } };
+      const now = st[k], then = lvl < 3 ? statsOf(S, next)[k] : null;
+      const cost = lvl < 3 ? boostCost(u.type, lvl) : null;
+      list.append(el('div', { class: 'tech-card' + (lvl >= 3 ? ' done' : '') },
+        el('span', { class: 'ticon' }, ic),
+        el('div', { class: 'binfo' },
+          el('b', {}, `${name} ${'●'.repeat(lvl)}${'○'.repeat(3 - lvl)}`),
+          el('span', {}, lvl < 3 ? `+${BOOST_PCT[lvl + 1]} %: ${now} → ${then}` : `+${BOOST_PCT[3]} %: ${now}`)),
+        lvl >= 3 ? el('span', { class: 'done' }, '✓')
+          : el('button', { class: 'btn small', disabled: !my || !canAfford(p.res, cost), onclick: () => buy({ type: 'boost', unitId: u.id, stat: k }) }, costEl(cost, p.res))));
+    }
+    const skills = skillsFor(u.type);
+    const opts = skillOptions(u);
+    const sk = el('div', { class: 'tech-list' });
+    for (const k of skills) {
+      const S0 = SKILLS[k];
+      const have = hasSkill(u, k);
+      const cost = skillCost(u.type);
+      sk.append(el('div', { class: 'tech-card' + (have ? ' done' : opts.includes(k) ? '' : ' locked') },
+        el('span', { class: 'ticon' }, S0.icon),
+        el('div', { class: 'binfo' }, el('b', {}, S0.name), el('span', {}, S0.desc), S0.req && !have ? el('span', { class: 'muted' }, `${opts.includes(k) ? '↳' : '🔒'} benötigt ${SKILLS[S0.req].name}`) : null),
+        have ? el('span', { class: 'done' }, '✓')
+          : el('button', { class: 'btn small', disabled: !my || !opts.includes(k) || !canAfford(p.res, cost), onclick: () => buy({ type: 'skill', unitId: u.id, skill: k }) }, costEl(cost, p.res))));
+    }
+    openClosable(el('h2', {}, `⬆ ${UNITS[u.type].name} verbessern`),
+      unitCard(u, 'Gilt nur für diese eine Einheit'),
+      el('h3', {}, 'Werte'), list,
+      el('h3', {}, 'Fähigkeiten'), skills.length ? sk : el('p', { class: 'muted' }, 'Diese Einheit hat keine Fähigkeiten – nur Werte lassen sich verbessern.'),
+      el('button', { class: 'btn big', onclick: closeModal }, 'Schließen'));
+    $('modalBox').classList.add('wide');
+  };
+  draw();
+}
+
 async function doDisband(u) {
-  const name = `${UNITS[u.type].name}${(u.count || 1) > 1 ? ` ×${u.count}` : ''}`;
-  const ok = await confirmDialog(`${name} entlassen?`, 'Die Einheit wird aufgelöst. Rohstoffe gibt es dafür nicht zurück.', 'Entlassen', 'Behalten');
+  const ok = await confirmDialog(`${UNITS[u.type].name} entlassen?`, 'Die Einheit wird aufgelöst. Rohstoffe gibt es dafür nicht zurück.', 'Entlassen', 'Behalten');
   if (ok) act({ type: 'disband', unitId: u.id }, { after: () => clearSel() });
 }
 
@@ -612,28 +704,7 @@ async function doRaze(u) {
   if (ok) act({ type: 'raze', unitId: u.id }, { after: () => clearSel() });
 }
 
-async function doFuse(u, t) {
-  const type = fusionResult(u.type, t.type);
-  const known = type !== 'chimera';
-  const res = known ? UNITS[type] : null;
-  const ok = await confirmDialog(`⚗️ ${UNITS[u.type].name} + ${UNITS[t.type].name}`,
-    known
-      ? `Ergibt: ${res.name} (❤ ${res.hp} · ⚔ ${fmt(res.atk)} · 🛡 ${fmt(res.def)} · 👣 ${res.move} · 🎯 ${res.range}). ${res.desc} Kostet ${costText(FUSION_COST)}; beide Einheiten gehen dabei auf. Eine Fusion pro Runde.`
-      : `Kein bekanntes Rezept – es entsteht eine wilde Chimäre mit gemischten Werten (+20 %). Kostet ${costText(FUSION_COST)}; beide Einheiten gehen dabei auf. Eine Fusion pro Runde.`,
-    'Verschmelzen', 'Abbrechen');
-  if (!ok) { sel.fuse = false; refresh(); return; }
-  act({ type: 'fuse', unitId: u.id, targetId: t.id }, { after: () => clearSel() });
-}
 const costText = (c) => RES.filter((k) => c[k]).map((k) => `${c[k]} ${RES_INFO[k].name}`).join(', ');
-
-async function doMerge(u, t) {
-  const total = (u.count || 1) + (t.count || 1);
-  const ok = await confirmDialog('Verband bilden?',
-    `${UNITS[u.type].name} und ${UNITS[t.type].name} werden zu einem Verband aus ${total} Einheiten zusammengelegt. Beide haben damit diesen Zug verbraucht. Aufteilen geht in einer späteren Runde wieder.`,
-    'Zusammenlegen', 'Abbrechen');
-  if (!ok) { sel.merge = false; refresh(); return; }
-  act({ type: 'merge', unitId: u.id, targetId: t.id }, { after: () => clearSel() });
-}
 
 // Sofort-Aktionen im Stadtmenü: kein Warten auf Animationen, schnelles Klicken kommt an
 function quickAct(action, undoable = true) {
@@ -661,8 +732,7 @@ function doBuild(idx, building) {
 }
 
 let techBranch = 'mil';
-// Fusions-Forschungen nur im Fusionsmodus zeigen
-const techList = () => TECH_ORDER.filter((t) => !TECHS[t].fusionOnly || S?.fusion);
+const techList = () => TECH_ORDER;
 function openTech() {
   if (!S || busy) return;
   const draw = () => {
@@ -1138,33 +1208,33 @@ async function playEvent(ev, f, isAI, pan = true) {
       if (f > 0) sound.play('fall', { pan: panOf(ev.idx), vol: isAI ? 0.4 : 0.8 });
       break;
     case 'stone':
-      if (unitById(S, ev.id)?.owner === humanId()) R.floatText(ev.idx, '🪨 setzt aus', '#d6d3d1', 900);
+      if (unitById(S, ev.id)?.owner === humanId()) R.floatText(ev.idx, ev.ice ? '❄️ vereist, setzt aus' : '🪨 setzt aus', ev.ice ? '#bae6fd' : '#d6d3d1', 900);
+      break;
+    case 'freeze':
+      if (f > 0) { R.ring(ev.from, '#7dd3fc', 400 * f); R.ring(ev.idx, '#bae6fd', 700 * f); }
+      sound.play('sparkle', { pan: panOf(ev.idx), vol: isAI ? 0.5 : 1 });
+      R.floatText(ev.idx, '❄️ vereist', '#bae6fd', 1100 * Math.max(f, 0.6));
+      await pause(isAI ? 260 : 160);
+      break;
+    case 'bomb':
+      R.invalidate(true, ev.idx);
+      if (f > 0) { R.ring(ev.from, '#fdba74', 400 * f); R.ring(ev.idx, '#f97316', 800 * f); }
+      sound.play('boom', { pan: panOf(ev.idx), vol: isAI ? 0.5 : 1 });
+      R.floatText(ev.idx, '💣 Berg gesprengt', '#fdba74', 1200 * Math.max(f, 0.6));
+      await pause(isAI ? 300 : 180);
+      break;
+    case 'boost':
+      if (f > 0) R.ring(ev.idx, '#fde047', 500 * f);
+      sound.play('chime', { pan: panOf(ev.idx), vol: isAI ? 0.3 : 1 });
+      R.floatText(ev.idx, `${BOOST_STATS.find((b) => b[0] === ev.stat)[2]} +${BOOST_PCT[ev.level]} %`, '#fde68a', 1000 * Math.max(f, 0.6));
+      break;
+    case 'skill':
+      if (f > 0) R.ring(ev.idx, '#fde047', 500 * f);
+      sound.play('chime', { pan: panOf(ev.idx), vol: isAI ? 0.3 : 1 });
+      R.floatText(ev.idx, `${SKILLS[ev.skill].icon} ${SKILLS[ev.skill].name}`, '#fde68a', 1100 * Math.max(f, 0.6));
       break;
     case 'defect':
       if (f > 0) R.ring(ev.idx, PLAYER_COLORS[ev.pid].main, 600 * f);
-      break;
-    case 'fuse': {
-      R.ring(ev.idx, '#c084fc', 900 * Math.max(f, 0.6));
-      R.floatText(ev.idx, `⚗️ ${UNITS[ev.type].name}`, '#f5d0fe', 1500 * Math.max(f, 0.6));
-      sound.play('sparkle', { pan: panOf(ev.idx), vol: isAI ? 0.5 : 1 });
-      const fu = unitById(S, ev.id);
-      if (fu?.owner === humanId()) {
-        const book = store.recipes();
-        const key = ev.type === 'chimera' ? 'chimera' : ev.type;
-        if (!book.includes(key)) { store.saveRecipes([...book, key]); toast(`📖 Neues Rezept entdeckt: ${UNITS[ev.type].name}!`); }
-      }
-      await pause(isAI ? 300 : 150);
-      break;
-    }
-    case 'merge':
-      if (f > 0) R.ring(ev.idx, '#c084fc', 600 * f);
-      R.floatText(ev.idx, `Verband ×${ev.count}`, '#e9d5ff', 1100 * Math.max(f, 0.6));
-      sound.play('drum', { pan: panOf(ev.idx), vol: isAI ? 0.4 : 0.8 });
-      await pause(isAI ? 200 : 120);
-      break;
-    case 'split':
-      R.floatText(ev.idx, 'aufgeteilt', '#e9d5ff', 900 * Math.max(f, 0.6));
-      await sleep(R.pop(ev.id, 300 * f));
       break;
     case 'eliminated':
       toast(`${S.players[ev.pid].name} wurde besiegt!`);
@@ -1274,7 +1344,7 @@ function statRow(u) {
   const dm = UNITS[u.type].structure ? 1 : defenseMult(S, u.idx);
   return el('div', { class: 'stats-row' },
     el('span', { title: 'Angriff (inkl. Forschung, Stufe, Spezialisierung)' }, icon('atk'), fmt(T.atk)),
-    el('span', { title: dm > 1 ? `Verteidigung ${fmt(T.def)} × ${fmt(Math.round(dm * 100) / 100)} Stadt-/Burgbonus` : 'Verteidigung' }, icon('def'), dm > 1 ? `${fmt(Math.round(T.def * dm * 10) / 10)}` : fmt(T.def), dm > 1 ? el('small', { class: 'bonus' }, '🏰') : null),
+    el('span', { title: dm > 1 ? `Verteidigung ${fmt(T.def)} × ${fmt(Math.round(dm * 100) / 100)} Stadt-/Burgbonus` : 'Verteidigung' }, icon('def'), dm > 1 ? `${Math.ceil(T.def * dm - 1e-9)}` : fmt(T.def), dm > 1 ? el('small', { class: 'bonus' }, '🏰') : null),
     T.move ? el('span', { title: 'Bewegung' }, icon('move'), T.move) : null,
     el('span', { title: 'Reichweite' }, icon('range'), T.range));
 }
@@ -1285,9 +1355,9 @@ function rankText(u) {
 }
 
 function unitCard(u, subtitle) {
-  const name = u.type === 'tower' ? `Turm · Stufe ${u.level}` : UNITS[u.type].structure ? UNITS[u.type].name : `${UNITS[u.type].name}${(u.count || 1) > 1 ? ` ×${u.count}` : ''} · ${rankText(u)}`;
+  const name = u.type === 'tower' ? `Turm · Stufe ${u.level}` : UNITS[u.type].structure ? UNITS[u.type].name : `${UNITS[u.type].name} · ${rankText(u)}`;
   return el('div', { class: 'unit-card' },
-    iconCanvas(u.mix ? 'chimera:' + u.mix.parents.join('+') : u.type, u.owner, 48, u.level),
+    iconCanvas(u.type, u.owner, 48, u.level),
     el('div', { class: 'uc-main' },
       el('div', { class: 'uc-top' }, el('span', { class: 'title' }, name), hpBar(u)),
       el('div', { class: 'uc-bottom' }, el('span', { class: 'muted' }, subtitle), statRow(u))));
@@ -1449,7 +1519,7 @@ function renderCityPanel(panel, ci, occ) {
           }, costEl(UNITS[type].cost, p.res))));
       }
     };
-    const order = BUILDING_ORDER.filter((x) => !BUILDINGS[x].fusionOnly || S.fusion);
+    const order = BUILDING_ORDER;
     const sorted = [...ECO.filter((b) => order.includes(b)), 'STRUCT', ...order.filter((b) => !ECO.includes(b))];
     for (const b of sorted) {
       if (b === 'STRUCT') { structRows(); continue; }
@@ -1523,20 +1593,12 @@ function renderPanelContent(panel) {
       : 'Tippe ein helles Feld im Stadtgebiet an.'));
     return;
   }
-  if (sel.fuse && sel.unitId != null) {
-    const fu = unitById(S, sel.unitId);
+  if (sel.magic && sel.unitId != null) {
+    const sk = SKILLS[sel.magic];
     panel.append(el('div', { class: 'city-head' },
-      el('span', { class: 'title' }, `⚗️ Verschmelzen · ${fu ? UNITS[fu.type].name : ''}`),
-      el('button', { class: 'btn small', onclick: () => { sel.fuse = false; refresh(); } }, 'Abbrechen')));
-    panel.append(el('div', { class: 'note' }, 'Tippe eine markierte andere Einheit direkt daneben an. Vor dem Verschmelzen siehst du, was entsteht.'));
-    return;
-  }
-  if (sel.merge && sel.unitId != null) {
-    const mu = unitById(S, sel.unitId);
-    panel.append(el('div', { class: 'city-head' },
-      el('span', { class: 'title' }, `🔗 Verband bilden · ${mu ? UNITS[mu.type].name : ''}`),
-      el('button', { class: 'btn small', onclick: () => { sel.merge = false; refresh(); } }, 'Abbrechen')));
-    panel.append(el('div', { class: 'note' }, 'Tippe eine violett markierte gleiche Einheit direkt daneben an. Vor dem Zusammenlegen fragt das Spiel noch einmal nach.'));
+      el('span', { class: 'title' }, `${sk.icon} ${sk.name}`),
+      el('button', { class: 'btn small', onclick: () => { sel.magic = null; refresh(); } }, 'Abbrechen')));
+    panel.append(el('div', { class: 'note' }, sel.magic === 'freeze' ? 'Tippe einen violett markierten Gegner an (bis 3 Felder weit): Er setzt seine nächste Runde aus.' : 'Tippe ein violett markiertes Gebirge an (bis 3 Felder weit): Es wird zu begehbarem Lehm.'));
     return;
   }
   if (sel.group) {
@@ -1577,9 +1639,12 @@ function renderPanelContent(panel) {
         el('button', { class: 'btn small', title: `Alle ${UNITS[u.type].name} in der Nähe ziehen und greifen gemeinsam an`, onclick: () => groupNearby(u, true) }, `👥 Alle ${UNITS[u.type].name}`),
         el('button', { class: 'btn small' + (u.sentry ? ' active' : ''), onclick: () => act({ type: 'sentry', unitId: u.id }, { after: () => { if (unitById(S, u.id)?.sentry) clearSel(); } }) }, u.sentry ? '💤 Wache beenden' : '💤 Wache halten'));
       actions.append(el('button', { class: 'btn small raze', title: 'Einheit auflösen', onclick: () => doDisband(u) }, '🗑 Entlassen'));
-      if (fuseTargets(S, u).length) actions.append(el('button', { class: 'btn small merge', onclick: () => { sel.fuse = true; refresh(); } }, '⚗️ Verschmelzen'));
-      if (mergeTargets(S, u).length) actions.append(el('button', { class: 'btn small merge', onclick: () => { sel.merge = true; refresh(); } }, '🔗 Verband bilden'));
-      if (canSplit(S, u)) actions.append(el('button', { class: 'btn small', onclick: () => act({ type: 'split', unitId: u.id }) }, `✂ Aufteilen (${u.count} → ${u.count - 1} + 1)`));
+      actions.append(el('button', { class: 'btn small primary', title: 'Angriff, Verteidigung, Leben und Fähigkeiten nur dieser Einheit verbessern', onclick: () => openBoost(u) }, '⬆ Verbessern'));
+      for (const k of ['freeze', 'bomb']) {
+        if (!hasSkill(u, k) || !canAttack(u)) continue;
+        const n = (k === 'freeze' ? getFreezeTargets(S, u).filter((x) => !curVis || curVis[x.idx]) : getBombTargets(S, u)).length;
+        actions.append(el('button', { class: 'btn small merge', disabled: !n, onclick: () => { sel.magic = k; refresh(); } }, `${SKILLS[k].icon} ${SKILLS[k].name}`));
+      }
       panel.append(actions);
     }
     if (u.type === 'tower' && u.owner === S.current) {
@@ -1744,24 +1809,6 @@ function gameOver() {
   openModal(...children);
 }
 
-// Rezeptbuch der Fusion: entdeckte Rezepte mit Zutaten, unentdeckte bleiben geheim
-function openRecipes(back) {
-  const book = store.recipes();
-  const all = [...Object.entries(FUSION_RECIPES), ['?', 'chimera']];
-  const list = el('div', { class: 'slot-list' });
-  for (const [key, type] of all) {
-    const known = book.includes(type);
-    const T = UNITS[type];
-    const parts = key === '?' ? 'zwei Einheiten ohne Rezept' : key.split('+').map((k) => UNITS[k].name).join(' + ');
-    list.append(el('div', { class: 'build-row' + (known ? '' : ' empty') },
-      known ? iconCanvas(type === 'chimera' ? 'chimera:rider+warrior' : type, humanId(), 40) : el('span', { class: 'bicon' }, '❓'),
-      el('div', { class: 'binfo' }, el('b', {}, known ? `${T.name}` : 'Unbekanntes Rezept'),
-        el('span', { class: 'muted' }, known ? `${parts} · ❤ ${T.hp} ⚔ ${fmt(T.atk)} 🛡 ${fmt(T.def)} 👣 ${T.move} 🎯 ${T.range} – ${T.desc}` : 'Verschmelze verschiedene Einheiten, um es zu entdecken.'))));
-  }
-  openClosable(el('h2', {}, '📖 Rezeptbuch'), el('p', {}, `${book.length} von ${all.length} Fusionen entdeckt.`), list,
-    el('button', { class: 'btn big', onclick: () => { closeModal(); if (back) back(); } }, 'Zurück'));
-}
-
 // Speicherplätze: Spielstand speichern oder laden (10 Plätze im Browser)
 function gameLabel(st) {
   const meta = st.meta || {};
@@ -1777,7 +1824,7 @@ function openSlots(mode, back) {
     const list = el('div', { class: 'slot-list' });
     for (let n = 1; n <= store.SLOTS; n++) {
       const d = store.slot(n);
-      const ok = d && d.state?.v === STATE_VERSION;
+      const ok = d && loadable(d.state);
       const info = d
         ? el('div', { class: 'binfo' }, el('b', {}, `${n}. ${d.name}`), el('span', { class: 'muted' }, `Runde ${d.turn} · ${new Date(d.date).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}${ok ? '' : ' · alte Version'}`))
         : el('div', { class: 'binfo' }, el('b', {}, `${n}. – leer –`));
@@ -1799,7 +1846,7 @@ function openSlots(mode, back) {
           onclick: async () => {
             if (S && !(await confirmDialog('Spielstand laden?', 'Das laufende Spiel wird durch den gespeicherten Stand ersetzt (ungespeicherter Fortschritt geht verloren).', 'Laden', 'Abbrechen'))) { draw(); return; }
             closeModal();
-            S = store.slot(n).state;
+            S = migrateState(store.slot(n).state);
             enterGame();
             toast(`📂 Platz ${n} geladen`);
           },
@@ -1844,7 +1891,6 @@ function gameMenu() {
         } catch { /* abgebrochen */ }
       },
     }, 'Karte teilen') : null,
-    S.fusion ? el('button', { class: 'btn big', onclick: () => openRecipes(gameMenu) }, '📖 Rezeptbuch') : null,
     el('button', { class: 'btn big', onclick: () => openSlots('save', gameMenu) }, '💾 Speichern'),
     el('button', { class: 'btn big', onclick: () => openSlots('load', gameMenu) }, '📂 Laden'),
     el('button', { class: 'btn big', onclick: () => openSettings(gameMenu) }, 'Einstellungen'),
@@ -1922,7 +1968,6 @@ function renderLevels() {
 
 // ---------------------------------------------------------------- Freies Spiel
 const setup = Object.assign({ size: 'M', biome: 'mixed', enemies: 1, diff: 3, fog: false, code: randomSeedCode() }, store.lastSetup() || {});
-setup.fusion = !!settings.fusion;
 
 function renderSetup() {
   const seg = (id, options, key) => {
@@ -1936,8 +1981,6 @@ function renderSetup() {
   seg('segBiome', [...Object.entries(BIOMES).map(([k, v]) => [k, v.name]), ['random', 'Zufall']], 'biome');
   seg('segEnemies', [[1, '1'], [2, '2'], [3, '3']], 'enemies');
   seg('segDiff', DIFFICULTIES.map((d) => [d.level, String(d.level)]), 'diff');
-  seg('segFusion', [[false, 'Aus'], [true, 'An']], 'fusion');
-  if (setup.fusion !== !!settings.fusion) { settings.fusion = !!setup.fusion; store.saveSettings(settings); updateFusionBtn(); }
   const d = DIFFICULTIES[setup.diff - 1];
   $('diffDesc').textContent = `${d.name}: ${d.desc}`;
   $('seedInput').value = setup.code;
@@ -1977,9 +2020,6 @@ function renderHelp() {
     <h3>Gemeinsam angreifen 👥</h3>
     <p>Wähle eine Einheit und tippe auf „👥 Alle in der Nähe“ (alle eigenen Einheiten im Umkreis) oder „👥 Alle Ritter“ usw. (nur gleiche Einheiten im Umkreis); am PC geht auch Shift + Klick. Danach ist der Gruppenmodus aktiv. Weitere eigene Einheiten fügst du per Tipp hinzu oder nimmst sie wieder heraus.
     Ein Tipp auf einen Gegner: Alle greifen nacheinander an und rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt. Zauberer ziehen mit, greifen aber nicht automatisch an (sie heilen lieber). Die Gruppe bleibt danach gewählt – tippe einfach den nächsten Gegner an. Ein Tipp auf ein hell markiertes Feld bewegt die Gruppe, ein Tipp auf ein anderes leeres Feld (oder „Auflösen“) beendet sie. Das Gruppenmenü unten bleibt bewusst klein: „+ Umgebung“, „+ Ritter“ usw. (nur Einheiten vom Typ der zuerst gewählten) und „Auflösen“.</p>
-    <h3>Verbände 🔗</h3>
-    <p>Bis zu 3 gleiche Einheiten (Krieger, Schützen, Reiter, Wächter, Ritter, Katapulte) lassen sich zu einem Verband zusammenlegen – dann ziehst du sie mit einem Tipp. Wähle eine Einheit, tippe „🔗 Verband bilden“ und dann eine violett markierte gleiche Einheit direkt daneben; das Spiel fragt vorher nach. Beide dürfen in dieser Runde noch nichts getan haben, das Zusammenlegen verbraucht ihren Zug.
-    Ein Verband hat die Lebenspunkte aller Mitglieder und teilt entsprechend mehr Schaden aus; je angeschlagener er ist, desto weniger Figuren stehen auf dem Sockel. Er übernimmt den besten Rang. Aber Vorsicht: Katapulte, Drachenfeuer und „Wüten“ treffen Verbände härter (+25 % je weiterem Mitglied). Mit „✂ Aufteilen“ löst du eine Einheit wieder heraus.</p>
     <h3>Angreifen</h3>
     <p>Wählst du eine Einheit, zeigen rote Felder alle Ziele. Die Blase über dem Ziel nennt den Schaden (↩ = Gegenschlag, ✖ = Ziel wird besiegt). Ein Tipp auf das Ziel greift an.
     Nahkämpfer rücken nach einem Sieg auf das Feld vor.<br>
@@ -1997,7 +2037,7 @@ function renderHelp() {
     <h3>Türme</h3>
     <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt, in der Burg 6). Türme bewegen sich nicht, greifen aber Gegner direkt daneben an (ab Stufe 3 bis 2 Felder weit) und lassen sich in 3 Stufen ausbauen – der Ausbau ist teuer: tippe den Turm an. Hat ein Turm in deinem Zug noch nicht geschossen, feuert er beim Zugende automatisch auf das lohnendste Ziel (sichtbar animiert; in den Einstellungen abschaltbar).</p>
     <h3>Steinwälle 🧱</h3>
-    <p>Im Reiter „Gebäude“ einer Stadt setzt du Steinwälle auf freie Felder bis 2 Felder um die Stadt (bis zu 6 pro Stadt). Sie sind sehr stabil (50 Leben, Verteidigung 6), greifen nicht an, versperren aber den Weg: Gegner müssen sie umgehen oder mühsam einreißen – ideal, um Angreifer in die Reichweite deiner Türme und Schützen zu lenken. Nebeneinander gesetzte Wallstücke verbinden sich zu einer Mauer. Katapulte und Belagerer sind gegen sie besonders wirksam.</p>
+    <p>Im Reiter „Gebäude“ einer Stadt setzt du Steinwälle auf freie Felder bis 2 Felder um die Stadt (bis zu 6 pro Stadt). Sie sind sehr stabil (50 Leben, Verteidigung 24), greifen nicht an, versperren aber den Weg: Gegner müssen sie umgehen oder mühsam einreißen – ideal, um Angreifer in die Reichweite deiner Türme und Schützen zu lenken. Nebeneinander gesetzte Wallstücke verbinden sich zu einer Mauer. Katapulte und Belagerer sind gegen sie besonders wirksam.</p>
     <h3>Forschung 🔬</h3>
     <p>Oben rechts öffnest du den Entwicklungsbaum. Jede Forschung gilt für dein ganzes Reich: ${TECH_ORDER.map((t) => `${TECHS[t].icon} ${TECHS[t].name} (${TECHS[t].desc})`).join(', ')}.</p>
     <h3>Kartennebel</h3>
@@ -2005,16 +2045,16 @@ function renderHelp() {
     <h3>Handel</h3>
     <p>Handeln kannst du erst mit einem <b>Markt</b> in einer deiner Städte (einer pro Reich genügt – in den anderen Städten ist er ausgegraut). Dann tippst du oben auf einen Rohstoff: 3 beliebige Rohstoffe gegen 1 anderen, mit der Forschung <b>Handelsgilde</b> 2 gegen 1.</p>
     <h3>Gelände</h3>
-    <p><b>Gebirge</b> und <b>Seen</b> sind unpassierbar (nur der Drache fliegt darüber). Ein <b>Wald</b>feld zu betreten kostet 2 Bewegung statt 1 – ein einzelner Schritt in den Wald geht aber immer. Verteidigungsbonus gibt es nur in Städten.</p>
+    <p><b>Gebirge</b> und <b>Seen</b> sind unpassierbar (nur Drache und Greifenreiter fliegen darüber; Zauberer mit Bergsprengung verwandeln Gebirge in begehbaren <b>Lehm</b>). Ein <b>Wald</b>feld zu betreten kostet 2 Bewegung statt 1 – ein einzelner Schritt in den Wald geht aber immer. Verteidigungsbonus gibt es nur in Städten.</p>
     <h3>Heilung</h3>
     <p>Einheiten, die eine Runde nichts tun, heilen 2 Lebenspunkte – in der Nähe eigener Städte 4. Zauberer heilen sofort.</p>
     <h3>Einheiten</h3>
     <table><tr><th>Einheit</th><th>❤</th><th>Angr.</th><th>Vert.</th><th>Bew.</th><th>Reichw.</th></tr>${rows}</table>
-    <p>Ritter brauchen eine Kaserne, Katapulte und Triboks eine Werkstatt, Zauberer einen Turm der Weisen, der Basilisk ein Basiliskennest, der Schwarze Troll eine Trollhöhle, der Drache eine Drachenhöhle. Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
+    <p>Ritter und Greifenreiter brauchen eine Kaserne, Katapulte und Triboks eine Werkstatt, Zauberer einen Turm der Weisen, der Basilisk ein Basiliskennest, der Schwarze Troll eine Trollhöhle, der Drache eine Drachenhöhle. Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
     <h3>Zugweite</h3>
-    <p>Auch voll entwickelt ziehen Fußtruppen höchstens 4 Felder, Katapulte 3, Reiter und Ritter 6 – auch wenn sie über eigene Einheiten springen.</p>
+    <p>Auch voll entwickelt ziehen Fußtruppen höchstens 4 Felder, Katapulte 3, Reiter, Ritter und Greifenreiter 6 – auch wenn sie über eigene Einheiten springen.</p>
     <h3>Ränge und Fähigkeiten ★</h3>
-    <p>Einheiten steigen durch <b>Siege</b> auf – überall auf der Karte, ganz ohne Stadt oder Kaserne: Je 5 besiegte Gegner bringen eine Stufe (Zauberer zählen stattdessen ihre Heilungen), höchstens 3 Stufen: ${RANK_NAMES.slice(1).join(' → ')}. Jede Stufe gibt +20 % Leben und +15 % Angriff und Verteidigung, Reiter und Ritter ab Veteran +1 Bewegung, alle Helden +1 Bewegung.
+    <p>Einheiten steigen durch <b>Siege</b> auf – überall auf der Karte, ganz ohne Stadt oder Kaserne: Je 5 besiegte Gegner bringen eine Stufe (Zauberer zählen stattdessen ihre Heilungen), höchstens 3 Stufen: ${RANK_NAMES.slice(1).join(' → ')}. Jede Stufe gibt +20 % Leben und +15 % Angriff und Verteidigung, Reiter, Ritter und Greifenreiter ab Veteran +1 Bewegung, alle Helden +1 Bewegung.
     Bei jeder Stufe wählst du eine <b>Spezialisierung</b>. Einheiten, die gerade eine wählen dürfen, schimmern golden, blinken auf und tragen ein ⬆; gewählte Spezialisierungen erscheinen als kleines Abzeichen neben der Figur: ${Object.values(PERKS).map((p) => `${p.icon} ${p.name} (${p.desc})`).join(', ')}.</p>
     <h3>Zauberer 🔮</h3>
     <p>Eigene Einheiten neben einem Zauberer (blaues Schild-Symbol) bekommen 25 % weniger Schaden, Flächenschaden halbiert. Statt anzugreifen heilt der Zauberer eine eigene Einheit bis 3 Felder entfernt (grün markiert antippen). Höchstens ein Zauberer pro Stadt.</p>
@@ -2023,17 +2063,22 @@ function renderHelp() {
     <h3>Schwarzer Troll</h3>
     <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel und braucht eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
     <h3>Einheiten-Entwicklung ⬆</h3>
-    <p>Im Forschungsfenster gibt es neben Militär, Wirtschaft und Verteidigung die Reiter <b>Nahkämpfer</b>, <b>Fernkämpfer</b>, <b>Katapulte</b> und <b>Titanen</b>. Dort wählst du eine Einheit und entwickelst sie in 5 Stufen weiter – das gilt sofort für alle Einheiten dieses Typs, auch für die schon aufgestellten. Auf Stufe 3 entscheidest du dich für eine von zwei Richtungen (z. B. Ritter → Chevalier mit extralanger Lanze oder Schwerer Ritter; Tribok → explosive Geschosse oder Riesenkugeln). So spezialisierst du dein Heer auf wenige starke Einheiten.</p>
+    <p>Im Forschungsfenster gibt es neben Militär, Wirtschaft und Verteidigung die Reiter <b>Nahkämpfer</b>, <b>Fernkämpfer</b>, <b>Zauberer</b>, <b>Katapulte</b> und <b>Titanen</b>. Dort wählst du eine Einheit und entwickelst sie in 5 Stufen weiter – das gilt sofort für alle Einheiten dieses Typs, auch für die schon aufgestellten. Auf Stufe 3 entscheidest du dich für eine von zwei Richtungen (z. B. Ritter → Chevalier mit extralanger Lanze oder Schwerer Ritter; Tribok → explosive Geschosse oder Riesenkugeln). So spezialisierst du dein Heer auf wenige starke Einheiten.</p>
     <p>Jede Stufe sieht man: goldene Steine am Sockel zählen die Stufen, neue Ausrüstung (Helm, Lanze, größerer Schild, zweites Schwert, Brandpfeile, Sprengbomben …), ab Stufe 4 schwarze Rüstung und auf Stufe 5 eine goldene Aura.</p>
-    <h3>Fusion ⚗️</h3>
-    <p>Im Hauptmenü (oder beim Freien Spiel) schaltest du die <b>Fusion</b> ein – sie gilt dann für neue Spiele in Kampagne und Freiem Spiel. Dann gibt es im Entwicklungsbaum (Wirtschaft) die Forschungen <b>Alchemie</b> (nach Baukunst und Plattenrüstung) und <b>Fusionskunst</b> (nach Alchemie und Gegengewicht) – ein langer, teurer Weg. Danach baust du in einer Stadt ab Stufe 4 die <b>Fusionsschmiede</b> (eine im Reich).</p>
-    <p>Stehen zwei <b>verschiedene</b> eigene Einheiten nebeneinander (überall auf der Karte, alle Einheiten bis zum Drachen), beide noch unbewegt, wählst du „⚗️ Verschmelzen“ und tippst die Partnerin an. Beide gehen in einer stärkeren Fusionseinheit auf (kostet ${costText(FUSION_COST)}, eine Fusion pro Runde, doppelter Unterhalt). Es gibt ${Object.keys(FUSION_RECIPES).length} feste Rezepte – welche, verrät das 📖 Rezeptbuch im Pause-Menü erst, wenn du sie entdeckt hast. Jedes andere Paar ergibt eine wilde <b>Chimäre</b> mit gemischten Werten (+20 %). Fusionseinheiten lassen sich nicht weiter verschmelzen, sammeln aber Stufen und Spezialisierungen wie alle anderen.</p>
+    <h3>Einzel-Verbesserungen ⬆</h3>
+    <p>Wähle eine eigene Einheit und tippe „⬆ Verbessern“: Diese Verbesserungen gelten nur für genau diese eine Einheit. <b>Angriff</b>, <b>Verteidigung</b> und <b>Leben</b> haben je 3 Stufen (+25 %, +75 %, +150 %, immer aufgerundet); jede Stufe kostet ${BOOST_COST.join(' / ')} % des Kaufpreises der Einheit – also etwas weniger als eine neue. Dazu kommen <b>Fähigkeiten</b> (je ${SKILL_COST} % des Kaufpreises):<br>
+    Nahkämpfer: 💚 Selbstheilung (10 % des Lebens pro Runde), 🪨 Stellung halten (+20 % Verteidigung, wenn sie in ihrem Zug nicht gezogen ist).<br>
+    Fernkämpfer (Schütze, Basilisk): 🏹 Weitschuss (+1 Reichweite), 🎯 Fernschuss (+2), 🔥 Brandpfeile (Nachbarn des Ziels bekommen 25 % des Schadens), 💚 Selbstheilung.<br>
+    Zauberer: ❄️ Vereisen (ein Gegner bis 3 Felder weit setzt eine Runde aus, Titanen sind immun), ✨ Flächenheilung (beim Heilen bekommen die eigenen Nachbarn des Ziels 25 % ihres Lebens zurück), 💣 Bergsprengung (ein Gebirge bis 3 Felder weit wird zu begehbarem Lehm).<br>
+    Katapulte, Triboke und Titanen haben keine Fähigkeiten, nur Werte. Alle Werte im Spiel sind ganze Zahlen.</p>
+    <h3>Greifenreiter 🦅</h3>
+    <p>Ein Ritter auf einem Greifen: gleiche Kampfwerte wie der Ritter, aber er fliegt über Berge, Seen und eigene Einheiten. Er ist teurer und braucht ebenfalls eine Kaserne.</p>
     <h3>Tribok</h3>
     <p>Die schwerste Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einzelnes Feld mit vollem Schaden (kein Flächenschaden, kein Abschlag gegen Truppen), kann aber nicht auf direkte Nachbarn schießen und nicht nach einer Bewegung. Braucht eine Werkstatt und die Forschung <b>Gegengewicht</b> (nach Ballistik), ohne Mengenbegrenzung, Unterhalt 1 Nahrung + 1 Holz. Ideal, um Burgverteidiger aus sicherer Entfernung zu treffen.</p>
     <h3>Basilisk 🦎</h3>
     <p>Eine Riesenechse mit tödlichem Blick: Sie greift aus 2 Feldern an, und wer getroffen wird und überlebt, <b>versteinert</b> – er setzt seinen nächsten Zug aus und schlägt bis dahin nicht zurück (grau dargestellt). Troll, Drache, Türme und Wälle sind immun. Ideal, um einen starken Gegner festzuhalten, während deine Armee angreift. Braucht ein Basiliskennest (Stadt ab Stufe 3), höchstens 2 pro Reich.</p>
     <h3>Drache 🐉</h3>
-    <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), er hat Angriff 25, und sein Feueratem trifft auch die Gegner auf den 2 Feldern hinter dem Ziel (75 % und 50 %), und er heilt jede Runde 6 Leben. Er ist ein Endgegner und kostet je 300 Nahrung, Holz und Erz – bei jeder Stufe wählst du aus drei Spezialisierungen. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (in jeder Stadt baubar, aber nur eine im Reich – ein kleiner Drache auf dem Stadtturm zeigt, wo sie steht), und es gibt nur einen Drachen pro Reich.</p>
+    <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), er hat Angriff 100, und sein Feueratem trifft auch die Gegner auf den 2 Feldern hinter dem Ziel (75 % und 50 %), und er heilt jede Runde 6 Leben. Er ist ein Endgegner und kostet je 300 Nahrung, Holz und Erz – bei jeder Stufe wählst du aus drei Spezialisierungen. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (in jeder Stadt baubar, aber nur eine im Reich – ein kleiner Drache auf dem Stadtturm zeigt, wo sie steht), und es gibt nur einen Drachen pro Reich.</p>
     <h3>Geräusche 🔊</h3>
     <p>Kampf, Bewegung und Ereignisse sind zu hören, im Hintergrund je nach Kartenausschnitt Meeresrauschen, plätschernde Seen, Wind über den Bergen, Vögel im Wald und das Treiben der Städte. Alles wird im Gerät erzeugt und funktioniert offline. Lautstärke und Umgebung stellst du im Menü unter Einstellungen ein.</p>
     <h3>Wache halten 💤</h3>
@@ -2054,16 +2099,6 @@ $('btnSkirmish').addEventListener('click', () => { renderSetup(); showScreen('sc
 $('btnHelp').addEventListener('click', () => { renderHelp(); showScreen('scrHelp'); });
 $('btnSettings').addEventListener('click', () => openSettings(() => { if (!$('scrLevels').classList.contains('hidden')) renderLevels(); }));
 $('btnLoad').addEventListener('click', () => openSlots('load'));
-// Fusionsmodus im Hauptmenü an/aus (gilt für neue Spiele: Kampagne und Freies Spiel)
-function updateFusionBtn() { $('btnFusion').textContent = `⚗️ Fusion: ${settings.fusion ? 'An' : 'Aus'}`; $('btnFusion').classList.toggle('primary', !!settings.fusion); }
-$('btnFusion').addEventListener('click', () => {
-  settings.fusion = !settings.fusion;
-  store.saveSettings(settings);
-  setup.fusion = settings.fusion;
-  updateFusionBtn();
-  toast(settings.fusion ? '⚗️ Fusion an: In neuen Spielen erforschst du Alchemie → Fusionskunst und baust die Fusionsschmiede.' : 'Fusion aus.', 3500);
-});
-updateFusionBtn();
 // Kartennebel: ein Schalter für Kampagne und Freies Spiel (gilt für neue Spiele)
 function updateFogBtn() { $('btnFog').textContent = `🌫️ Nebel: ${settings.fog ? 'An' : 'Aus'}`; $('btnFog').classList.toggle('primary', !!settings.fog); }
 $('btnFog').addEventListener('click', () => {
@@ -2075,8 +2110,8 @@ $('btnFog').addEventListener('click', () => {
 updateFogBtn();
 $('btnContinue').addEventListener('click', () => {
   const g = store.savedGame();
-  if (!g || g.v !== STATE_VERSION) { store.clearGame(); $('btnContinue').classList.add('hidden'); return; }
-  S = g;
+  if (!loadable(g)) { store.clearGame(); $('btnContinue').classList.add('hidden'); return; }
+  S = migrateState(g);
   enterGame();
 });
 $('btnMenu').addEventListener('click', gameMenu);
