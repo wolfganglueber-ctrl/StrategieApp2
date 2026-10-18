@@ -1,5 +1,5 @@
 // Spielregeln und Spielzustand. Komplett ohne DOM, damit auch Simulationen in Node laufen.
-import { getGeo } from './hex.js';
+import { getGeo, hexCenter, pixelToIndex, SQRT3 } from './hex.js';
 import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
@@ -403,7 +403,7 @@ export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp
   // Verbände teilen Schaden mal Mitgliederzahl aus; Flächenwaffen treffen Verbände härter
   const na = att.count || 1, nd = def.count || 1;
   const crowd = nd > 1 && splashOf(att) > 0 ? 1 + 0.25 * (nd - 1) : 1;
-  const dmg = Math.round((aF / tot) * atk * 4.5 * na * crowd * (inAura(state, def) ? 1 - AURA.reduce : 1));
+  const dmg = Math.round((aF / tot) * atk * 4.5 * na * crowd * (UNITS[att.type].dmgMult || 1) * (inAura(state, def) ? 1 - AURA.reduce : 1));
   const kill = dmg >= def.hp;
   let counter = 0;
   const geo = geoOf(state);
@@ -680,11 +680,27 @@ export function getHealTargets(state, u, fromIdx = u.idx) {
   return state.units.filter((t) => t.owner === u.owner && t !== u && !isStructure(t) && geo.dist(fromIdx, t.idx) <= HEAL.range && needsHeal(state, u, t));
 }
 
-// Flächenschaden (Katapult): gegnerische Einheiten neben dem Ziel bekommen einen Teil des Schadens
-export function splashDamage(state, att, idx, dmg) {
+// Flächenschaden (Katapult): gegnerische Einheiten neben dem Ziel bekommen einen Teil des Schadens.
+// Feueratem in Linie (Drache): die Felder hinter dem Ziel in Angriffsrichtung werden mitgetroffen.
+export function splashDamage(state, att, idx, dmg, from = att.idx) {
   const geo = geoOf(state);
   const res = [];
+  const line = UNITS[att.type].line;
+  const inLine = new Set();
+  if (line && from !== idx) {
+    const a = hexCenter(from, state.cols, 1), b = hexCenter(idx, state.cols, 1);
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1, dx = ((b.x - a.x) / len) * SQRT3, dy = ((b.y - a.y) / len) * SQRT3;
+    line.forEach((f, k) => {
+      const j = pixelToIndex(b.x + dx * (k + 1), b.y + dy * (k + 1), 1, state.cols, state.rows);
+      if (j < 0) return;
+      inLine.add(j);
+      const o = state.units.find((x) => x.idx === j);
+      if (o && o.owner !== att.owner) res.push({ unit: o, dmg: Math.round(dmg * f * (inAura(state, o) ? AURA.splash : 1)) });
+    });
+  }
+  if (!splashOf(att)) return res.filter((h) => h.dmg > 0);
   for (const j of geo.nb[idx]) {
+    if (inLine.has(j)) continue;
     const o = state.units.find((x) => x.idx === j);
     if (!o || o.owner === att.owner) continue;
     const d = Math.round(dmg * splashOf(att) * (inAura(state, o) ? AURA.splash : 1));
@@ -693,9 +709,9 @@ export function splashDamage(state, att, idx, dmg) {
   return res;
 }
 
-function applySplash(state, att, idx, dmg) {
+function applySplash(state, att, idx, dmg, from) {
   const out = [];
-  for (const { unit, dmg: d } of splashDamage(state, att, idx, dmg)) {
+  for (const { unit, dmg: d } of splashDamage(state, att, idx, dmg, from)) {
     const hit = { id: unit.id, idx: unit.idx, dmg: d, killed: false, snap: snapshotUnit(unit) };
     unit.hp -= d;
     if (unit.hp <= 0) {
@@ -765,7 +781,7 @@ export function applyAction(state, a) {
           state.stats.losses[pid] += u.count || 1;
         }
       }
-      if (splashOf(u)) e.splash = applySplash(state, u, defSnap.idx, r.dmg);
+      if (splashOf(u) || UNITS[u.type].line) e.splash = applySplash(state, u, defSnap.idx, r.dmg, attSnap.idx);
       ev.push(e);
       // Erfahrung: Angreifer +1 (+1 für einen Sieg), überlebender Verteidiger +1
       // Erfahrung = besiegte Gegner (auch durch Flächenschaden oder Gegenschlag)

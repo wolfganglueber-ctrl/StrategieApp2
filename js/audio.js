@@ -428,14 +428,20 @@ class SoundEngine {
         this.grains(d, t, { n: 3, spread: 0.06, fmin: 1500, fmax: 3500, vol: 0.06 * v, pan });
         break;
       case 'bow':
-        // Sehne: gezupfte, schnell gedämpfte Saite + Luftzug des Pfeils
-        this.pluck(d, t, { f: 98, dur: 0.35, damp: 0.985, vol: 0.5 * v, pan, lp: 2500, verb: 0.15 });
-        this.noise(d, t + 0.01, { type: 'highpass', f: 2500, dur: 0.03, vol: 0.12 * v, pan });
-        this.noise(d, t + 0.04, { buf: this.pink, type: 'bandpass', f: 1600, f2: 900, q: 1.2, dur: 0.28, vol: 0.18 * v, attack: 0.04, pan });
+        // Langbogen: Sehne schlägt gegen den Armschutz (trockener Klatsch), tiefes kurzes Brummen des Bogens,
+        // dann das Zischen des Pfeils, das mit flatternder Befiederung schnell leiser wird
+        this.noise(d, t, { type: 'bandpass', f: 1900, q: 2.5, dur: 0.018, vol: 0.45 * v * 1.5, pan, verb: 0.08 });
+        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 600, dur: 0.05, vol: 0.35 * v * 1.5, pan });
+        this.pluck(d, t + 0.002, { f: 72, dur: 0.2, damp: 0.965, vol: 0.32 * v * 1.5, pan, lp: 900, verb: 0.1 });
+        this.noise(d, t + 0.025, { buf: this.pink, type: 'bandpass', f: 3400, f2: 1300, q: 2.6, dur: 0.34, vol: 0.2 * v * 1.5, attack: 0.03, pan, verb: 0.12 });
+        for (let i = 0; i < 6; i++) this.noise(d, t + 0.04 + i * 0.022, { type: 'bandpass', f: 4800 - i * 350, q: 6, dur: 0.012, vol: (0.06 - i * 0.008) * v * 1.5, pan });
         break;
       case 'thunk':
-        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 1400, dur: 0.06, vol: 0.6 * v, pan, verb: 0.15 });
-        this.pluck(d, t, { f: 210, dur: 0.12, damp: 0.96, vol: 0.25 * v, pan, lp: 1800 });
+        // Einschlag: dumpfes Eindringen in Holz/Schild mit kurzem Nachzittern des Schafts
+        this.noise(d, t, { type: 'highpass', f: 3000, dur: 0.008, vol: 0.25 * v, pan });
+        this.thump(d, t, { f: 150, vol: 0.32 * v, dur: 0.09, pan, verb: 0.1 });
+        this.noise(d, t, { buf: this.brown, type: 'lowpass', f: 900, dur: 0.045, vol: 0.45 * v, pan, verb: 0.12 });
+        this.pluck(d, t + 0.01, { f: 330, dur: 0.16, damp: 0.93, vol: 0.12 * v, pan, lp: 2200 });
         break;
       case 'catapult':
         // Knarzendes Holz (Ratsche), Schlag des Wurfarms, dann der Luftzug des Steins

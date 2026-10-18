@@ -183,8 +183,8 @@ function attackScore(state, ctx, P, u, t, from) {
   const tc = cityOn(state, t.idx);
   if (tc && tc.owner === u.owner) gain += r.kill ? 8 : 3; // Besetzer aus eigener Stadt werfen
   if (tc && tc.capital && tc.owner === u.owner) gain += r.kill ? 6 : 2;
-  if (UNITS[u.type].splash) {
-    for (const h of splashDamage(state, u, t.idx, r.dmg)) {
+  if (UNITS[u.type].splash || UNITS[u.type].line) {
+    for (const h of splashDamage(state, u, t.idx, r.dmg, from)) {
       const hv = baseValue(h.unit);
       gain += (Math.min(h.dmg, h.unit.hp) / ctx.st(h.unit).hp) * hv * 1.2 + (h.dmg >= h.unit.hp ? hv + 3 : 0);
     }
