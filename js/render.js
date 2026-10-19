@@ -117,12 +117,14 @@ export class Renderer {
     const vw = this.w / z, vh = Math.max(50, this.h - this.viewPad.top - this.viewPad.bottom) / z;
     const off = ((this.viewPad.top + this.h - this.viewPad.bottom) / 2 - this.h / 2) / z;
     const m = 24 / z;
-    if (bx1 - bx0 <= vw) this.cam.x = (bx0 + bx1) / 2;
-    else this.cam.x = Math.min(bx1 - vw / 2 + m, Math.max(bx0 + vw / 2 - m, this.cam.x));
+    // Über den Rand hinaus scrollen: links/rechts 2 Felder, unten 3, oben 1 – damit Randfelder nicht unter Menüs liegen
+    const ex = HEX * SQRT3 * 2, eyTop = HEX * 1.5, eyBottom = HEX * 1.5 * 3;
+    if (bx1 - bx0 + 2 * ex <= vw) this.cam.x = (bx0 + bx1) / 2;
+    else this.cam.x = Math.min(bx1 + ex - vw / 2 + m, Math.max(bx0 - ex + vw / 2 - m, this.cam.x));
     // Senkrecht: so weit scrollen, dass die äußersten Felder über dem offenen Menü unten
     // bzw. unter der Rohstoffleiste oben sichtbar werden (overlayPad wird laufend gemessen)
     const T = Math.max(this.viewPad.top, this.overlayPad?.top || 0), Bp = Math.max(this.viewPad.bottom, this.overlayPad?.bottom || 0);
-    const yMin = by0 + (this.h / 2 - T) / z - m, yMax = by1 - (this.h / 2 - Bp) / z + m;
+    const yMin = by0 - eyTop + (this.h / 2 - T) / z - m, yMax = by1 + eyBottom - (this.h / 2 - Bp) / z + m;
     if (by1 - by0 <= vh && yMin > yMax) this.cam.y = (by0 + by1) / 2 - off;
     else if (yMin > yMax) this.cam.y = (yMin + yMax) / 2;
     else this.cam.y = Math.min(yMax, Math.max(yMin, this.cam.y));
