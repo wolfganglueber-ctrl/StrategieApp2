@@ -261,26 +261,51 @@ export class Renderer {
     const fx = this.fx, fall = fallDir;
     const c0 = this.center(unit.idx);
     const t = lungeTo != null ? this.center(lungeTo) : null;
-    this.addAnim(ms, null, (ctx, p) => {
+    // Kampfeffekte: Besiegte legen sich schlafen (zZZ) und verschwinden danach – dafür länger sichtbar
+    const tDie = ms * fadeFrom, total = fx ? tDie + 1500 : ms;
+    this.addAnim(total, null, (ctx, p) => {
+      const now = p * total;
       let x = c0.x, y = c0.y;
-      if (t && p < fadeFrom) {
-        const e = Math.sin((p / fadeFrom) * Math.PI) * 0.4;
+      if (t && now < tDie) {
+        const e = Math.sin((now / tDie) * Math.PI) * 0.4;
         x += (t.x - c0.x) * e;
         y += (t.y - c0.y) * e;
       }
-      const f = p < fadeFrom ? 0 : (p - fadeFrom) / (1 - fadeFrom);
       if (fx) {
-        // Kampfeffekte: die Figur kippt um und verblasst erst danach
+        const d = Math.max(0, now - tDie); // Zeit seit dem Ende
+        const lie = easeInOut(Math.min(1, d / 450)); // langsam hinlegen
+        const fade = Math.max(0, (d - 1050) / 450);
         const py = y + HEX * 0.3;
         ctx.save();
-        ctx.globalAlpha = 1 - Math.max(0, (f - 0.45) / 0.55);
+        ctx.globalAlpha = 1 - fade;
         ctx.translate(x, py);
-        ctx.rotate(easeOut(Math.min(1, f * 1.6)) * 1.35 * fall);
+        ctx.rotate(lie * 1.45 * fall);
         ctx.translate(-x, -py);
-        this.drawUnit(ctx, unit, x, y + f * HEX * 0.1, 1, false, f > 0 ? Math.max(0, 1 - f * 2) : 0);
+        this.drawUnit(ctx, unit, x, y + lie * HEX * 0.08, 1, false, d > 0 ? Math.max(0, 1 - d / 250) : 0);
         ctx.restore();
+        // zZZ steigt auf (klein → groß, leicht schaukelnd)
+        if (d > 300) {
+          ctx.save();
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ['z', 'Z', 'Z'].forEach((ch, k) => {
+            const q = (d - 300 - k * 170) / 900;
+            if (q <= 0 || q >= 1) return;
+            const zx = x + fall * HEX * (0.25 + k * 0.18) + Math.sin(q * 6 + k) * HEX * 0.06;
+            const zy = y - HEX * (0.35 + k * 0.22) - q * HEX * 0.6;
+            ctx.globalAlpha = Math.min(1, q * 4) * (1 - Math.max(0, (q - 0.6) / 0.4));
+            ctx.font = `italic 800 ${HEX * (0.3 + k * 0.1)}px Georgia, serif`;
+            ctx.lineWidth = HEX * 0.07;
+            ctx.strokeStyle = 'rgba(15,23,42,0.75)';
+            ctx.strokeText(ch, zx, zy);
+            ctx.fillStyle = '#e0e7ff';
+            ctx.fillText(ch, zx, zy);
+          });
+          ctx.restore();
+        }
         return;
       }
+      const f = p < fadeFrom ? 0 : (p - fadeFrom) / (1 - fadeFrom);
       ctx.globalAlpha = 1 - f;
       this.drawUnit(ctx, unit, x, y - f * HEX * 0.2, 1 - f * 0.3, false, f > 0 ? 1 - f : 0);
       ctx.globalAlpha = 1;
