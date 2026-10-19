@@ -14,7 +14,7 @@ import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
-  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, CENTER_YIELD, MAX_SLOTS, BUILDING_FLAT, buildingFactor, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
+  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, CENTER_YIELD, MAX_SLOTS, BUILDING_FLAT, buildingYield, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
   BOOST_PCT, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
@@ -1619,7 +1619,7 @@ function renderCityPanel(panel, ci, occ) {
     // Reihenfolge: Wirtschaft, dann Turm und Steinwall, dann alles andere
     const tiles = cityTiles(S, ci);
     const ECO = ['farm', 'lumber', 'mine', 'market'];
-    const eco = (n, what, res) => n ? `+${n * buildingFactor(c.level)} ${res} (${n} ${what} × ${buildingFactor(c.level)})` : `+${BUILDING_FLAT + c.level - 1} ${res} (pauschal, kein ${what} im Stadtkreis)`;
+    const eco = (n, what, res) => n ? `+${buildingYield(n, c.level)} ${res} (${n} ${what}, Stufe ${c.level})` : `+${BUILDING_FLAT + c.level - 1} ${res} (pauschal, kein ${what} im Stadtkreis)`;
     const ecoDesc = { farm: eco(tiles.food, 'Wiese/See', 'Nahrung'), lumber: eco(tiles.wood, 'Wald', 'Holz'), mine: eco(tiles.ore, 'Hügel/Berg', 'Erz') };
     const structRows = () => {
       for (const [type, text] of [['tower', 'Schießt auf Gegner, 3 Ausbaustufen'], ['barrier', 'Blockiert den Weg, bildet Mauern']]) {
@@ -1658,7 +1658,7 @@ function renderCityPanel(panel, ci, occ) {
           // Zuwachs: Stadtzentrum + je Feld mit passendem Gebäude (Bauernhof/Holzfäller/Mine) +1
           const t = cityTiles(S, ci);
           const B = { food: 'farm', wood: 'lumber', ore: 'mine' };
-          const parts = RES.map((k) => `+${CENTER_YIELD[c.level + 1] - CENTER_YIELD[c.level] + (hasBuilding(c, B[k]) ? (t[k] ? t[k] * (buildingFactor(c.level + 1) - buildingFactor(c.level)) : 1) : 0)} ${RES_INFO[k].name}`).join(', ');
+          const parts = RES.map((k) => `+${CENTER_YIELD[c.level + 1] - CENTER_YIELD[c.level] + (hasBuilding(c, B[k]) ? (t[k] ? buildingYield(t[k], c.level + 1) - buildingYield(t[k], c.level) : 1) : 0)} ${RES_INFO[k].name}`).join(', ');
           return `Ausbau zur ${CITY_NAMES[c.level + 1]}: ${citySlots({ level: c.level + 1 }) > citySlots(c) ? '+1 Bauplatz, ' : ''}${parts}`;
         })()),
         el('button', { class: 'btn small primary', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost, p.res))));
@@ -2155,7 +2155,7 @@ function renderHelp() {
     <b>Erschüttert ⭐:</b> Greifen in einer Runde mindestens zwei verschiedene Einheiten denselben Gegner an (Katapult und Tribok: schon ein Angriff), ist er bis zu seinem nächsten Zug erschüttert: halbe Verteidigung, kein Gegenschlag. Troll und Drache werden nie erschüttert. Tipp: erst zwei Fernkämpfer, dann die Nahkämpfer.</p>
     <h3>Städte</h3>
     <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden; Türme und Steinwälle in ihrem Gebiet wechseln mit auf deine Seite.
-    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz (höchstens ${MAX_SLOTS}) und mehr Ertrag: Das Stadtzentrum liefert je Rohstoff ${CENTER_YIELD.slice(1).join(' / ')}. Jedes Feld im Stadtkreis liefert 1 seines Rohstoffs – mit Bauernhof (Wiese/See), Holzfäller (Wald) oder Mine (Hügel/Gebirge) kommt je passendem Feld +1 dazu, ab Stadtstufe 4 +2, ab Stufe 7 +3. Ob du zuerst baust oder ausbaust, ist egal. Hohe Stadtstufen sind teuer – überlege, wo sich der Ausbau lohnt.</p>
+    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz (höchstens ${MAX_SLOTS}) und mehr Ertrag: Das Stadtzentrum liefert je Rohstoff ${CENTER_YIELD.slice(1).join(' / ')}. Jedes Feld im Stadtkreis liefert 1 seines Rohstoffs – mit Bauernhof (Wiese/See), Holzfäller (Wald) oder Mine (Hügel/Gebirge) kommt je passendem Feld +1 dazu und mit jeder weiteren Stadtstufe +½ je Feld (Stufe 8: 4½ je Feld). Ob du zuerst baust oder ausbaust, ist egal. Hohe Stadtstufen sind teuer und zahlen sich erst über viele Runden aus – in langen Partien lohnen sie sich.</p>
     <h3>Versorgung</h3>
     <p><b>Versorgung:</b> Oben neben ⚔ steht „Truppen/Versorgung“. Jede Stadt versorgt Truppen (${[1, 2, 3, 4, 5, 6, 7, 8].map((l) => citySupply({ level: l })).join(' / ')} je nach Stufe; Basilisk zählt 2, Troll und Drache 3). Jede Einheit isst 2 Nahrung pro Runde. Einheiten über der Versorgung kosten doppelten Unterhalt, über dem 1,5-Fachen dreifachen. Eine riesige Armee frisst also schnell den ganzen Ertrag – lieber wenige, gut verbesserte Einheiten.</p>
     <h3>Gebäude</h3>

@@ -311,9 +311,9 @@ export const TRADE_RATE_GUILD = 2;
 
 // Gebäude: jede Stadt hat so viele Bauplätze wie ihre Stufe (höchstens 6)
 export const BUILDINGS = {
-  farm: { art: 'einen', name: 'Bauernhof', icon: '🌾', cost: { wood: 4 }, desc: '+1 Nahrung je Wiese/See im Stadtkreis, ab Stadtstufe 4 +2, ab 7 +3 (ohne: +4, +1 je Stufe)' },
-  lumber: { art: 'einen', name: 'Holzfäller', icon: '🌲', cost: { food: 4 }, desc: '+1 Holz je Wald im Stadtkreis, ab Stadtstufe 4 +2, ab 7 +3 (ohne: +4, +1 je Stufe)' },
-  mine: { art: 'eine', name: 'Mine', icon: '⛏️', cost: { food: 4, wood: 4 }, desc: '+1 Erz je Hügel/Berg im Stadtkreis, ab Stadtstufe 4 +2, ab 7 +3 (ohne: +4, +1 je Stufe)' },
+  farm: { art: 'einen', name: 'Bauernhof', icon: '🌾', cost: { wood: 4 }, desc: '+1 Nahrung je Wiese/See im Stadtkreis, mit jeder weiteren Stadtstufe +½ je Feld (ohne: +4, +1 je Stufe)' },
+  lumber: { art: 'einen', name: 'Holzfäller', icon: '🌲', cost: { food: 4 }, desc: '+1 Holz je Wald im Stadtkreis, mit jeder weiteren Stadtstufe +½ je Feld (ohne: +4, +1 je Stufe)' },
+  mine: { art: 'eine', name: 'Mine', icon: '⛏️', cost: { food: 4, wood: 4 }, desc: '+1 Erz je Hügel/Berg im Stadtkreis, mit jeder weiteren Stadtstufe +½ je Feld (ohne: +4, +1 je Stufe)' },
   barracks: { art: 'eine', name: 'Kaserne', icon: '🛡️', cost: { wood: 6, ore: 4 }, desc: 'Ritter möglich, neue Einheiten können sofort ziehen' },
   workshop: { art: 'eine', name: 'Werkstatt', icon: '⚙️', cost: { wood: 8, ore: 4 }, desc: 'Katapulte möglich' },
   wall: { art: 'eine', name: 'Mauer', icon: '🧱', cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt ×2,2' },
@@ -342,9 +342,10 @@ export function cityRadius() {
 export const MAX_SLOTS = 6;
 // Bauernhof/Holzfäller/Mine ohne passendes Feld im Stadtkreis
 export const BUILDING_FLAT = 4;
-// Bauernhof/Holzfäller/Mine: je passendem Feld +1 auf Stufe 1–3, +2 auf 4–6, +3 auf 7–8
-export function buildingFactor(level) {
-  return Math.ceil(level / 3);
+// Bauernhof/Holzfäller/Mine: je passendem Feld +1 auf Stufe 1, mit jeder weiteren Stadtstufe +½ je Feld
+// (gleichmäßiger Zuwachs, aufgerundet auf die ganze Stadt) – hohe Stufen lohnen sich in langen Partien
+export function buildingYield(tiles, level) {
+  return Math.ceil((tiles * (level + 1)) / 2);
 }
 // Versorgung: Einheiten über der Versorgung der Städte kosten doppelten, über dem 1,5-Fachen dreifachen Unterhalt
 export function citySlots(city) {
