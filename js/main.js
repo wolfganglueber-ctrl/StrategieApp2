@@ -328,6 +328,45 @@ function unitTargets(u, occ) {
   return curVis ? t.filter((x) => curVis[x.idx]) : t;
 }
 
+// Gegner, die die Einheit erst nach einem Zug erreicht (bestes Angriffsfeld je Gegner)
+function reachTargets(u, occ) {
+  if (!canMove(u) || !canAttack(u) || UNITS[u.type].noMoveAttack || isStructure(u)) return new Map();
+  const geo = getGeoOf();
+  const rng = statsOf(S, u).range;
+  const spots = [...getMoves(S, u, occ).keys()];
+  const direct = new Set(unitTargets(u, occ));
+  const res = new Map();
+  for (const x of S.units) {
+    if (x.owner === u.owner || direct.has(x) || (curVis && !curVis[x.idx])) continue;
+    let best = null;
+    for (const d of spots) {
+      const dd = geo.dist(d, x.idx);
+      if (dd > rng || dd < (UNITS[u.type].minRange || 1)) continue;
+      // Fernkämpfer bleiben auf Abstand, sonst kürzester Weg
+      const score = (rng > 1 ? -dd * 3 : 0) + geo.dist(u.idx, d);
+      if (!best || score < best.score) best = { d, score };
+    }
+    if (best) res.set(x, best.d);
+  }
+  return res;
+}
+
+// Erst auf das beste Feld ziehen, dann angreifen
+async function doApproachAttack(u, t, spot) {
+  if (busy) return;
+  undoStack = [];
+  busy = true;
+  vibrate(30);
+  const mv = applyAction(S, { type: 'move', unitId: u.id, to: spot });
+  if (mv) { refresh(); await play(mv, 1, false); }
+  const ev = mv && unitById(S, t.id) ? applyAction(S, { type: 'attack', unitId: u.id, targetId: t.id }) : null;
+  if (ev) { refresh(); await play(ev, 1, false); }
+  busy = false;
+  clearSel();
+  refresh();
+  if (S.over) gameOver();
+}
+
 function unitHeals(u) {
   return canAttack(u) ? getHealTargets(S, u) : [];
 }
@@ -362,8 +401,14 @@ function refresh() {
         if (canAttack(u)) o.heals = new Set(getHealTargets(S, u).map((x) => x.idx));
       }
       const t = unitTargets(u, occ);
-      if (t.length) {
+      // Gegner, die erst nach dem Ziehen erreichbar sind, ebenfalls rot (Vorschau vom besten Angriffsfeld)
+      const reach = reachTargets(u, occ);
+      if (t.length || reach.size) {
         o.targets = new Map();
+        for (const [x, spot] of reach) {
+          const r = computeCombat(S, u, x, spot);
+          o.targets.set(x.idx, { idx: x.idx, dmg: r.dmg, counter: r.counter, kill: r.kill, die: r.die });
+        }
         for (const x of t) {
           const r = computeCombat(S, u, x);
           // Mitgetroffene Gegner (Flächenschaden, Feueratem in Linie)
@@ -499,6 +544,10 @@ function onTap(sx, sy) {
   }
   if (selU && selU.owner === S.current) {
     if (u && u.owner !== S.current && unitTargets(selU, occ).includes(u)) { doAttack(selU, u); return; }
+    if (u && u.owner !== S.current) {
+      const spot = reachTargets(selU, occ).get(u);
+      if (spot != null) { doApproachAttack(selU, u, spot); return; }
+    }
     if (u && u.owner === S.current && unitHeals(selU).includes(u)) { doHeal(selU, u); return; }
     if (!u && canMove(selU) && getMoves(S, selU, occ).has(i)) { doMove(selU, i); return; }
   }
@@ -1745,7 +1794,7 @@ function renderPanelContent(panel) {
   if (u) {
     const targets = unitTargets(u, occ);
     let status;
-    if (canMove(u)) status = targets.length ? 'Ziehen oder Ziel antippen' : unitHeals(u).length ? 'Ziehen oder Grün = heilen' : 'Helles Feld = ziehen';
+    if (canMove(u)) status = targets.length || reachTargets(u, occ).size ? 'Ziehen oder rotes Ziel antippen' : unitHeals(u).length ? 'Ziehen oder Grün = heilen' : 'Helles Feld = ziehen';
     else if (targets.length) status = 'Rotes Ziel = angreifen';
     else if (unitHeals(u).length) status = 'Grüne Einheit = heilen';
     else status = u.type === 'tower' ? 'Kein Ziel in Reichweite' : u.type === 'barrier' ? 'Blockiert den Weg' : 'Fertig für diese Runde';
@@ -2150,7 +2199,7 @@ function renderHelp() {
     <p>Wähle eine Einheit und tippe auf „👥 Alle in der Nähe“ (alle eigenen Einheiten im Umkreis) oder „👥 Alle Ritter“ usw. (nur gleiche Einheiten im Umkreis); am PC geht auch Shift + Klick. Danach ist der Gruppenmodus aktiv. Weitere eigene Einheiten fügst du per Tipp hinzu oder nimmst sie wieder heraus.
     Ein Tipp auf einen Gegner: Alle greifen nacheinander an und rücken dafür heran (Fernkämpfer zuerst), bis jeder dran war oder das Ziel fällt. Zauberer ziehen mit, greifen aber nicht automatisch an (sie heilen lieber). Die Gruppe bleibt gewählt, solange noch ein Mitglied ziehen oder angreifen kann – tippe einfach den nächsten Gegner an. Erst wenn alle fertig sind, löst sie sich automatisch auf. Ein Tipp auf ein hell markiertes Feld bewegt die Gruppe, ein Tipp auf ein anderes leeres Feld (oder „Auflösen“) beendet sie. Das Gruppenmenü unten bleibt bewusst klein: „+ Umgebung“, „+ Ritter“ usw. (nur Einheiten vom Typ der zuerst gewählten) und „Auflösen“.</p>
     <h3>Angreifen</h3>
-    <p>Wählst du eine Einheit, zeigen rote Felder alle Ziele. Die Blase über dem Ziel nennt den Schaden (↩ = Gegenschlag, ✖ = Ziel wird besiegt). Ein Tipp auf das Ziel greift an.
+    <p>Wählst du eine Einheit, zeigen rote Felder alle Ziele – auch solche, die sie erst nach dem Ziehen erreicht. Die Blase über dem Ziel nennt den Schaden (↩ = Gegenschlag, ✖ = Ziel wird besiegt). Ein Tipp auf das Ziel greift an; ist es noch zu weit weg, zieht die Einheit vorher auf das beste Feld (Fernkämpfer halten Abstand).
     Nahkämpfer rücken nach einem Sieg auf das Feld vor.<br>
     <b>Erschüttert ⭐:</b> Greifen in einer Runde mindestens zwei verschiedene Einheiten denselben Gegner an (Katapult und Tribok: schon ein Angriff), ist er bis zu seinem nächsten Zug erschüttert: halbe Verteidigung, kein Gegenschlag. Troll und Drache werden nie erschüttert. Tipp: erst zwei Fernkämpfer, dann die Nahkämpfer.</p>
     <h3>Städte</h3>
