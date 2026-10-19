@@ -259,7 +259,8 @@ async function doGroupMove(target) {
   refresh();
 }
 
-// Gruppe automatisch auflösen, sobald sie gezogen und angegriffen hat oder niemand mehr etwas tun kann
+// Gruppe automatisch auflösen, sobald sie gezogen und angegriffen hat (egal in welcher Reihenfolge,
+// Heranrücken beim Gruppenangriff zählt als Ziehen) oder niemand mehr ziehen oder angreifen kann
 function groupDone(kind) {
   if (!sel.group) return;
   sel.groupDid = { ...(sel.groupDid || {}), [kind]: true };
@@ -278,6 +279,7 @@ async function doGroupAttack(target) {
   if (!attackers.length) return;
   undoStack = [];
   busy = true;
+  let approached = false; // Heranrücken zählt für die Gruppe als Ziehen
   vibrate(30);
   // Alle nacheinander, bis jeder dran war oder das Ziel fällt
   for (const u of attackers) {
@@ -289,6 +291,7 @@ async function doGroupAttack(target) {
     if (spot !== u.idx) {
       const mv = applyAction(S, { type: 'move', unitId: u.id, to: spot });
       if (!mv) continue;
+      approached = true;
       refresh();
       await play(mv, 1, false);
     }
@@ -299,6 +302,7 @@ async function doGroupAttack(target) {
   }
   if (!unitById(S, target.id)) toast('Ziel besiegt.');
   busy = false;
+  if (approached) sel.groupDid = { ...(sel.groupDid || {}), move: true };
   groupDone('attack');
   refresh();
   if (S.over) gameOver();
@@ -2268,4 +2272,4 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !loc
 }
 
 // Für Tests/Debugging
-window.__hex = { get state() { return S; }, R };
+window.__hex = { get state() { return S; }, get sel() { return sel; }, R };
