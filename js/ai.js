@@ -2,12 +2,12 @@
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
 import {
   UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, BASE_RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY, structureLimit,
-  costTotal, UNIT_UPS, unitUpCost, boostCost, skillCost, PLANT_COST,
+  costTotal, UNIT_UPS, unitUpCost, boostCost, skillCost, PLANT_COST, slotsUsed,
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
   spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, unitUpOptions, unitUpList, canBuild, canPetrify, wouldShake,
-  DMG_K, canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage, canTerraform,
+  DMG_K, canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage, canTerraform, cityTiles,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -322,20 +322,13 @@ function weightedPick(list, wf, rng) {
 
 function chooseBuilding(state, ctx, pid, ci, inc) {
   const c = state.cities[ci];
-  if (c.buildings.length >= citySlots(c)) return null;
-  const res = state.players[pid].res;
-  const territory = ctx.territory;
-  let forests = 0, rocks = 0, grapes = 0;
-  for (let i = 0; i < territory.length; i++) {
-    if (territory[i] !== ci) continue;
-    if (state.grapes?.includes(i)) grapes++;
-    if (state.terrain[i] === 'forest') forests++;
-    if (state.terrain[i] === 'hill' || state.terrain[i] === 'mountain') rocks++;
-  }
+  const full = slotsUsed(c) >= citySlots(c);
+  const t = cityTiles(state, ci, ctx.territory);
+  // Wirtschaftsgebäude nur mit passenden Feldern (sie belegen keinen Bauplatz)
   const score = {
-    farm: inc.food < 6 ? 3 : 1,
-    lumber: 1 + forests * 1.2 - (inc.wood > inc.ore + 4 ? 1 : 0),
-    mine: 1 + rocks * 2.4 + (inc.ore < inc.wood ? 1 : 0),
+    farm: t.food ? 2 + t.food * 0.6 + (inc.food < 6 ? 2 : 0) : 0,
+    lumber: t.wood ? 1.5 + t.wood * 1.2 - (inc.wood > inc.ore + 4 ? 1 : 0) : 0,
+    mine: t.ore ? 1.5 + t.ore * 2 + (inc.ore < inc.wood ? 1 : 0) : 0,
     barracks: c.capital || ctx.ownCities.length >= 3 ? 2.2 : 0.3,
     workshop: ctx.ownCities.length >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'barracks')) ? 1.4 : 0.2,
     dragonlair: c.level >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.6 : 0, // KI baut sie spät
@@ -344,11 +337,11 @@ function chooseBuilding(state, ctx, pid, ci, inc) {
     sanctum: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'sanctum')) ? 1.5 : 0.3,
     wall: (ctx.cityDanger.get(c.idx) || 0) > 3 ? 3 : 0.4,
     market: ctx.ownCities.some((x) => hasBuilding(x, 'market')) ? 0 : ctx.ownCities.length >= 3 ? 2 : 1,
-    press: grapes ? 1.2 + grapes : 0, // Kelterei nur bei Manatrauben im Stadtkreis
+    press: t.mana ? 1.5 + t.mana : 0, // Kelterei nur bei Traubenhainen im Stadtkreis
   };
   let best = null;
   for (const [b, v] of Object.entries(score)) {
-    if (v <= 0.5 || canBuild(state, pid, c, b)) continue;
+    if (v <= 0.5 || (full && !BUILDINGS[b].eco) || canBuild(state, pid, c, b)) continue;
     if (!best || v > best.v) best = { b, v };
   }
   return best && best.b;
@@ -402,12 +395,17 @@ function economyAction(state, ctx, P, pid, rng) {
       break;
     }
   }
-  // Aufforsten, wenn Holz knapp ist und viel Wiese im Gebiet liegt (abseits der Gegner)
-  if (P.smart && rng() < 0.25 && canAfford(res, PLANT_COST) && (state.plants || []).filter((p) => p.pid === pid).length < ctx.ownCities.length) {
+  // Wiesen bearbeiten (abseits der Gegner): Wald bei Holzmangel, Grube bei Erzmangel, Traubenhain für Zauberer
+  if (P.smart && rng() < 0.3 && canAfford(res, PLANT_COST) && (state.plants || []).filter((p) => p.pid === pid).length < ctx.ownCities.length) {
     const inc = incomeOf(state, pid, ctx.territory);
-    if (inc.wood * 3 < inc.food) {
+    const sanctum = ctx.ownCities.some((x) => hasBuilding(x, 'sanctum'));
+    const to = sanctum && inc.mana < 3 ? 'vine' : inc.ore * 2 < inc.food ? 'pit' : inc.wood * 2 < inc.food ? 'forest' : null;
+    const need = { forest: 'lumber', pit: 'mine', vine: 'press' }[to];
+    if (to) {
       for (let i = 0; i < ctx.territory.length; i++) {
-        if ((ctx.distEnemy[i] < 0 || ctx.distEnemy[i] > 4) && canTerraform(state, pid, i, ctx.territory) === 'plant') return { type: 'plant', idx: i };
+        const c = state.cities[ctx.territory[i]];
+        if (!c || (to !== 'vine' && !hasBuilding(c, need))) continue;
+        if ((ctx.distEnemy[i] < 0 || ctx.distEnemy[i] > 4) && canTerraform(state, pid, i, ctx.territory) === 'plant') return { type: 'plant', idx: i, to };
       }
     }
   }
@@ -425,7 +423,7 @@ function economyAction(state, ctx, P, pid, rng) {
       if (b) return { type: 'build', idx: c.idx, building: b };
     }
     const ups = safe
-      .filter((c) => c.level < CITY_MAX_LEVEL && c.buildings.length >= citySlots(c) - 1 && canAfford(res, upgradeCostOf(state, c)))
+      .filter((c) => c.level < CITY_MAX_LEVEL && slotsUsed(c) >= citySlots(c) - 1 && canAfford(res, upgradeCostOf(state, c)))
       .sort((a, b) => (b.capital - a.capital) || (a.level - b.level));
     if (ups.length) {
       memory.ctxKey = ''; // Ausbau verschiebt Gebietsgrenzen: Karte neu berechnen

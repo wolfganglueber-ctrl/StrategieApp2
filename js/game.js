@@ -1,14 +1,13 @@
 // Spielregeln und Spielzustand. Komplett ohne DOM, damit auch Simulationen in Node laufen.
 import { getGeo, hexCenter, pixelToIndex, SQRT3 } from './hex.js';
 import {
-  TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply, upkeepOf,
+  TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
-  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, BUILDING_FLAT, buildingYield, PLANT_COST, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_PCT, SKILLS, skillsFor, boostCost, skillCost,
+  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, buildingYield, PLANT_COST, START_BUILDINGS, slotsUsed, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_PCT, SKILLS, skillsFor, boostCost, skillCost,
   BASE_RES, MANA,
 } from './data.js';
 import { generateMap } from './mapgen.js';
-import { mulberry32 } from './rng.js';
 
 export const STATE_VERSION = 6;
 
@@ -53,9 +52,10 @@ export function createGame(config) {
   // Hauptstädte zuweisen (Reihenfolge der Spieler gemischt durch Seed)
   const caps = state.cities.filter((c) => c.capital);
   caps.forEach((c, i) => { c.owner = i; c.level = 2; c.castle = true; });
-  for (const c of state.cities) c.buildings = [];
+  for (const c of state.cities) c.buildings = c.capital ? [...START_BUILDINGS] : [];
   state.cities.forEach((c, i) => (state.cityAt[c.idx] = i));
-  state.grapes = placeGrapes(state, config.seed);
+  state.grapes = []; // Traubenhaine (angelegt von den Spielern)
+  state.pits = []; // Erzgruben (gegraben von den Spielern)
   // Startkrieger neben der Hauptstadt
   for (const c of caps) {
     const free = geo.nb[c.idx].filter((j) => TERRAIN[state.terrain[j]].pass && state.cityAt[j] === -1);
@@ -64,21 +64,6 @@ export function createGame(config) {
   }
   startTurn(state);
   return state;
-}
-
-// Manatrauben-Haine: je Hauptstadt einer am Rand des Burggebiets (fair), dazu bei etwa jedem zweiten Dorf einer
-function placeGrapes(state, seed) {
-  const geo = geoOf(state);
-  const rng = mulberry32((seed ^ 0x9e3779b9) >>> 0);
-  const res = [];
-  const ok = (j) => (state.terrain[j] === 'plain' || state.terrain[j] === 'forest') && state.cityAt[j] < 0 && !res.includes(j);
-  for (const c of state.cities) {
-    if (!c.capital && rng() < 0.5) continue;
-    const d = c.capital ? 2 : 1 + Math.floor(rng() * 2);
-    const spots = geo.within(c.idx, 2).filter((j) => ok(j) && geo.dist(j, c.idx) === d);
-    if (spots.length) res.push(spots[Math.floor(rng() * spots.length)]);
-  }
-  return res;
 }
 
 export function cloneState(s) {
@@ -570,38 +555,36 @@ export function upkeepTotal(state, pid) {
 export function cityYield(state, ci, territory = computeTerritory(state)) {
   const inc = { food: 0, wood: 0, ore: 0, mana: 0 };
   const c = state.cities[ci];
-  for (let i = 0; i < territory.length; i++) {
-    if (territory[i] !== ci) continue;
-    if (i === c.idx) {
-      for (const k of BASE_RES) inc[k] += cityCenterYield(c);
-      continue;
-    }
-    // Manatrauben-Hain: Mana (mit Kelterei mehr)
-    if (state.grapes?.includes(i)) inc.mana += MANA.grape + (hasBuilding(c, 'press') ? MANA.press : 0);
-    // Jedes Feld im Stadtkreis liefert 1; erst Bauernhof/Holzfäller/Mine lassen es mit der Stadtstufe wachsen
-    if (state.plants?.some((p) => p.idx === i)) continue; // Schonung: liefert noch nichts
-    const t = state.terrain[i];
-    inc[TERRAIN[t].res]++;
-  }
-  // Bauernhof, Holzfäller, Mine: +1 je passendem Feld im Stadtkreis (Wiese/See, Wald, Hügel/Gebirge)
+  // Felder liefern nur mit passendem Gebäude: Bauernhof (Wiese/See), Holzfäller (Wald), Mine (Hügel, Lehm, Grube, Gebirge ×2), Kelterei (Traubenhain)
   const tiles = cityTiles(state, ci, territory);
   const tech = (t) => c.owner >= 0 && hasTech(state, c.owner, t);
-  // Gebäude: +Stufe je passendem Feld (Reihenfolge von Bau und Ausbau egal); ohne passendes Feld pauschal 4 (+1 je weiterer Stufe)
-  const per = (n) => (n ? buildingYield(n, c.level) : BUILDING_FLAT + c.level - 1);
+  // Gebäude: je passendem Feld 1 auf Stufe 1, +½ je weiterer Stadtstufe; ohne passendes Feld nichts
+  const per = (n) => buildingYield(n, c.level);
   if (hasBuilding(c, 'farm')) inc.food += per(tiles.food) + (tech('plough') ? 2 : 0) + (tech('rotation') ? 2 : 0);
   if (hasBuilding(c, 'lumber')) inc.wood += per(tiles.wood) + (tech('saw') ? 2 : 0);
   if (hasBuilding(c, 'mine')) inc.ore += per(tiles.ore) + (tech('mining') ? 2 : 0) + (tech('smelting') ? 2 : 0);
+  if (hasBuilding(c, 'press')) inc.mana += per(tiles.mana);
   if (hasBuilding(c, 'sanctum')) inc.mana += MANA.sanctum;
   return inc;
 }
 
-// Felder im Stadtkreis je Rohstoff (ohne das Stadtzentrum)
+// Rohstoff eines Feldes: Traubenhain → Mana, Grube → Erz, Schonung/Baustelle → nichts, sonst das Gelände (Gebirge zählt 2)
+export function tileRes(state, i) {
+  if (state.grapes?.includes(i)) return { res: 'mana', n: 1 };
+  if (state.pits?.includes(i)) return { res: 'ore', n: 1 };
+  if (state.plants?.some((p) => p.idx === i)) return null;
+  const T = TERRAIN[state.terrain[i]];
+  return { res: T.res, n: T.n || 1 };
+}
+
+// Felder im Stadtkreis je Rohstoff (ohne das Stadtzentrum, Gebirge zählt doppelt)
 export function cityTiles(state, ci, territory = computeTerritory(state)) {
   const c = state.cities[ci];
-  const n = { food: 0, wood: 0, ore: 0 };
+  const n = { food: 0, wood: 0, ore: 0, mana: 0 };
   for (let i = 0; i < territory.length; i++) {
     if (territory[i] !== ci || i === c.idx) continue;
-    n[TERRAIN[state.terrain[i]].res]++;
+    const t = tileRes(state, i);
+    if (t) n[t.res] += t.n;
   }
   return n;
 }
@@ -627,7 +610,7 @@ export function canBuild(state, pid, c, b) {
   if (B.tech && !hasTech(state, pid, B.tech)) return 'tech';
   if (c.level < (B.minLevel || 0)) return 'level';
   if (B.perRealm && state.cities.filter((x) => x.owner === pid && hasBuilding(x, b)).length >= B.perRealm) return 'realm';
-  if (c.buildings.length >= citySlots(c)) return 'slots';
+  if (!B.eco && slotsUsed(c) >= citySlots(c)) return 'slots';
   if (!canAfford(state.players[pid].res, B.cost)) return 'cost';
   return null;
 }
@@ -722,8 +705,11 @@ export function startTurn(state) {
   // Aufforstung: Schonungen dieses Spielers werden zu Wald
   if (state.plants?.length) {
     for (const p of state.plants.filter((x) => x.pid === pid && x.done <= state.turn)) {
-      state.terrain[p.idx] = 'forest';
-      ev.push({ k: 'grown', idx: p.idx, pid });
+      const to = p.to || 'forest';
+      if (to === 'forest') state.terrain[p.idx] = 'forest';
+      else if (to === 'pit') state.pits = [...(state.pits || []), p.idx];
+      else state.grapes = [...(state.grapes || []), p.idx];
+      ev.push({ k: 'grown', idx: p.idx, pid, to });
     }
     state.plants = state.plants.filter((x) => !(x.pid === pid && x.done <= state.turn));
   }
@@ -998,7 +984,6 @@ export function applyAction(state, a) {
       if (!u || u.owner !== pid || !canAttack(u) || !getBombTargets(state, u).includes(a.idx)) return null;
       player.res.mana -= MANA.bomb;
       state.terrain[a.idx] = 'clay';
-      state.grapes = (state.grapes || []).filter((j) => j !== a.idx);
       u.attacked = u.moved = u.acted = true;
       ev.push({ k: 'bomb', idx: a.idx, by: u.id, from: u.idx });
       break;
@@ -1163,11 +1148,12 @@ export function applyAction(state, a) {
       break;
     }
     case 'plant': {
-      // Wiese im eigenen Stadtgebiet aufforsten (eine Schonung je Stadt gleichzeitig)
-      if (canTerraform(state, pid, a.idx) !== 'plant' || !canAfford(player.res, PLANT_COST)) return null;
+      // Wiese im eigenen Stadtgebiet bearbeiten: aufforsten (Wald), Grube graben (Erz) oder Traubenhain anlegen (Mana)
+      const to = a.to || 'forest';
+      if (!PLANT_KINDS[to] || canTerraform(state, pid, a.idx) !== 'plant' || !canAfford(player.res, PLANT_COST)) return null;
       for (const k of RES) player.res[k] -= PLANT_COST[k] || 0;
-      state.plants = [...(state.plants || []), { idx: a.idx, pid, ci: computeTerritory(state)[a.idx], done: state.turn + PLANT_ROUNDS }];
-      ev.push({ k: 'plant', idx: a.idx });
+      state.plants = [...(state.plants || []), { idx: a.idx, pid, ci: computeTerritory(state)[a.idx], done: state.turn + PLANT_ROUNDS, to }];
+      ev.push({ k: 'plant', idx: a.idx, to });
       break;
     }
     case 'clear': {
@@ -1265,12 +1251,12 @@ export function hasMana(state, pid, n) {
   return (state.players[pid]?.res.mana || 0) >= n;
 }
 
-// Gelände umgestalten: 'plant' (Wiese aufforsten), 'clear' (Wald roden) oder null.
-// Nur im eigenen Stadtgebiet, nicht auf Städten, Burgfeldern oder Manatrauben-Hainen; ohne Begrenzung je Stadt.
+// Gelände umgestalten: 'plant' (Wiese bearbeiten: Wald, Grube oder Traubenhain), 'clear' (Wald roden) oder null.
+// Nur im eigenen Stadtgebiet, nicht auf Städten, Burgfeldern, Gruben oder Traubenhainen; ohne Begrenzung je Stadt.
 export function canTerraform(state, pid, idx, territory = computeTerritory(state)) {
   const c = state.cities[territory[idx]];
   if (!c || c.owner !== pid || state.cityAt[idx] >= 0 || castleOf(state, idx)) return null;
-  if (state.plants?.some((p) => p.idx === idx) || state.grapes?.includes(idx)) return null;
+  if (state.plants?.some((p) => p.idx === idx) || state.grapes?.includes(idx) || state.pits?.includes(idx)) return null;
   const t = state.terrain[idx];
   if (t === 'plain') return 'plant';
   if (t === 'forest') return 'clear';

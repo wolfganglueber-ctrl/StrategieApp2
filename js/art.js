@@ -285,7 +285,7 @@ export function drawForest(ctx, x, y, H, seed) {
   }
 }
 
-// Manatrauben-Hain: Rebstock mit leuchtenden violetten Trauben und magischem Schimmer
+// Traubenhain: Rebstock mit leuchtenden violetten Trauben und magischem Schimmer
 export function drawGrapes(ctx, x, y, H, seed) {
   const s = H / 40;
   ctx.save();
@@ -335,6 +335,59 @@ export function drawGrapes(ctx, x, y, H, seed) {
     ctx.lineTo(px, py + 2.2 * s);
     ctx.lineTo(px - 0.7 * s, py);
     ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// Erzgrube: Stolleneingang mit Holzrahmen, Erzbrocken und Lore
+export function drawPit(ctx, x, y, H, seed) {
+  const s = H / 40;
+  ctx.save();
+  // Aushub
+  ctx.fillStyle = '#7c5a3a';
+  ctx.beginPath();
+  ctx.ellipse(x, y + 6 * s, 20 * s, 10 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#5b4029';
+  ctx.beginPath();
+  ctx.ellipse(x - 2 * s, y + 4 * s, 15 * s, 7 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Stolleneingang
+  ctx.fillStyle = '#1c1410';
+  ctx.beginPath();
+  ctx.moveTo(x - 8 * s, y + 6 * s);
+  ctx.lineTo(x - 8 * s, y - 4 * s);
+  ctx.quadraticCurveTo(x, y - 11 * s, x + 8 * s, y - 4 * s);
+  ctx.lineTo(x + 8 * s, y + 6 * s);
+  ctx.closePath();
+  ctx.fill();
+  // Holzrahmen
+  ctx.strokeStyle = '#a16207';
+  ctx.lineWidth = 2.2 * s;
+  ctx.beginPath();
+  ctx.moveTo(x - 8.5 * s, y + 6 * s);
+  ctx.lineTo(x - 8.5 * s, y - 5 * s);
+  ctx.lineTo(x + 8.5 * s, y - 5 * s);
+  ctx.lineTo(x + 8.5 * s, y + 6 * s);
+  ctx.stroke();
+  // Erzbrocken
+  for (let k = 0; k < 5; k++) {
+    const px = x + 11 * s + (hash(seed * 5 + k) - 0.5) * 9 * s, py = y + 8 * s + (hash(seed * 11 + k) - 0.5) * 5 * s;
+    ctx.fillStyle = hash(seed + k * 7) > 0.5 ? '#94a3b8' : '#64748b';
+    ctx.beginPath();
+    ctx.arc(px, py, (1.5 + hash(seed * 3 + k)) * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(px - 0.4 * s, py - 0.6 * s, 0.9 * s, 0.9 * s);
+  }
+  // Lore
+  ctx.fillStyle = '#57534e';
+  ctx.fillRect(x - 17 * s, y + 4 * s, 8 * s, 5 * s);
+  ctx.fillStyle = '#1c1917';
+  for (const dx of [-15, -11]) {
+    ctx.beginPath();
+    ctx.arc(x + dx * s, y + 9.5 * s, 1.4 * s, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();

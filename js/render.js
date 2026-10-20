@@ -4,7 +4,7 @@ import { hexCenter, pixelToIndex, boardSize, SQRT3, getGeo } from './hex.js';
 import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS, PERKS } from './data.js';
 import { computeTerritory, statsOf, inAura } from './game.js';
 import {
-  hash, hexPath, mix, drawGrapes, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, drawWallLink, FIG_BOX, drawCastle, drawCourt, CASTLE_BOX,
+  hash, hexPath, mix, drawGrapes, drawPit, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, drawWallLink, FIG_BOX, drawCastle, drawCourt, CASTLE_BOX,
 } from './art.js';
 
 export const HEX = 40;
@@ -683,6 +683,37 @@ export class Renderer {
       ctx.fillStyle = 'rgba(120,80,40,0.28)';
       hexPath(ctx, c.x, c.y, HEX - 6);
       ctx.fill();
+      // Baustelle für Erzgrube oder Traubenhain: Holzpflöcke mit Schnur, darin wächst Loch bzw. Reben
+      if (p.to === 'pit' || p.to === 'vine') {
+        ctx.strokeStyle = '#a16207';
+        ctx.lineWidth = HEX * 0.04;
+        for (const [dx, dy] of [[-0.45, -0.2], [0.45, -0.2], [0.45, 0.4], [-0.45, 0.4]]) {
+          ctx.beginPath();
+          ctx.moveTo(c.x + dx * HEX, c.y + dy * HEX);
+          ctx.lineTo(c.x + dx * HEX, c.y + (dy - 0.18) * HEX);
+          ctx.stroke();
+        }
+        if (p.to === 'pit') {
+          ctx.fillStyle = '#2a1d14';
+          ctx.beginPath();
+          ctx.ellipse(c.x, c.y + HEX * 0.12, HEX * 0.3 * grow, HEX * 0.16 * grow, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          for (const dx of [-0.25, 0, 0.25]) {
+            ctx.strokeStyle = '#5b3a1e';
+            ctx.beginPath();
+            ctx.moveTo(c.x + dx * HEX, c.y + HEX * 0.3);
+            ctx.lineTo(c.x + dx * HEX, c.y + HEX * (0.3 - 0.35 * grow));
+            ctx.stroke();
+            ctx.fillStyle = '#4d7c0f';
+            ctx.beginPath();
+            ctx.arc(c.x + dx * HEX, c.y + HEX * (0.3 - 0.35 * grow), HEX * 0.07 * grow + 1, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+        continue;
+      }
       for (const [dx, dy] of [[-0.35, -0.15], [0.3, -0.25], [0, 0.2], [-0.15, 0.45], [0.38, 0.3]]) {
         const x = c.x + dx * HEX, y = c.y + dy * HEX, h = HEX * (0.18 + 0.22 * grow);
         ctx.strokeStyle = '#6b4a2a';
@@ -922,6 +953,7 @@ export class Renderer {
         else if (T[i] === 'hill') drawHill(ctx, c.x, c.y, HEX, i);
         else if (T[i] === 'mountain') drawMountain(ctx, c.x, c.y, HEX, i);
         if (s.grapes?.includes(i)) drawGrapes(ctx, c.x, c.y, HEX, i);
+        else if (s.pits?.includes(i)) drawPit(ctx, c.x, c.y, HEX, i);
       }
     }
     // Städte groß über die Nachbarfelder (je höher die Stufe, desto größer), damit man sie auch mit Einheit darauf gut erkennt

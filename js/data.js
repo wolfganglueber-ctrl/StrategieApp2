@@ -1,6 +1,6 @@
 // Spieldaten: Gelände, Rohstoffe, Einheiten, Städte, Farben, Schwierigkeitsstufen.
 
-// Grundrohstoffe (Gelände, Stadtzentrum, Handel) und Mana für alles Magische
+// Grundrohstoffe (Gelände, Handel) und Mana für alles Magische
 export const BASE_RES = ['food', 'wood', 'ore'];
 export const RES = [...BASE_RES, 'mana'];
 export const RES_INFO = {
@@ -9,16 +9,16 @@ export const RES_INFO = {
   ore: { name: 'Erz', short: 'Erz' },
   mana: { name: 'Mana', short: 'Mana' },
 };
-// Mana: Manatrauben-Haine im Stadtgebiet (+1, mit Kelterei +2 mehr) und Turm der Weisen (+1); Zauberkosten je Einsatz
+// Mana: Traubenhaine mit Kelterei und Turm der Weisen (+1); Zauberkosten je Einsatz
 export const MANA = { grape: 1, press: 2, sanctum: 1, freeze: 3, bomb: 4, areaheal: 2, storm: 8 };
 
-// Gelände liefert Rohstoffe, wenn es im Gebiet einer eigenen Stadt liegt.
+// Gelände liefert Rohstoffe, wenn es im Gebiet einer eigenen Stadt liegt und dort das passende Gebäude steht (n: Felder-Wert, Gebirge 2).
 // Bewegung: alles passierbar außer Gebirge und Wasser.
 export const TERRAIN = {
   plain: { name: 'Wiese', pass: true, res: 'food' },
   forest: { name: 'Wald', pass: true, res: 'wood' },
   hill: { name: 'Hügel', pass: true, res: 'ore' },
-  mountain: { name: 'Gebirge', pass: false, res: 'ore' },
+  mountain: { name: 'Gebirge', pass: false, res: 'ore', n: 2 },
   water: { name: 'See', pass: false, res: 'food' },
   clay: { name: 'Lehm', pass: true, res: 'ore' }, // gesprengtes Gebirge
 };
@@ -316,27 +316,28 @@ export const TRADE_RATE_GUILD = 2;
 
 // Gebäude: jede Stadt hat so viele Bauplätze wie ihre Stufe (höchstens 6)
 export const BUILDINGS = {
-  farm: { art: 'einen', name: 'Bauernhof', icon: '🌾', cost: { wood: 4 }, desc: '+1 Nahrung je Wiese/See im Stadtkreis, mit jeder weiteren Stadtstufe +½ je Feld (ohne: +4, +1 je Stufe)' },
-  lumber: { art: 'einen', name: 'Holzfäller', icon: '🌲', cost: { food: 4 }, desc: '+1 Holz je Wald im Stadtkreis, mit jeder weiteren Stadtstufe +½ je Feld (ohne: +4, +1 je Stufe)' },
-  mine: { art: 'eine', name: 'Mine', icon: '⛏️', cost: { food: 4, wood: 4 }, desc: '+1 Erz je Hügel/Berg im Stadtkreis, mit jeder weiteren Stadtstufe +½ je Feld (ohne: +4, +1 je Stufe)' },
+  farm: { art: 'einen', name: 'Bauernhof', icon: '🌾', eco: 'food', cost: { wood: 10, ore: 10 }, desc: '1 Nahrung je Wiese/See im Stadtkreis, mit jeder weiteren Stadtstufe +½ je Feld' },
+  lumber: { art: 'einen', name: 'Holzfäller', icon: '🌲', eco: 'wood', cost: { food: 10, ore: 10 }, desc: '1 Holz je Wald im Stadtkreis, mit jeder weiteren Stadtstufe +½ je Feld' },
+  mine: { art: 'eine', name: 'Mine', icon: '⛏️', eco: 'ore', cost: { food: 10, wood: 10 }, desc: '1 Erz je Hügel, Lehm oder Grube im Stadtkreis, 2 je Gebirge, mit jeder weiteren Stadtstufe +½ je Feld' },
   barracks: { art: 'eine', name: 'Kaserne', icon: '🛡️', cost: { wood: 6, ore: 4 }, desc: 'Ritter möglich, neue Einheiten können sofort ziehen' },
   workshop: { art: 'eine', name: 'Werkstatt', icon: '⚙️', cost: { wood: 8, ore: 4 }, desc: 'Katapulte möglich' },
   wall: { art: 'eine', name: 'Mauer', icon: '🧱', cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt ×2,2' },
   sanctum: { art: 'einen', name: 'Turm der Weisen', icon: '🔮', cost: { wood: 6, ore: 6 }, desc: 'Zauberer möglich, +1 Mana' },
-  press: { art: 'eine', name: 'Kelterei', icon: '🍇', cost: { food: 8, wood: 10 }, desc: 'Jeder Manatrauben-Hain im Stadtkreis liefert +2 Mana mehr' },
+  press: { art: 'eine', name: 'Kelterei', icon: '🍇', eco: 'mana', cost: { food: 10, wood: 10 }, desc: '1 Mana je Traubenhain im Stadtkreis, mit jeder weiteren Stadtstufe +½ je Feld' },
   nest: { art: 'ein', name: 'Basiliskennest', icon: '🦎', cost: { food: 10, wood: 8, ore: 12 }, minLevel: 3, desc: 'Basilisk möglich (Stadt ab Stufe 3)' },
   lair: { art: 'eine', name: 'Trollhöhle', icon: '🦴', cost: { food: 10, wood: 12, ore: 16 }, minLevel: 4, desc: 'Schwarzer Troll möglich (Stadt ab Stufe 4)' },
   market: { art: 'einen', name: 'Markt', icon: '⚖️', cost: { food: 16, wood: 16, ore: 8 }, perRealm: 1, desc: 'Erlaubt Handel (3:1, mit Handelsgilde 2:1), einer pro Reich' },
   dragonlair: { art: 'eine', name: 'Drachenhöhle', icon: '🐉', cost: { food: 20, wood: 20, ore: 30 }, perRealm: 1, desc: 'Drache möglich (nur eine im Reich)' },
 };
-export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'sanctum', 'nest', 'lair', 'dragonlair', 'wall', 'market', 'press'];
-
-// Stadtzentrum liefert von jedem Rohstoff so viel wie die Stufe
-// Ertrag des Stadtzentrums je Rohstoff: steigt mit jeder Stufe stärker, damit auch wenige große Städte genug liefern
-export const CENTER_YIELD = [0, 1, 2, 3, 4, 5, 6, 7, 8];
-export function cityCenterYield(city) {
-  return CENTER_YIELD[city.level] ?? city.level;
+export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'press', 'market', 'barracks', 'workshop', 'sanctum', 'nest', 'lair', 'dragonlair', 'wall'];
+// Gruppen im Bau-Menü
+export const ECO_BUILDINGS = ['farm', 'lumber', 'mine', 'press', 'market'];
+// Bauernhof, Holzfäller, Mine und Kelterei belegen keinen Bauplatz
+export function slotsUsed(city) {
+  return city.buildings.filter((b) => !BUILDINGS[b]?.eco).length;
 }
+// Jede Hauptstadt startet mit Bauernhof, Holzfäller und Mine
+export const START_BUILDINGS = ['farm', 'lumber', 'mine'];
 // Versorgung: wie viele Einheiten eine Stadt unterhält (bewusst knapp: wenige, aber wertvolle Einheiten)
 export function citySupply(city) {
   return [0, 2, 2, 3, 4, 5, 6, 7, 8][city.level];
@@ -346,13 +347,13 @@ export function cityRadius() {
   return 2;
 }
 export const MAX_SLOTS = 6;
-// Bauernhof/Holzfäller/Mine ohne passendes Feld im Stadtkreis
-export const BUILDING_FLAT = 4;
-// Gelände umgestalten im Stadtgebiet: Wiese aufforsten (wächst in 3 Runden zu Wald) oder Wald roden (sofort Holz)
+// Gelände umgestalten im Stadtgebiet: Wiese aufforsten (Wald), Grube graben (Erz) oder Traubenhain anlegen (Mana),
+// je fertig nach 3 Runden; Wald roden (sofort Holz, wird Wiese)
 export const PLANT_COST = { food: 10, wood: 5 };
+export const PLANT_KINDS = { forest: { name: 'Aufforsten', icon: '🌱', what: 'Wald' }, pit: { name: 'Grube graben', icon: '⛏️', what: 'Erzgrube' }, vine: { name: 'Traubenhain', icon: '🍇', what: 'Traubenhain' } };
 export const PLANT_ROUNDS = 3;
 export const CLEAR_WOOD = 15;
-// Bauernhof/Holzfäller/Mine: je passendem Feld +1 auf Stufe 1, mit jeder weiteren Stadtstufe +½ je Feld
+// Bauernhof/Holzfäller/Mine/Kelterei: je passendem Feld 1 auf Stufe 1 (ohne Feld nichts), mit jeder weiteren Stadtstufe +½ je Feld
 // (gleichmäßiger Zuwachs, aufgerundet auf die ganze Stadt) – hohe Stufen lohnen sich in langen Partien
 export function buildingYield(tiles, level) {
   return Math.ceil((tiles * (level + 1)) / 2);

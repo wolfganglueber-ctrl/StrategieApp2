@@ -1,9 +1,9 @@
 // Schnelltests: alle Kampagnenlevel erzeugen, Zufallsspiele in allen Größen ohne Fehler durchspielen.
-import { createGame, applyAction, cloneState, statsOf, getBombTargets, migrateState, stormArea, canTerraform, incomeOf } from '../js/game.js';
+import { createGame, applyAction, cloneState, statsOf, getBombTargets, migrateState, stormArea, canTerraform, incomeOf, cityTiles, cityYield } from '../js/game.js';
 import { getGeo } from '../js/hex.js';
 import { planAction } from '../js/ai.js';
 import { getLevels } from '../js/levels.js';
-import { MAP_SIZES, BIOMES, UNITS } from '../js/data.js';
+import { MAP_SIZES, BIOMES, UNITS, buildingYield } from '../js/data.js';
 import { mulberry32 } from '../js/rng.js';
 
 let fails = 0;
@@ -99,21 +99,28 @@ const t0 = Date.now();
   check(!t || t.hp < hp, 'Flächenbrand');
   check(s.units.find((u) => u.id === 900) && !applyAction(s, { type: 'storm', unitId: 900, toward: geo.nb[c][0] }), 'Abklingzeit');
 }
-// Mana: Haine liefern Mana, Zauber kosten Mana
+// Wirtschaft: Felder liefern nur mit Gebäude; Hauptstadt startet mit Bauernhof, Holzfäller, Mine
 {
   const s = createGame({ seed: 9, cols: 12, rows: 14, biome: 'mixed', players: [{ ai: 3 }, { ai: 3 }] });
-  check(s.grapes.length >= 2, 'Manatrauben verteilt');
-  check(s.players.every((p) => incomeOf(s, p.id).mana >= 1), 'Jede Hauptstadt hat einen Manatrauben-Hain');
+  check(s.grapes.length === 0, 'Keine Traubenhaine zu Beginn');
+  const cap = s.cities.find((c) => c.capital && c.owner === 0);
+  check(['farm', 'lumber', 'mine'].every((b) => cap.buildings.includes(b)), 'Startgebäude');
+  const ci = s.cities.indexOf(cap), t = cityTiles(s, ci), y = cityYield(s, ci);
+  check(y.food === buildingYield(t.food, cap.level) && y.ore === buildingYield(t.ore, cap.level), 'Ertrag nur über Gebäude');
+  cap.buildings = [];
+  check(Object.values(cityYield(s, ci)).every((v) => v === 0), 'Ohne Gebäude kein Ertrag');
 }
-// Aufforsten und Roden
+// Felder bearbeiten: Aufforsten, Grube, Traubenhain, Roden
 {
   const s = createGame({ seed: 3, cols: 12, rows: 14, biome: 'mixed', players: [{ ai: 3 }, { ai: 3 }] });
   const pid = s.current;
-  s.players[pid].res = { food: 50, wood: 50, ore: 50 };
-  const idx = [...s.terrain.keys()].find((i) => canTerraform(s, pid, i) === 'plant');
-  check(idx != null && applyAction(s, { type: 'plant', idx }), 'Aufforsten');
+  s.players[pid].res = { food: 90, wood: 90, ore: 50, mana: 0 };
+  const plains = [...s.terrain.keys()].filter((i) => canTerraform(s, pid, i) === 'plant');
+  const [a, b, c] = plains;
+  check(c != null && applyAction(s, { type: 'plant', idx: a }) && applyAction(s, { type: 'plant', idx: b, to: 'pit' }) && applyAction(s, { type: 'plant', idx: c, to: 'vine' }), 'Wiese bearbeiten');
   for (let k = 0; k < 8; k++) applyAction(s, { type: 'end' });
-  check(s.terrain[idx] === 'forest', 'Schonung wird Wald');
+  check(s.terrain[a] === 'forest' && s.pits.includes(b) && s.grapes.includes(c), 'Wald, Grube und Traubenhain fertig');
+  check(canTerraform(s, pid, b) === null && canTerraform(s, pid, c) === null, 'Grube/Hain nicht erneut bearbeitbar');
   const f = [...s.terrain.keys()].find((i) => canTerraform(s, s.current, i) === 'clear');
   const w = s.players[s.current].res.wood;
   check(f != null && applyAction(s, { type: 'clear', idx: f }) && s.terrain[f] === 'plain' && s.players[s.current].res.wood > w, 'Roden');

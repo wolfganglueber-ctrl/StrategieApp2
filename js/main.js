@@ -14,7 +14,7 @@ import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, BASE_RES, RES_INFO, MANA, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
-  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, CENTER_YIELD, MAX_SLOTS, BUILDING_FLAT, buildingYield, PLANT_COST, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
+  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, MAX_SLOTS, buildingYield, PLANT_COST, PLANT_KINDS, ECO_BUILDINGS, slotsUsed, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
   BOOST_PCT, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
@@ -142,7 +142,7 @@ function saveGame() {
 
 // ---------------------------------------------------------------- Auswahl & Overlay
 function clearSel() {
-  sel = { unitId: null, cityIdx: null, infoIdx: null, placeTower: null, placeType: 'tower', group: null, magic: null, terraform: null };
+  sel = { unitId: null, cityIdx: null, infoIdx: null, placeTower: null, placeType: 'tower', group: null, magic: null, terraform: null, tfKind: 'forest' };
 }
 
 // ---------------------------------------------------------------- Gruppen
@@ -450,7 +450,7 @@ function refresh() {
   if (sel.terraform != null) {
     const terr = computeTerritory(S);
     o.moves = new Set();
-    for (const i of getGeoOf().within(S.cities[sel.terraform].idx, 2)) if (terr[i] === sel.terraform && canTerraform(S, S.current, i, terr)) o.moves.add(i);
+    for (const i of getGeoOf().within(S.cities[sel.terraform].idx, 2)) if (terr[i] === sel.terraform && canTerraform(S, S.current, i, terr) === (sel.tfKind === 'clear' ? 'clear' : 'plant')) o.moves.add(i);
   }
   if (sel.placeTower != null) {
     const terr = computeTerritory(S);
@@ -474,9 +474,10 @@ function onTap(sx, sy) {
   if (sel.terraform != null) {
     const ci = sel.terraform;
     const terr = computeTerritory(S);
-    const kind = terr[i] === ci ? canTerraform(S, S.current, i, terr) : null;
-    if (kind === 'plant' && !canAfford(S.players[S.current].res, PLANT_COST)) { toast('Zu wenig Rohstoffe zum Aufforsten.'); return; }
-    if (kind) { quickAct({ type: kind, idx: i }); return; } // Modus bleibt offen für weitere Felder
+    const want = sel.tfKind === 'clear' ? 'clear' : 'plant';
+    const kind = terr[i] === ci && canTerraform(S, S.current, i, terr) === want ? want : null;
+    if (kind === 'plant' && !canAfford(S.players[S.current].res, PLANT_COST)) { toast('Zu wenig Rohstoffe.'); return; }
+    if (kind) { quickAct(kind === 'plant' ? { type: 'plant', idx: i, to: sel.tfKind } : { type: 'clear', idx: i }); return; } // Modus bleibt offen für weitere Felder
     clearSel();
     sel.cityIdx = S.cities[ci].idx;
     cityTab = 'build';
@@ -1361,7 +1362,7 @@ async function playEvent(ev, f, isAI, pan = true) {
     case 'plant':
       R.invalidate(true, ev.idx);
       if (f > 0) { R.ring(ev.idx, '#86efac', 500 * f); sound.play('hammer', { pan: panOf(ev.idx), vol: isAI ? 0.3 : 0.7 }); }
-      R.floatText(ev.idx, '🌱 Schonung', '#bbf7d0', 900 * Math.max(f, 0.6));
+      R.floatText(ev.idx, ev.to === 'pit' ? '⛏️ Grube wird gegraben' : ev.to === 'vine' ? '🍇 Traubenhain wird angelegt' : '🌱 Schonung', '#bbf7d0', 900 * Math.max(f, 0.6));
       break;
     case 'clear':
       R.invalidate(true, ev.idx);
@@ -1370,7 +1371,7 @@ async function playEvent(ev, f, isAI, pan = true) {
       break;
     case 'grown':
       R.invalidate(true, ev.idx);
-      if (S.players[ev.pid].human) R.floatText(ev.idx, '🌲 Wald gewachsen', '#bbf7d0', 1100);
+      if (S.players[ev.pid].human) R.floatText(ev.idx, ev.to === 'pit' ? '⛏️ Erzgrube fertig' : ev.to === 'vine' ? '🍇 Traubenhain fertig' : '🌲 Wald gewachsen', '#bbf7d0', 1100);
       break;
     case 'storm': {
       if (f > 0) await sleep(R.ensureVisible(ev.line[1] >= 0 ? ev.line[1] : ev.from, 220 * f));
@@ -1480,7 +1481,7 @@ function updateHud() {
     bar.append(el('button', {
       class: 'pill' + (mana ? ' mana' : ''),
       title: mana ? 'Mana: für Zauberer, Zauber, Feuersturm und magische Forschung – nicht handelbar' : `${RES_INFO[k].name}: Ertrag pro Runde nach Abzug von ${up} Unterhalt für die Armee – tippen zum Handeln`,
-      onclick: () => (mana ? toast('🍇 Mana kommt aus Manatrauben-Hainen im Stadtgebiet (mit Kelterei mehr) und vom Turm der Weisen. Es lässt sich nicht handeln.', 4000) : openTrade(k)),
+      onclick: () => (mana ? toast('🍇 Mana kommt aus Traubenhainen (Wiese bearbeiten) mit Kelterei und vom Turm der Weisen. Es lässt sich nicht handeln.', 4000) : openTrade(k)),
     }, icon(k), el('b', {}, human.res[k] || 0), el('small', { class: inc[k] < 0 ? 'neg' : '' }, inc[k] < 0 ? `${inc[k]}` : `+${inc[k]}`)));
   }
   // Armee-Unterhalt pro Runde neben der Einheitenzahl
@@ -1570,10 +1571,15 @@ function cityTitle(c) {
 function tileInfo(i) {
   const c = cityOn(S, i);
   if (c) return `${cityTitle(c)} · Verteidigung ×${fmt(cityDefense(c, hasTech(S, c.owner, 'stonework')))}`;
-  return TERRAIN[S.terrain[i]].name + (S.grapes?.includes(i) ? ' · 🍇 Manatrauben-Hain' : '');
+  if (S.grapes?.includes(i)) return '🍇 Traubenhain (Mana mit Kelterei)';
+  if (S.pits?.includes(i)) return '⛏️ Erzgrube (Erz mit Mine)';
+  const pl = S.plants?.find((x) => x.idx === i);
+  if (pl) return `${TERRAIN[S.terrain[i]].name} · wird ${PLANT_KINDS[pl.to || 'forest'].what} (Runde ${pl.done})`;
+  return TERRAIN[S.terrain[i]].name;
 }
 
 let cityTab = 'units';
+let buildGroup = null; // Handy: gewählte Gebäudegruppe ('eco' oder 'mil')
 const RECRUIT_BLOCK = {
   needs: (T) => `braucht ${BUILDINGS[T.needs].name}`,
   tech: (T) => `braucht ${TECHS[T.tech].name}`,
@@ -1616,20 +1622,16 @@ function advice(occ) {
   // 4. Bauen / Ausbauen
   const inc = incomeOf(S, pid, territory);
   for (const c of S.cities.filter((c) => c.owner === pid)) {
-    if (c.buildings.length >= citySlots(c)) continue;
     const ci = S.cityAt[c.idx];
-    let rocks = 0, forests = 0;
-    for (let i = 0; i < territory.length; i++) {
-      if (territory[i] !== ci) continue;
-      if (S.terrain[i] === 'hill' || S.terrain[i] === 'mountain') rocks++;
-      if (S.terrain[i] === 'forest') forests++;
-    }
-    const pick = !hasBuilding(c, 'mine') && rocks && inc.ore <= inc.wood ? 'mine'
-      : !hasBuilding(c, 'lumber') && forests > 1 ? 'lumber'
-      : !hasBuilding(c, 'barracks') && c.capital ? 'barracks'
-      : !hasBuilding(c, 'farm') ? 'farm' : null;
+    const t = cityTiles(S, ci, territory);
+    const free = slotsUsed(c) < citySlots(c);
+    const pick = !hasBuilding(c, 'mine') && t.ore && inc.ore <= inc.wood ? 'mine'
+      : !hasBuilding(c, 'lumber') && t.wood > 1 ? 'lumber'
+      : !hasBuilding(c, 'farm') && t.food ? 'farm'
+      : !hasBuilding(c, 'press') && t.mana ? 'press'
+      : free && !hasBuilding(c, 'barracks') && c.capital ? 'barracks' : null;
     if (pick && canAfford(p.res, BUILDINGS[pick].cost)) {
-      return { text: `Freier Bauplatz: Baue in deiner ${c.capital ? 'Hauptstadt' : CITY_NAMES[c.level]} ${BUILDINGS[pick].art} ${BUILDINGS[pick].name} (${BUILDINGS[pick].desc}).`, city: c.idx, tab: 'build' };
+      return { text: `${BUILDINGS[pick].eco ? 'Wirtschaft' : 'Freier Bauplatz'}: Baue in deiner ${c.capital ? 'Hauptstadt' : CITY_NAMES[c.level]} ${BUILDINGS[pick].art} ${BUILDINGS[pick].name} (${BUILDINGS[pick].desc}).`, city: c.idx, tab: 'build' };
     }
   }
   const up = S.cities.find((c) => c.owner === pid && c.level < CITY_MAX_LEVEL && canAfford(p.res, upgradeCost(c)));
@@ -1671,13 +1673,13 @@ function renderCityPanel(panel, ci, occ) {
     el('span', { class: 'title' }, cityTitle(c)),
     el('span', { class: 'yield' }, ...RES.map((k) => el('span', {}, icon(k), `+${y[k]}`)))));
   const tabs = el('div', { class: 'ptabs' });
-  for (const [k, label] of [['units', 'Einheiten'], ['build', `Gebäude ${c.buildings.length}/${citySlots(c)}`]]) {
-    tabs.append(el('button', { class: cityTab === k ? 'active' : '', onclick: () => { cityTab = k; renderPanel(); } }, label));
+  for (const [k, label] of [['units', 'Einheiten'], ['build', `Gebäude · Plätze ${slotsUsed(c)}/${citySlots(c)}`]]) {
+    tabs.append(el('button', { class: cityTab === k ? 'active' : '', onclick: () => { cityTab = k; buildGroup = null; renderPanel(); } }, label));
   }
   panel.append(tabs);
   if (cityTab === 'build') {
     const t = cityTiles(S, ci);
-    panel.append(el('div', { class: 'note tiles-note' }, 'Im Stadtkreis: ', icon('food'), ` ${t.food} `, icon('wood'), ` ${t.wood} `, icon('ore'), ` ${t.ore} Felder`));
+    panel.append(el('div', { class: 'note tiles-note' }, 'Felder-Wert im Stadtkreis: ', icon('food'), ` ${t.food} `, icon('wood'), ` ${t.wood} `, icon('ore'), ` ${t.ore} `, icon('mana'), ` ${t.mana}`));
   }
   if (cityTab === 'units') {
     const grid = el('div', { class: 'recruit-grid' });
@@ -1701,35 +1703,11 @@ function renderCityPanel(panel, ci, occ) {
     const ready = hasBuilding(c, 'barracks') ? ' Dank Kaserne können sie sofort ziehen.' : '';
     panel.append(el('div', { class: 'note', id: 'recruitNote' }, note ? `Rekrutieren nicht möglich: ${note}.` : `Neue Einheiten erscheinen im Stadtgebiet.${ready}`));
   } else {
-    const list = el('div', { class: 'build-list' });
-    // Reihenfolge: Wirtschaft, dann Turm und Steinwall, dann alles andere
+    // Gebäude in zwei Gruppen: Wirtschaft und Einheiten (breiter Bildschirm: nebeneinander, Handy: erst Gruppe wählen)
     const tiles = cityTiles(S, ci);
-    const ECO = ['farm', 'lumber', 'mine', 'market'];
-    const eco = (n, what, res) => n ? `+${buildingYield(n, c.level)} ${res} (${n} ${what}, Stufe ${c.level})` : `+${BUILDING_FLAT + c.level - 1} ${res} (pauschal, kein ${what} im Stadtkreis)`;
-    const ecoDesc = { farm: eco(tiles.food, 'Wiese/See', 'Nahrung'), lumber: eco(tiles.wood, 'Wald', 'Holz'), mine: eco(tiles.ore, 'Hügel/Berg', 'Erz') };
-    const structRows = () => {
-      for (const [type, text] of [['tower', 'Schießt auf Gegner, 3 Ausbaustufen'], ['barrier', 'Blockiert den Weg, bildet Mauern']]) {
-        const nt = towersOfCity(S, ci, undefined, type), max = structureLimit(S.cities[ci], type);
-        list.append(el('div', { class: 'build-row tower-row' },
-          el('span', { class: 'bicon' }, iconCanvas(type, p.id, 34, 1)),
-          el('div', { class: 'binfo' }, el('b', {}, `${UNITS[type].name} ${nt}/${max}`), el('span', { class: 'muted' }, text)),
-          el('button', {
-            class: 'btn small', disabled: nt >= max || !canAfford(p.res, UNITS[type].cost),
-            onclick: () => { clearSel(); sel.placeTower = ci; sel.placeType = type; refresh(); },
-          }, costEl(UNITS[type].cost, p.res))));
-      }
-      // Gelände umgestalten: Wiese aufforsten oder Wald roden
-      const growing = (S.plants || []).filter((x) => x.ci === ci).length;
-      list.append(el('div', { class: 'build-row tower-row' },
-        el('span', { class: 'bicon' }, '🌱'),
-        el('div', { class: 'binfo' }, el('b', {}, 'Aufforsten / Roden'),
-          el('span', { class: 'muted' }, `Wiese → Wald in ${PLANT_ROUNDS} Runden · Wald → Wiese, +${CLEAR_WOOD} Holz${growing ? ` · ${growing} Schonung${growing > 1 ? 'en' : ''} wachsen` : ''}`)),
-        el('button', { class: 'btn small', onclick: () => { clearSel(); sel.terraform = ci; refresh(); } }, 'Felder wählen')));
-    };
-    const order = BUILDING_ORDER;
-    const sorted = [...ECO.filter((b) => order.includes(b)), 'STRUCT', ...order.filter((b) => !ECO.includes(b))];
-    for (const b of sorted) {
-      if (b === 'STRUCT') { structRows(); continue; }
+    const eco = (n, what, res) => n ? `+${buildingYield(n, c.level)} ${res} (Feldwert ${n} ${what}, Stufe ${c.level})` : `Kein ${what} im Stadtkreis – liefert nichts`;
+    const ecoDesc = { farm: eco(tiles.food, 'Wiese/See', 'Nahrung'), lumber: eco(tiles.wood, 'Wald', 'Holz'), mine: eco(tiles.ore, 'Hügel/Lehm/Grube/Gebirge', 'Erz'), press: eco(tiles.mana, 'Traubenhain', 'Mana') };
+    const buildingRow = (list, b) => {
       const B = BUILDINGS[b];
       const built = hasBuilding(c, b);
       const realm = !built && canBuild(S, p.id, c, b) === 'realm';
@@ -1742,16 +1720,55 @@ function renderCityPanel(panel, ci, occ) {
           : canBuild(S, p.id, c, b) === 'level' ? el('span', { class: 'lock' }, `🔒 ab Stufe ${B.minLevel}`)
           : canBuild(S, p.id, c, b) === 'realm' ? el('span', { class: 'lock' }, '🔒 schon im Reich')
           : el('button', { class: 'btn small', disabled: !!canBuild(S, p.id, c, b), onclick: () => doBuild(c.idx, b) }, costEl(B.cost, p.res))));
+    };
+    const structRows = (list) => {
+      for (const [type, text] of [['tower', 'Schießt auf Gegner, 3 Ausbaustufen'], ['barrier', 'Blockiert den Weg, bildet Mauern']]) {
+        const nt = towersOfCity(S, ci, undefined, type), max = structureLimit(S.cities[ci], type);
+        list.append(el('div', { class: 'build-row tower-row' },
+          el('span', { class: 'bicon' }, iconCanvas(type, p.id, 34, 1)),
+          el('div', { class: 'binfo' }, el('b', {}, `${UNITS[type].name} ${nt}/${max}`), el('span', { class: 'muted' }, text)),
+          el('button', {
+            class: 'btn small', disabled: nt >= max || !canAfford(p.res, UNITS[type].cost),
+            onclick: () => { clearSel(); sel.placeTower = ci; sel.placeType = type; refresh(); },
+          }, costEl(UNITS[type].cost, p.res))));
+      }
+    };
+    // Felder bearbeiten: Wiese → Wald, Erzgrube oder Traubenhain; Wald → Wiese
+    const terraRow = (list) => {
+      const growing = (S.plants || []).filter((x) => x.ci === ci).length;
+      const pick = (kind) => () => { clearSel(); sel.terraform = ci; sel.tfKind = kind; refresh(); };
+      list.append(el('div', { class: 'build-row tower-row terra-row' },
+        el('span', { class: 'bicon' }, '🌱'),
+        el('div', { class: 'binfo' }, el('b', {}, 'Felder bearbeiten'),
+          el('span', { class: 'muted' }, `Wiese: ${costText(PLANT_COST)}, fertig in ${PLANT_ROUNDS} Runden · Wald roden: +${CLEAR_WOOD} Holz${growing ? ` · ${growing} in Arbeit` : ''}`),
+          el('span', { class: 'terra-btns' },
+            ...Object.entries(PLANT_KINDS).map(([k, K]) => el('button', { class: 'btn small', disabled: !canAfford(p.res, PLANT_COST), onclick: pick(k) }, `${K.icon} ${K.what}`)),
+            el('button', { class: 'btn small', onclick: pick('clear') }, '🪓 Roden')))));
+    };
+    const groups = {
+      eco: { title: 'Wirtschaft', fill: (list) => { for (const b of ECO_BUILDINGS) buildingRow(list, b); terraRow(list); } },
+      mil: { title: 'Einheiten', fill: (list) => { for (const b of BUILDING_ORDER.filter((x) => !ECO_BUILDINGS.includes(x))) buildingRow(list, b); structRows(list); } },
+    };
+    const groupList = (g) => { const list = el('div', { class: 'build-list' }); groups[g].fill(list); return list; };
+    const wide = window.innerWidth >= 760;
+    if (wide) {
+      panel.append(el('div', { class: 'build-cols' }, ...['eco', 'mil'].map((g) => el('div', { class: 'build-col' }, el('div', { class: 'build-col-head' }, groups[g].title), groupList(g)))));
+    } else if (!buildGroup) {
+      const count = (g) => c.buildings.filter((b) => (g === 'eco') === ECO_BUILDINGS.includes(b)).length;
+      panel.append(el('div', { class: 'build-groups' }, ...['eco', 'mil'].map((g) => el('button', { class: 'build-group', onclick: () => { buildGroup = g; renderPanel(); } },
+        el('span', { class: 'bg-icon' }, g === 'eco' ? '🌾' : '🛡️'), el('b', {}, groups[g].title), el('span', { class: 'muted' }, `${count(g)} gebaut`)))));
+    } else {
+      panel.append(el('div', { class: 'build-col-head back' }, el('button', { class: 'btn small', onclick: () => { buildGroup = null; renderPanel(); } }, '‹ Zurück'), groups[buildGroup].title));
+      panel.append(groupList(buildGroup));
     }
-    panel.append(list);
     if (c.level < CITY_MAX_LEVEL) {
       const cost = upgradeCostOf(S, c);
       panel.append(el('div', { class: 'upgrade-row' },
         el('span', { class: 'muted' }, (() => {
-          // Zuwachs: Stadtzentrum + je Feld mit passendem Gebäude (Bauernhof/Holzfäller/Mine) +1
+          // Zuwachs: je Feld mit passendem Gebäude (Bauernhof/Holzfäller/Mine/Kelterei) +½
           const t = cityTiles(S, ci);
-          const B = { food: 'farm', wood: 'lumber', ore: 'mine' };
-          const parts = BASE_RES.map((k) => `+${CENTER_YIELD[c.level + 1] - CENTER_YIELD[c.level] + (hasBuilding(c, B[k]) ? (t[k] ? buildingYield(t[k], c.level + 1) - buildingYield(t[k], c.level) : 1) : 0)} ${RES_INFO[k].name}`).join(', ');
+          const B = { food: 'farm', wood: 'lumber', ore: 'mine', mana: 'press' };
+          const parts = RES.filter((k) => hasBuilding(c, B[k]) && t[k]).map((k) => `+${buildingYield(t[k], c.level + 1) - buildingYield(t[k], c.level)} ${RES_INFO[k].name}`).join(', ') || 'kein Mehrertrag ohne Wirtschaftsgebäude';
           return `Ausbau zur ${CITY_NAMES[c.level + 1]}: ${citySlots({ level: c.level + 1 }) > citySlots(c) ? '+1 Bauplatz, ' : ''}${parts}`;
         })()),
         el('button', { class: 'btn small primary', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost, p.res))));
@@ -1794,9 +1811,10 @@ function renderPanelContent(panel) {
   if (sel.terraform != null) {
     const ci = sel.terraform;
     panel.append(el('div', { class: 'city-head' },
-      el('span', { class: 'title' }, '🌱 Aufforsten / 🪓 Roden'),
+      el('span', { class: 'title' }, sel.tfKind === 'clear' ? '🪓 Wald roden' : `${PLANT_KINDS[sel.tfKind].icon} ${PLANT_KINDS[sel.tfKind].name}`),
       el('button', { class: 'btn small', onclick: () => { const idx = S.cities[ci].idx; clearSel(); sel.cityIdx = idx; cityTab = 'build'; refresh(); } }, 'Fertig')));
-    panel.append(el('div', { class: 'note' }, `Tippe helle Wiesen an, um sie aufzuforsten (je ${costText(PLANT_COST)}, nach ${PLANT_ROUNDS} Runden Wald), oder helle Wälder, um sie zu roden (je +${CLEAR_WOOD} Holz sofort). Beliebig viele Felder.`));
+    panel.append(el('div', { class: 'note' }, sel.tfKind === 'clear' ? `Tippe helle Wälder an, um sie zu roden (je +${CLEAR_WOOD} Holz sofort, danach Wiese). Beliebig viele Felder.`
+      : `Tippe helle Wiesen an (je ${costText(PLANT_COST)}, nach ${PLANT_ROUNDS} Runden ${PLANT_KINDS[sel.tfKind].what}). Beliebig viele Felder.`));
     return;
   }
   if (sel.placeTower != null) {
@@ -2256,14 +2274,15 @@ function renderHelp() {
     <b>Erschüttert ⭐:</b> Greifen in einer Runde mindestens zwei verschiedene Einheiten denselben Gegner an (Katapult und Tribok: schon ein Angriff), ist er bis zu seinem nächsten Zug erschüttert: halbe Verteidigung, kein Gegenschlag. Troll und Drache werden nie erschüttert. Tipp: erst zwei Fernkämpfer, dann die Nahkämpfer.</p>
     <h3>Städte</h3>
     <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden; Türme und Steinwälle in ihrem Gebiet wechseln mit auf deine Seite.
-    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz (höchstens ${MAX_SLOTS}) und mehr Ertrag: Das Stadtzentrum liefert je Rohstoff ${CENTER_YIELD.slice(1).join(' / ')}. Jedes Feld im Stadtkreis liefert 1 seines Rohstoffs – mit Bauernhof (Wiese/See), Holzfäller (Wald) oder Mine (Hügel/Gebirge) kommt je passendem Feld +1 dazu und mit jeder weiteren Stadtstufe +½ je Feld (Stufe 8: 4½ je Feld). Ob du zuerst baust oder ausbaust, ist egal. Hohe Stadtstufen sind teuer und zahlen sich erst über viele Runden aus – in langen Partien lohnen sie sich.</p>
+    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz (höchstens ${MAX_SLOTS}) und mehr Ertrag.<br>
+    <b>Ertrag:</b> Felder im Stadtkreis liefern nur mit dem passenden Wirtschaftsgebäude: Bauernhof 1 Nahrung je Wiese/See, Holzfäller 1 Holz je Wald, Mine 1 Erz je Hügel, Lehm oder Erzgrube und 2 je Gebirge, Kelterei 1 Mana je Traubenhain – mit jeder weiteren Stadtstufe +½ je Feld (Stufe 8: 4½ je Feld). Ohne passendes Feld liefert ein Gebäude nichts, das Stadtzentrum selbst liefert nichts. Jede Hauptstadt startet mit Bauernhof, Holzfäller und Mine. Wirtschaftsgebäude belegen keinen Bauplatz, die Plätze sind für Einheiten-Gebäude, Mauer und Markt. Ob du zuerst baust oder ausbaust, ist egal. Hohe Stadtstufen sind teuer und zahlen sich erst über viele Runden aus – in langen Partien lohnen sie sich.</p>
     <h3>Versorgung</h3>
     <p><b>Versorgung:</b> Oben neben ⚔ steht „Truppen/Versorgung“. Jede Stadt versorgt Truppen (${[1, 2, 3, 4, 5, 6, 7, 8].map((l) => citySupply({ level: l })).join(' / ')} je nach Stufe; Basilisk zählt 2, Troll und Drache 3). Jede Einheit isst 2 Nahrung pro Runde. Einheiten über der Versorgung kosten doppelten Unterhalt, über dem 1,5-Fachen dreifachen. Eine riesige Armee frisst also schnell den ganzen Ertrag – lieber wenige, gut verbesserte Einheiten.</p>
-    <h3>Aufforsten und Roden 🌱🪓</h3>
-    <p>Im Reiter „Gebäude“ einer Stadt wählst du „Aufforsten / Roden“ und tippst helle Felder im Stadtgebiet an: Eine <b>Wiese</b> wird für ${costText(PLANT_COST)} zur Schonung und nach ${PLANT_ROUNDS} Runden zu Wald (solange liefert das Feld nichts). Einen <b>Wald</b> rodest du sofort zur Wiese und bekommst ${CLEAR_WOOD} Holz. Beliebig viele Felder, nur nicht auf Manatrauben-Hainen.</p>
+    <h3>Felder bearbeiten 🌱⛏️🍇🪓</h3>
+    <p>Im Reiter „Gebäude“ → Wirtschaft wählst du bei „Felder bearbeiten“, was entstehen soll, und tippst helle Felder im Stadtgebiet an. Eine <b>Wiese</b> wird für je ${costText(PLANT_COST)} nach ${PLANT_ROUNDS} Runden zu <b>Wald</b> (Holz mit Holzfäller), zur <b>Erzgrube</b> (1 Erz mit Mine) oder zum <b>Traubenhain</b> (1 Mana mit Kelterei); solange liefert das Feld nichts. Einen <b>Wald</b> rodest du sofort zur Wiese (Nahrung mit Bauernhof) und bekommst ${CLEAR_WOOD} Holz. Beliebig viele Felder. Wald bremst Angreifer, weil er 2 Bewegung kostet.</p>
     <h3>Mana 🍇</h3>
-    <p>Mana ist der Rohstoff für alles Magische. Es kommt aus <b>Manatrauben-Hainen</b> (violette Trauben auf Wiese oder Wald; jede Hauptstadt hat einen am Rand ihres Gebiets, weitere liegen bei manchen Dörfern): ${MANA.grape} Mana je Hain im Stadtgebiet, mit einer <b>Kelterei</b> in der Stadt ${MANA.grape + MANA.press}. Der Turm der Weisen liefert zusätzlich ${MANA.sanctum}. Mana lässt sich nicht handeln.<br>
-    Wofür: Zauberer kosten Mana und 1 Mana Unterhalt pro Runde; Vereisen ${MANA.freeze}, Bergsprengung ${MANA.bomb}, Flächenheilung ${MANA.areaheal} (sonst heilt der Zauberer nur das Ziel), Feuersturm des Drachen ${MANA.storm}; die Forschungen Erleuchtung und Segen kosten ebenfalls Mana. Manatrauben-Haine sind deshalb lohnende Eroberungsziele. So gleichst du Holzmangel aus – und Wald bremst Angreifer, weil er 2 Bewegung kostet.</p>
+    <p>Mana ist der Rohstoff für alles Magische. Es kommt aus selbst angelegten <b>Traubenhainen</b> mit einer <b>Kelterei</b> in der Stadt und vom Turm der Weisen (+${MANA.sanctum}). Mana lässt sich nicht handeln.<br>
+    Wofür: Zauberer kosten Mana und 1 Mana Unterhalt pro Runde; Vereisen ${MANA.freeze}, Bergsprengung ${MANA.bomb}, Flächenheilung ${MANA.areaheal} (sonst heilt der Zauberer nur das Ziel), Feuersturm des Drachen ${MANA.storm}; die Forschungen Erleuchtung und Segen kosten ebenfalls Mana.</p>
     <h3>Gebäude</h3>
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
     <h3>Abreißen 🗑</h3>
