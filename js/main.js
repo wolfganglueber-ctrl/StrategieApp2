@@ -1456,6 +1456,13 @@ const ICONS = {
   range: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#fca5a5" stroke-width="1.5"/><circle cx="8" cy="8" r="2.6" fill="none" stroke="#fca5a5" stroke-width="1.5"/><circle cx="8" cy="8" r="0.9" fill="#fca5a5"/></svg>',
 };
 const icon = (k) => el('i', { class: 'ico', html: ICONS[k] });
+// Dieselben Symbole als Bilder für die Ertragsanzeige über den Städten auf der Karte
+R.resIcons = Object.fromEntries(RES.map((k) => {
+  const img = new Image();
+  img.onload = () => R.invalidate?.();
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(ICONS[k].replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" '));
+  return [k, img];
+}));
 
 function costEl(cost, have) {
   const box = el('span', { class: 'cost' });
@@ -1472,6 +1479,10 @@ function updateHud() {
   const cur = S.players[S.current];
   $('turnDot').style.background = PLAYER_COLORS[cur.id].main;
   $('turnText').textContent = `Runde ${S.turn} · ${cur.human ? 'Dein Zug' : cur.name}`;
+  // Ertrag jeder Stadt für die Anzeige über den Städten
+  const terrY = computeTerritory(S);
+  R.cityYields = S.cities.map((c, ci) => (c.owner >= 0 ? cityYield(S, ci, terrY) : null));
+  R.showYields = settings.cityYields !== false;
   // Grün: Ertrag des ganzen Reichs (alle Städte inkl. Ausbau und Forschung); rot umrandet, wenn der Unterhalt mehr frisst
   const gross = realmYield(S, human.id), upk = upkeepTotal(S, human.id);
   const bar = $('resBar');
@@ -2213,6 +2224,8 @@ function openSettings(onClose) {
     seg([[true, 'An'], [false, 'Aus']], settings.fx !== false, (v) => { settings.fx = v; store.saveSettings(settings); R.fx = v; }),
     el('label', {}, 'Türme schießen am Zugende automatisch'),
     seg([[true, 'An'], [false, 'Aus']], settings.towerAuto !== false, (v) => { settings.towerAuto = v; store.saveSettings(settings); }),
+    el('label', {}, 'Ertrag über den Städten anzeigen'),
+    seg([[true, 'An'], [false, 'Aus']], settings.cityYields !== false, (v) => { settings.cityYields = v; store.saveSettings(settings); updateHud(); R.invalidate(); }),
     el('label', {}, 'Rohstoffe der Gegner oben anzeigen (Testmodus)'),
     seg([[true, 'An'], [false, 'Aus']], settings.enemyRes !== false, (v) => { settings.enemyRes = v; store.saveSettings(settings); updateHud(); }),
     el('label', {}, 'Alle Level freischalten (Testmodus)'),
