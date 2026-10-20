@@ -2,12 +2,12 @@
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
 import {
   UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY, structureLimit,
-  costTotal, UNIT_UPS, unitUpCost, boostCost, skillCost,
+  costTotal, UNIT_UPS, unitUpCost, boostCost, skillCost, PLANT_COST,
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
   spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, unitUpOptions, unitUpList, canBuild, canPetrify, wouldShake,
-  DMG_K, canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage,
+  DMG_K, canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage, canTerraform,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -398,6 +398,15 @@ function economyAction(state, ctx, P, pid, rng) {
       if (type === 'dragon') continue; // viel zu teuer zum gezielten Sparen
       saveTroll = true;
       break;
+    }
+  }
+  // Aufforsten, wenn Holz knapp ist und viel Wiese im Gebiet liegt (abseits der Gegner)
+  if (P.smart && rng() < 0.25 && canAfford(res, PLANT_COST)) {
+    const inc = incomeOf(state, pid, ctx.territory);
+    if (inc.wood * 3 < inc.food) {
+      for (let i = 0; i < ctx.territory.length; i++) {
+        if ((ctx.distEnemy[i] < 0 || ctx.distEnemy[i] > 4) && canTerraform(state, pid, i, ctx.territory) === 'plant') return { type: 'plant', idx: i };
+      }
     }
   }
   if (P.smart) {

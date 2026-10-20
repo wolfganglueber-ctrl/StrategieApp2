@@ -1,5 +1,5 @@
 // Schnelltests: alle Kampagnenlevel erzeugen, Zufallsspiele in allen Größen ohne Fehler durchspielen.
-import { createGame, applyAction, cloneState, statsOf, getBombTargets, migrateState, stormArea } from '../js/game.js';
+import { createGame, applyAction, cloneState, statsOf, getBombTargets, migrateState, stormArea, canTerraform } from '../js/game.js';
 import { getGeo } from '../js/hex.js';
 import { planAction } from '../js/ai.js';
 import { getLevels } from '../js/levels.js';
@@ -96,6 +96,19 @@ const t0 = Date.now();
   const t = s.units.find((u) => u.id === 901);
   check(!t || t.hp < hp, 'Flächenbrand');
   check(s.units.find((u) => u.id === 900) && !applyAction(s, { type: 'storm', unitId: 900, toward: geo.nb[c][0] }), 'Abklingzeit');
+}
+// Aufforsten und Roden
+{
+  const s = createGame({ seed: 3, cols: 12, rows: 14, biome: 'mixed', players: [{ ai: 3 }, { ai: 3 }] });
+  const pid = s.current;
+  s.players[pid].res = { food: 50, wood: 50, ore: 50 };
+  const idx = [...s.terrain.keys()].find((i) => canTerraform(s, pid, i) === 'plant');
+  check(idx != null && applyAction(s, { type: 'plant', idx }), 'Aufforsten');
+  for (let k = 0; k < 8; k++) applyAction(s, { type: 'end' });
+  check(s.terrain[idx] === 'forest', 'Schonung wird Wald');
+  const f = [...s.terrain.keys()].find((i) => canTerraform(s, s.current, i) === 'clear');
+  const w = s.players[s.current].res.wood;
+  check(f != null && applyAction(s, { type: 'clear', idx: f }) && s.terrain[f] === 'plain' && s.players[s.current].res.wood > w, 'Roden');
 }
 for (const l of getLevels()) {
   const s = createGame({ seed: l.seed, cols: l.cols, rows: l.rows, biome: l.biome, players: [{ human: true }, ...l.ais.map((ai) => ({ ai }))] });

@@ -6,7 +6,7 @@ import {
   incomeOf, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, flankers, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, defenseMult,
-  canBoost, skillOptions, hasSkill, hasPerk, unitCap, canStorm, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
+  canBoost, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, canStorm, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
@@ -14,7 +14,7 @@ import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
-  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, CENTER_YIELD, MAX_SLOTS, BUILDING_FLAT, buildingYield, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
+  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, CENTER_YIELD, MAX_SLOTS, BUILDING_FLAT, buildingYield, PLANT_COST, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
   BOOST_PCT, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
@@ -142,7 +142,7 @@ function saveGame() {
 
 // ---------------------------------------------------------------- Auswahl & Overlay
 function clearSel() {
-  sel = { unitId: null, cityIdx: null, infoIdx: null, placeTower: null, placeType: 'tower', group: null, magic: null };
+  sel = { unitId: null, cityIdx: null, infoIdx: null, placeTower: null, placeType: 'tower', group: null, magic: null, terraform: null };
 }
 
 // ---------------------------------------------------------------- Gruppen
@@ -446,6 +446,12 @@ function refresh() {
     }
   }
   if (sel.cityIdx != null) o.cityIdx = sel.cityIdx;
+  // Gelände umgestalten: helle Felder = aufforstbare Wiesen und rodbare Wälder der Stadt
+  if (sel.terraform != null) {
+    const terr = computeTerritory(S);
+    o.moves = new Set();
+    for (const i of getGeoOf().within(S.cities[sel.terraform].idx, 2)) if (terr[i] === sel.terraform && canTerraform(S, S.current, i, terr)) o.moves.add(i);
+  }
   if (sel.placeTower != null) {
     const terr = computeTerritory(S);
     o.moves = new Set();
@@ -465,6 +471,18 @@ function onTap(sx, sy) {
   if (!humanTurn()) return;
   const i = R.pick(sx, sy);
   if (i < 0) { clearSel(); refresh(); return; }
+  if (sel.terraform != null) {
+    const ci = sel.terraform;
+    const terr = computeTerritory(S);
+    const kind = terr[i] === ci ? canTerraform(S, S.current, i, terr) : null;
+    if (kind === 'plant' && !canAfford(S.players[S.current].res, PLANT_COST)) { toast('Zu wenig Rohstoffe zum Aufforsten.'); return; }
+    if (kind) { quickAct({ type: kind, idx: i }); return; } // Modus bleibt offen für weitere Felder
+    clearSel();
+    sel.cityIdx = S.cities[ci].idx;
+    cityTab = 'build';
+    refresh();
+    return;
+  }
   if (sel.placeTower != null) {
     const type = sel.placeType;
     const ok = !canBuildTower(S, S.current, i, undefined, type, sel.placeTower);
@@ -1340,6 +1358,20 @@ async function playEvent(ev, f, isAI, pan = true) {
     case 'stone':
       if (unitById(S, ev.id)?.owner === humanId()) R.floatText(ev.idx, ev.ice ? '❄️ vereist, setzt aus' : '🪨 setzt aus', ev.ice ? '#bae6fd' : '#d6d3d1', 900);
       break;
+    case 'plant':
+      R.invalidate(true, ev.idx);
+      if (f > 0) { R.ring(ev.idx, '#86efac', 500 * f); sound.play('hammer', { pan: panOf(ev.idx), vol: isAI ? 0.3 : 0.7 }); }
+      R.floatText(ev.idx, '🌱 Schonung', '#bbf7d0', 900 * Math.max(f, 0.6));
+      break;
+    case 'clear':
+      R.invalidate(true, ev.idx);
+      if (f > 0) { R.dust(ev.idx, 0, { n: 6 }); sound.play('hammer', { pan: panOf(ev.idx), vol: isAI ? 0.3 : 0.8 }); }
+      R.floatText(ev.idx, `🪓 +${ev.wood} Holz`, '#fde68a', 1000 * Math.max(f, 0.6));
+      break;
+    case 'grown':
+      R.invalidate(true, ev.idx);
+      if (S.players[ev.pid].human) R.floatText(ev.idx, '🌲 Wald gewachsen', '#bbf7d0', 1100);
+      break;
     case 'storm': {
       if (f > 0) await sleep(R.ensureVisible(ev.line[1] >= 0 ? ev.line[1] : ev.from, 220 * f));
       const ms = 2400 * f;
@@ -1681,6 +1713,13 @@ function renderCityPanel(panel, ci, occ) {
             onclick: () => { clearSel(); sel.placeTower = ci; sel.placeType = type; refresh(); },
           }, costEl(UNITS[type].cost, p.res))));
       }
+      // Gelände umgestalten: Wiese aufforsten oder Wald roden
+      const growing = (S.plants || []).find((x) => x.ci === ci);
+      list.append(el('div', { class: 'build-row tower-row' },
+        el('span', { class: 'bicon' }, '🌱'),
+        el('div', { class: 'binfo' }, el('b', {}, 'Aufforsten / Roden'),
+          el('span', { class: 'muted' }, growing ? `Schonung wächst – Wald in ${Math.max(0, growing.done - S.turn)} Runden` : `Wiese → Wald in ${PLANT_ROUNDS} Runden · Wald → Wiese, +${CLEAR_WOOD} Holz`)),
+        el('button', { class: 'btn small', onclick: () => { clearSel(); sel.terraform = ci; refresh(); } }, 'Felder wählen')));
     };
     const order = BUILDING_ORDER;
     const sorted = [...ECO.filter((b) => order.includes(b)), 'STRUCT', ...order.filter((b) => !ECO.includes(b))];
@@ -1747,6 +1786,15 @@ function renderPanelContent(panel) {
   if (!S || !humanTurn()) return;
   const occ = buildOcc(S);
   if (curVis) for (const x of S.units) if (x.owner !== S.current && !curVis[x.idx]) occ[x.idx] = null;
+  if (sel.terraform != null) {
+    const ci = sel.terraform;
+    const busyPlant = (S.plants || []).find((x) => x.ci === ci);
+    panel.append(el('div', { class: 'city-head' },
+      el('span', { class: 'title' }, '🌱 Aufforsten / 🪓 Roden'),
+      el('button', { class: 'btn small', onclick: () => { const idx = S.cities[ci].idx; clearSel(); sel.cityIdx = idx; cityTab = 'build'; refresh(); } }, 'Fertig')));
+    panel.append(el('div', { class: 'note' }, `Tippe eine helle Wiese an, um sie aufzuforsten (${costText(PLANT_COST)}, nach ${PLANT_ROUNDS} Runden Wald, eine Schonung je Stadt${busyPlant ? ' – gerade wächst schon eine' : ''}), oder einen hellen Wald, um ihn zu roden (+${CLEAR_WOOD} Holz sofort, einmal je Runde).`));
+    return;
+  }
   if (sel.placeTower != null) {
     panel.append(el('div', { class: 'city-head' },
       el('span', { class: 'title' }, `${UNITS[sel.placeType].name} platzieren`),
@@ -2207,6 +2255,8 @@ function renderHelp() {
     Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz (höchstens ${MAX_SLOTS}) und mehr Ertrag: Das Stadtzentrum liefert je Rohstoff ${CENTER_YIELD.slice(1).join(' / ')}. Jedes Feld im Stadtkreis liefert 1 seines Rohstoffs – mit Bauernhof (Wiese/See), Holzfäller (Wald) oder Mine (Hügel/Gebirge) kommt je passendem Feld +1 dazu und mit jeder weiteren Stadtstufe +½ je Feld (Stufe 8: 4½ je Feld). Ob du zuerst baust oder ausbaust, ist egal. Hohe Stadtstufen sind teuer und zahlen sich erst über viele Runden aus – in langen Partien lohnen sie sich.</p>
     <h3>Versorgung</h3>
     <p><b>Versorgung:</b> Oben neben ⚔ steht „Truppen/Versorgung“. Jede Stadt versorgt Truppen (${[1, 2, 3, 4, 5, 6, 7, 8].map((l) => citySupply({ level: l })).join(' / ')} je nach Stufe; Basilisk zählt 2, Troll und Drache 3). Jede Einheit isst 2 Nahrung pro Runde. Einheiten über der Versorgung kosten doppelten Unterhalt, über dem 1,5-Fachen dreifachen. Eine riesige Armee frisst also schnell den ganzen Ertrag – lieber wenige, gut verbesserte Einheiten.</p>
+    <h3>Aufforsten und Roden 🌱🪓</h3>
+    <p>Im Reiter „Gebäude“ einer Stadt wählst du „Aufforsten / Roden“ und tippst helle Felder im Stadtgebiet an: Eine <b>Wiese</b> wird für ${costText(PLANT_COST)} zur Schonung und nach ${PLANT_ROUNDS} Runden zu Wald (solange liefert das Feld nichts; eine Schonung je Stadt gleichzeitig). Einen <b>Wald</b> rodest du sofort zur Wiese und bekommst ${CLEAR_WOOD} Holz (einmal je Stadt und Runde). So gleichst du Holzmangel aus – und Wald bremst Angreifer, weil er 2 Bewegung kostet.</p>
     <h3>Gebäude</h3>
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
     <h3>Abreißen 🗑</h3>

@@ -672,6 +672,44 @@ export class Renderer {
     this.dust(idx, delay + 250, { n: 6, color: '70,60,55', ms: 900 });
   }
 
+  // Schonungen (aufgeforstete Wiesen): umgegrabene Erde mit jungen Setzlingen, die mit der Zeit wachsen
+  drawPlants(ctx) {
+    const fog = this.overlay.fog;
+    for (const p of this.state.plants) {
+      if (fog && !fog.explored?.[p.idx]) continue;
+      const c = this.center(p.idx);
+      const grow = Math.min(1, Math.max(0.25, 1 - (p.done - this.state.turn) / 3));
+      ctx.save();
+      ctx.fillStyle = 'rgba(120,80,40,0.28)';
+      hexPath(ctx, c.x, c.y, HEX - 6);
+      ctx.fill();
+      for (const [dx, dy] of [[-0.35, -0.15], [0.3, -0.25], [0, 0.2], [-0.15, 0.45], [0.38, 0.3]]) {
+        const x = c.x + dx * HEX, y = c.y + dy * HEX, h = HEX * (0.18 + 0.22 * grow);
+        ctx.strokeStyle = '#6b4a2a';
+        ctx.lineWidth = HEX * 0.035;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y - h * 0.4);
+        ctx.stroke();
+        ctx.fillStyle = '#3f8f3a';
+        ctx.beginPath();
+        ctx.moveTo(x, y - h);
+        ctx.lineTo(x + h * 0.38, y - h * 0.3);
+        ctx.lineTo(x - h * 0.38, y - h * 0.3);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgba(190,240,140,0.5)';
+        ctx.beginPath();
+        ctx.moveTo(x, y - h);
+        ctx.lineTo(x - h * 0.38, y - h * 0.3);
+        ctx.lineTo(x - h * 0.05, y - h * 0.3);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
   // Brennende Felder (Flächenbrand bis zum nächsten Zug des Drachen): flackernde Flammen
   drawBurns(ctx, now) {
     for (const b of this.state.burns || []) {
@@ -1327,6 +1365,7 @@ export class Renderer {
       }
     }
 
+    if (this.state.plants?.length) this.drawPlants(ctx);
     if (this.state.burns?.length) this.drawBurns(ctx, now);
     // Einheiten (von oben nach unten, damit vordere Figuren davor stehen)
     const s = this.state;

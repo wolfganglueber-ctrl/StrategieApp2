@@ -342,6 +342,10 @@ export function cityRadius() {
 export const MAX_SLOTS = 6;
 // Bauernhof/Holzfäller/Mine ohne passendes Feld im Stadtkreis
 export const BUILDING_FLAT = 4;
+// Gelände umgestalten im Stadtgebiet: Wiese aufforsten (wächst in 3 Runden zu Wald) oder Wald roden (sofort Holz)
+export const PLANT_COST = { food: 10, wood: 5 };
+export const PLANT_ROUNDS = 3;
+export const CLEAR_WOOD = 15;
 // Bauernhof/Holzfäller/Mine: je passendem Feld +1 auf Stufe 1, mit jeder weiteren Stadtstufe +½ je Feld
 // (gleichmäßiger Zuwachs, aufgerundet auf die ganze Stadt) – hohe Stufen lohnen sich in langen Partien
 export function buildingYield(tiles, level) {

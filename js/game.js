@@ -4,7 +4,7 @@ import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, cityCenterYield, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
-  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, BUILDING_FLAT, buildingYield, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_PCT, SKILLS, skillsFor, boostCost, skillCost,
+  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, BUILDING_FLAT, buildingYield, PLANT_COST, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_PCT, SKILLS, skillsFor, boostCost, skillCost,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -559,6 +559,7 @@ export function cityYield(state, ci, territory = computeTerritory(state)) {
       continue;
     }
     // Jedes Feld im Stadtkreis liefert 1; erst Bauernhof/Holzfäller/Mine lassen es mit der Stadtstufe wachsen
+    if (state.plants?.some((p) => p.idx === i)) continue; // Schonung: liefert noch nichts
     const t = state.terrain[i];
     inc[TERRAIN[t].res]++;
   }
@@ -696,6 +697,14 @@ export function startTurn(state) {
       }
       if (old >= 0 && cityCount(state, old) === 0) eliminate(state, old, ev);
     }
+  }
+  // Aufforstung: Schonungen dieses Spielers werden zu Wald
+  if (state.plants?.length) {
+    for (const p of state.plants.filter((x) => x.pid === pid && x.done <= state.turn)) {
+      state.terrain[p.idx] = 'forest';
+      ev.push({ k: 'grown', idx: p.idx, pid });
+    }
+    state.plants = state.plants.filter((x) => !(x.pid === pid && x.done <= state.turn));
   }
   // Flächenbrand: der eigene Brand erlischt, fremde Brände verletzen eigene Einheiten darin
   if (state.burns?.length) {
@@ -1128,6 +1137,24 @@ export function applyAction(state, a) {
       ev.push({ k: 'demolish', idx: u.idx, unit: u.type, snap: snapshotUnit(u), disband: true });
       break;
     }
+    case 'plant': {
+      // Wiese im eigenen Stadtgebiet aufforsten (eine Schonung je Stadt gleichzeitig)
+      if (canTerraform(state, pid, a.idx) !== 'plant' || !canAfford(player.res, PLANT_COST)) return null;
+      for (const k of RES) player.res[k] -= PLANT_COST[k] || 0;
+      state.plants = [...(state.plants || []), { idx: a.idx, pid, ci: computeTerritory(state)[a.idx], done: state.turn + PLANT_ROUNDS }];
+      ev.push({ k: 'plant', idx: a.idx });
+      break;
+    }
+    case 'clear': {
+      // Wald im eigenen Stadtgebiet roden: sofort Holz, das Feld wird Wiese (einmal je Stadt und Runde)
+      if (canTerraform(state, pid, a.idx) !== 'clear') return null;
+      const c = state.cities[computeTerritory(state)[a.idx]];
+      state.terrain[a.idx] = 'plain';
+      c.clearedTurn = state.turn;
+      player.res.wood += CLEAR_WOOD;
+      ev.push({ k: 'clear', idx: a.idx, wood: CLEAR_WOOD });
+      break;
+    }
     case 'storm': {
       const u = unitById(state, a.unitId);
       if (!u || u.owner !== pid || !canStorm(state, u) || geoOf(state).dist(u.idx, a.toward) !== 1) return null;
@@ -1207,6 +1234,19 @@ export function stormArea(state, from, toward) {
 // Schaden des Feuersturms an einem Ziel
 export function stormDamage(state, u, t) {
   return Math.max(1, Math.ceil(computeCombat(state, u, t, u.idx).dmg * STORM.dmg - 1e-9));
+}
+
+// Gelände umgestalten: 'plant' (Wiese aufforsten), 'clear' (Wald roden) oder null.
+// Nur im eigenen Stadtgebiet, nicht auf Städten oder Burgfeldern; je Stadt eine Schonung bzw. eine Rodung pro Runde.
+export function canTerraform(state, pid, idx, territory = computeTerritory(state)) {
+  const ci = territory[idx];
+  const c = state.cities[ci];
+  if (!c || c.owner !== pid || state.cityAt[idx] >= 0 || castleOf(state, idx)) return null;
+  if (state.plants?.some((p) => p.idx === idx)) return null;
+  const t = state.terrain[idx];
+  if (t === 'plain') return state.plants?.some((p) => p.ci === ci) ? null : 'plant';
+  if (t === 'forest') return c.clearedTurn === state.turn ? null : 'clear';
+  return null;
 }
 
 // Einzel-Verbesserungen: alle Einheiten außer Bauwerken
