@@ -120,18 +120,23 @@ function placeCities(rng, geo, terrain, players, villageDensity) {
   }
   if (land.length < players * 4) return null;
 
-  // Hauptstädte: möglichst großer Mindestabstand
-  let caps = null, capScore = -1;
-  for (let t = 0; t < 250; t++) {
+  // Hauptstädte: möglichst großer Mindestabstand, mindestens 2 Felder vom Kartenrand (volles Gebiet mit 2 Ringen)
+  const inner = land.filter((i) => { const c = geo.col(i), r = geo.row(i); return c > 1 && r > 1 && c < geo.cols - 2 && r < geo.rows - 2; });
+  const minCapDist = Math.max(4, Math.floor(Math.sqrt(geo.n) * (players === 2 ? 0.75 : 0.55)));
+  // Wertung: alle Hauptstädte innen (volles Gebiet) mit Abstand ≥ 5 (Gebiete überlappen nicht) geht vor dem großen Mindestabstand,
+  // danach möglichst weit auseinander
+  const isInner = new Set(inner);
+  let caps = null, capScore = -1, capDistMin = 0;
+  for (let t = 0; t < 400; t++) {
     const pick = [];
     for (let k = 0; k < players; k++) pick.push(rng.pick(land));
     let md = Infinity;
     for (let a = 0; a < players; a++) for (let b = a + 1; b < players; b++) md = Math.min(md, geo.dist(pick[a], pick[b]));
-    const s = md + rng.float() * 0.5;
-    if (s > capScore) { capScore = s; caps = pick; }
+    const nIn = pick.filter((i) => isInner.has(i)).length;
+    const s = (md >= minCapDist ? 100 : md >= 5 ? 60 : 0) + (nIn === players ? 60 : nIn * 5) + Math.min(md, 5) * 4 + md * 0.3 + rng.float() * 0.5;
+    if (s > capScore) { capScore = s; caps = pick; capDistMin = md; }
   }
-  const minCapDist = Math.max(4, Math.floor(Math.sqrt(geo.n) * (players === 2 ? 0.75 : 0.55)));
-  if (capScore < minCapDist) return null;
+  if (capDistMin < Math.min(minCapDist, 5)) return null;
 
   const cities = caps.map((idx) => ({ idx, owner: -1, level: 1, capital: true }));
   const capDist = caps.map((c) => bfsDistances(geo, terrain, [c]));

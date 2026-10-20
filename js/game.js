@@ -504,14 +504,15 @@ export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp
   return { dmg, counter, kill, die: counter >= attHp };
 }
 
-// Gebiet: jedes Feld gehört der nächstgelegenen Stadt in Reichweite (Gleichstand: höhere Stufe, dann Hauptstadt)
+// Gebiet: jedes Feld gehört der nächstgelegenen Stadt in Reichweite (Gleichstand: höhere Stufe).
+// Hauptstädte haben Vorrang: ihre beiden Ringe gehören immer ganz ihnen; das Stadtfeld selbst gehört immer der Stadt.
 export function computeTerritory(state) {
   const geo = geoOf(state);
   const owner = new Int16Array(geo.n).fill(-1);
   const best = new Float32Array(geo.n).fill(1e9);
   state.cities.forEach((c, ci) => {
     for (const j of geo.within(c.idx, cityRadius(c))) {
-      const d = geo.dist(c.idx, j) - c.level * 0.01 - (c.capital ? 0.005 : 0);
+      const d = j === c.idx ? -10 : geo.dist(c.idx, j) - c.level * 0.01 - (c.capital ? 3 : 0);
       if (d < best[j]) { best[j] = d; owner[j] = ci; }
     }
   });

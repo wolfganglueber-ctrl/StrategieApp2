@@ -1434,38 +1434,40 @@ export class Renderer {
     for (const a of this.anims) if (a.draw && a.p >= 0) a.draw(ctx, a.p);
   }
 
-  // Ertrag jeder Stadt über ihr: je Rohstoff mit Ertrag > 0 Symbol und Zahl (Werte setzt main.js in cityYields)
+  // Ertrag jeder Stadt über ihr: alle vier Rohstoffe als kleines 2×2-Raster (Nahrung, Holz / Erz, Mana), Werte aus main.js
   drawYields(ctx, fog, vr) {
     const s = this.state;
-    const fs = HEX * 0.4, isz = HEX * 0.44, pad = HEX * 0.1, gap = HEX * 0.12;
+    const fs = HEX * 0.26, isz = HEX * 0.28, pad = HEX * 0.07, gap = HEX * 0.08, rowH = isz + HEX * 0.02;
     ctx.save();
     ctx.font = `800 ${fs}px system-ui, sans-serif`;
     ctx.textBaseline = 'middle';
+    const numW = ctx.measureText('00').width;
     s.cities.forEach((city, ci) => {
       const y = this.cityYields[ci];
       if (!y || (fog && !fog.explored?.[city.idx])) return;
-      const parts = Object.keys(y).filter((k) => y[k] > 0).map((k) => ({ k, t: String(y[k]), w: 0 }));
-      if (!parts.length) return;
       const c = this.center(city.idx);
       if (c.x < vr.x0 - HEX * 2 || c.x > vr.x1 + HEX * 2 || c.y < vr.y0 - HEX * 3 || c.y > vr.y1 + HEX * 2) return;
-      for (const p of parts) p.w = isz + 1 + ctx.measureText(p.t).width;
-      const w = parts.reduce((a, p) => a + p.w, 0) + gap * (parts.length - 1) + pad * 2, h = isz + pad * 1.4;
-      const x0 = c.x - w / 2, yc = c.y - HEX * (city.castle ? 2.15 : 1.3);
-      ctx.fillStyle = 'rgba(10,20,36,0.78)';
+      const rows = [['food', 'wood'], ['ore', 'mana']];
+      const cellW = isz + 1 + Math.max(numW, ...['food', 'wood', 'ore', 'mana'].map((k) => ctx.measureText(String(y[k] || 0)).width));
+      const w = cellW * 2 + gap + pad * 2, h = rowH * 2 + pad * 2;
+      const x0 = c.x - w / 2, y0 = c.y - HEX * (city.castle ? 2.15 : 1.3) - h / 2;
+      ctx.fillStyle = 'rgba(10,20,36,0.8)';
       ctx.strokeStyle = colorOf(city.owner).main;
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.roundRect(x0, yc - h / 2, w, h, h / 2);
+      ctx.roundRect(x0, y0, w, h, HEX * 0.12);
       ctx.fill();
       ctx.stroke();
-      let x = x0 + pad;
-      for (const p of parts) {
-        const img = this.resIcons?.[p.k];
+      rows.forEach((row, r) => row.forEach((k, col) => {
+        const x = x0 + pad + col * (cellW + gap), yc = y0 + pad + r * rowH + rowH / 2;
+        const v = y[k] || 0;
+        ctx.globalAlpha = v > 0 ? 1 : 0.45;
+        const img = this.resIcons?.[k];
         if (img?.complete) ctx.drawImage(img, x, yc - isz / 2, isz, isz);
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillText(p.t, x + isz + 1, yc + 0.5);
-        x += p.w + gap;
-      }
+        ctx.fillStyle = v > 0 ? '#f8fafc' : '#94a3b8';
+        ctx.fillText(String(v), x + isz + 1, yc + 0.5);
+      }));
+      ctx.globalAlpha = 1;
     });
     ctx.restore();
   }
