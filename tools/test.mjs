@@ -1,5 +1,5 @@
 // Schnelltests: alle Kampagnenlevel erzeugen, Zufallsspiele in allen Größen ohne Fehler durchspielen.
-import { createGame, applyAction, cloneState, statsOf, getBombTargets, migrateState, stormArea, canTerraform } from '../js/game.js';
+import { createGame, applyAction, cloneState, statsOf, getBombTargets, migrateState, stormArea, canTerraform, incomeOf } from '../js/game.js';
 import { getGeo } from '../js/hex.js';
 import { planAction } from '../js/ai.js';
 import { getLevels } from '../js/levels.js';
@@ -60,6 +60,7 @@ const t0 = Date.now();
   const m = s.units.find((u) => u.owner === 0);
   m.type = 'mage';
   m.skills = ['bomb', 'freeze'];
+  s.players[0].res.mana = 50;
   m.attacked = m.moved = false;
   const mtn = getBombTargets(s, m);
   if (mtn.length) {
@@ -89,6 +90,7 @@ const t0 = Date.now();
   check(area.length === 10, `Feuersturm-Fläche ${area.length}`);
   s.units.push({ id: 901, type: 'troll', owner: 1, idx: area[9], hp: 70, rank: 1, xp: 0 });
   s.current = 0;
+  s.players[0].res.mana = 50;
   const ev = applyAction(s, { type: 'storm', unitId: 900, toward: geo.nb[c][0] });
   check(ev && ev.find((e) => e.k === 'storm').hits.length === 1, 'Feuersturm trifft');
   const hp = s.units.find((u) => u.id === 901).hp;
@@ -96,6 +98,12 @@ const t0 = Date.now();
   const t = s.units.find((u) => u.id === 901);
   check(!t || t.hp < hp, 'Flächenbrand');
   check(s.units.find((u) => u.id === 900) && !applyAction(s, { type: 'storm', unitId: 900, toward: geo.nb[c][0] }), 'Abklingzeit');
+}
+// Mana: Haine liefern Mana, Zauber kosten Mana
+{
+  const s = createGame({ seed: 9, cols: 12, rows: 14, biome: 'mixed', players: [{ ai: 3 }, { ai: 3 }] });
+  check(s.grapes.length >= 2, 'Manatrauben verteilt');
+  check(s.players.every((p) => incomeOf(s, p.id).mana >= 1), 'Jede Hauptstadt hat einen Manatrauben-Hain');
 }
 // Aufforsten und Roden
 {

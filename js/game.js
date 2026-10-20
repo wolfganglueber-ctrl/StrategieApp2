@@ -5,8 +5,10 @@ import {
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
   PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, BUILDING_FLAT, buildingYield, PLANT_COST, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_PCT, SKILLS, skillsFor, boostCost, skillCost,
+  BASE_RES, MANA,
 } from './data.js';
 import { generateMap } from './mapgen.js';
+import { mulberry32 } from './rng.js';
 
 export const STATE_VERSION = 6;
 
@@ -53,6 +55,7 @@ export function createGame(config) {
   caps.forEach((c, i) => { c.owner = i; c.level = 2; c.castle = true; });
   for (const c of state.cities) c.buildings = [];
   state.cities.forEach((c, i) => (state.cityAt[c.idx] = i));
+  state.grapes = placeGrapes(state, config.seed);
   // Startkrieger neben der Hauptstadt
   for (const c of caps) {
     const free = geo.nb[c.idx].filter((j) => TERRAIN[state.terrain[j]].pass && state.cityAt[j] === -1);
@@ -61,6 +64,21 @@ export function createGame(config) {
   }
   startTurn(state);
   return state;
+}
+
+// Manatrauben-Haine: je Hauptstadt einer am Rand des Burggebiets (fair), dazu bei etwa jedem zweiten Dorf einer
+function placeGrapes(state, seed) {
+  const geo = geoOf(state);
+  const rng = mulberry32((seed ^ 0x9e3779b9) >>> 0);
+  const res = [];
+  const ok = (j) => (state.terrain[j] === 'plain' || state.terrain[j] === 'forest') && state.cityAt[j] < 0 && !res.includes(j);
+  for (const c of state.cities) {
+    if (!c.capital && rng() < 0.5) continue;
+    const d = c.capital ? 2 : 1 + Math.floor(rng() * 2);
+    const spots = geo.within(c.idx, 2).filter((j) => ok(j) && geo.dist(j, c.idx) === d);
+    if (spots.length) res.push(spots[Math.floor(rng() * spots.length)]);
+  }
+  return res;
 }
 
 export function cloneState(s) {
@@ -517,7 +535,7 @@ export function computeTerritory(state) {
 
 // Rohstoffertrag pro Runde, aufgeschlüsselt
 export function incomeOf(state, pid, territory = computeTerritory(state)) {
-  const inc = { food: 0, wood: 0, ore: 0 };
+  const inc = { food: 0, wood: 0, ore: 0, mana: 0 };
   state.cities.forEach((c, ci) => {
     if (c.owner !== pid) return;
     const y = cityYield(state, ci, territory);
@@ -534,7 +552,7 @@ export function incomeOf(state, pid, territory = computeTerritory(state)) {
 // Unterhalt: bis zur Versorgung der Städte einfach, darüber doppelt, über dem 1,5-Fachen dreifach
 // (älteste Einheiten zuerst, Versorgungspunkte wie beim Truppenzähler)
 export function upkeepTotal(state, pid) {
-  const up = { food: 0, wood: 0, ore: 0 };
+  const up = { food: 0, wood: 0, ore: 0, mana: 0 };
   const cap = unitCap(state, pid);
   let used = 0;
   for (const u of state.units) {
@@ -542,7 +560,7 @@ export function upkeepTotal(state, pid) {
     used += UNITS[u.type].supply || 1;
     const mult = used <= cap ? 1 : used <= cap * 1.5 ? 2 : 3;
     const c = upkeepOf(u.type);
-    for (const k in c) up[k] += c[k] * mult;
+    for (const k in c) up[k] += k === 'mana' ? c[k] : c[k] * mult; // Mana-Unterhalt steigt nicht mit
   }
   if (hasTech(state, pid, 'granary')) up.food = Math.ceil(up.food * 0.75);
   return up;
@@ -550,14 +568,16 @@ export function upkeepTotal(state, pid) {
 
 // Ertrag einer Stadt: Gebiet + Zentrum + Gebäude
 export function cityYield(state, ci, territory = computeTerritory(state)) {
-  const inc = { food: 0, wood: 0, ore: 0 };
+  const inc = { food: 0, wood: 0, ore: 0, mana: 0 };
   const c = state.cities[ci];
   for (let i = 0; i < territory.length; i++) {
     if (territory[i] !== ci) continue;
     if (i === c.idx) {
-      for (const k of RES) inc[k] += cityCenterYield(c);
+      for (const k of BASE_RES) inc[k] += cityCenterYield(c);
       continue;
     }
+    // Manatrauben-Hain: Mana (mit Kelterei mehr)
+    if (state.grapes?.includes(i)) inc.mana += MANA.grape + (hasBuilding(c, 'press') ? MANA.press : 0);
     // Jedes Feld im Stadtkreis liefert 1; erst Bauernhof/Holzfäller/Mine lassen es mit der Stadtstufe wachsen
     if (state.plants?.some((p) => p.idx === i)) continue; // Schonung: liefert noch nichts
     const t = state.terrain[i];
@@ -571,6 +591,7 @@ export function cityYield(state, ci, territory = computeTerritory(state)) {
   if (hasBuilding(c, 'farm')) inc.food += per(tiles.food) + (tech('plough') ? 2 : 0) + (tech('rotation') ? 2 : 0);
   if (hasBuilding(c, 'lumber')) inc.wood += per(tiles.wood) + (tech('saw') ? 2 : 0);
   if (hasBuilding(c, 'mine')) inc.ore += per(tiles.ore) + (tech('mining') ? 2 : 0) + (tech('smelting') ? 2 : 0);
+  if (hasBuilding(c, 'sanctum')) inc.mana += MANA.sanctum;
   return inc;
 }
 
@@ -767,7 +788,7 @@ export function startTurn(state) {
   }
   const inc = incomeOf(state, pid);
   const p = state.players[pid];
-  for (const k of RES) p.res[k] = Math.max(0, p.res[k] + inc[k]);
+  for (const k of RES) p.res[k] = Math.max(0, (p.res[k] || 0) + inc[k]);
   ev.push({ k: 'income', pid, amount: inc });
   checkOver(state);
   updateExplored(state);
@@ -947,7 +968,8 @@ export function applyAction(state, a) {
       u.acted = true;
       ev.push({ k: 'heal', id: t.id, idx: t.idx, amount: h, by: u.id, from: u.idx });
       // Flächenheilung: eigene Nachbarn des Ziels bekommen 25 % ihres Lebens zurück
-      if (hasSkill(u, 'areaheal')) {
+      if (hasSkill(u, 'areaheal') && (player.res.mana || 0) >= MANA.areaheal) {
+        player.res.mana -= MANA.areaheal;
         const geo = geoOf(state);
         for (const o of state.units) {
           if (o === t || o.owner !== pid || isStructure(o) || geo.dist(o.idx, t.idx) !== 1) continue;
@@ -963,6 +985,7 @@ export function applyAction(state, a) {
       const u = unitById(state, a.unitId);
       const t = unitById(state, a.targetId);
       if (!u || !t || u.owner !== pid || !canAttack(u) || !getFreezeTargets(state, u).includes(t)) return null;
+      player.res.mana -= MANA.freeze;
       t.stone = 1;
       t.iced = true;
       u.attacked = u.moved = u.acted = true;
@@ -973,7 +996,9 @@ export function applyAction(state, a) {
       // Zauberer mit „Bergsprengung“: Gebirge bis 3 Felder weit wird zu Lehm
       const u = unitById(state, a.unitId);
       if (!u || u.owner !== pid || !canAttack(u) || !getBombTargets(state, u).includes(a.idx)) return null;
+      player.res.mana -= MANA.bomb;
       state.terrain[a.idx] = 'clay';
+      state.grapes = (state.grapes || []).filter((j) => j !== a.idx);
       u.attacked = u.moved = u.acted = true;
       ev.push({ k: 'bomb', idx: a.idx, by: u.id, from: u.idx });
       break;
@@ -1062,7 +1087,7 @@ export function applyAction(state, a) {
     case 'trade': {
       const rate = tradeRate(state, pid);
       const n = Math.max(1, Math.floor(a.count || 1));
-      if (!rate || !RES.includes(a.give) || !RES.includes(a.get) || a.give === a.get || player.res[a.give] < tradeCost(rate, n)) return null;
+      if (!rate || !BASE_RES.includes(a.give) || !BASE_RES.includes(a.get) || a.give === a.get || player.res[a.give] < tradeCost(rate, n)) return null;
       player.res[a.give] -= tradeCost(rate, n);
       player.res[a.get] += n;
       ev.push({ k: 'trade', give: a.give, get: a.get, count: n });
@@ -1146,11 +1171,9 @@ export function applyAction(state, a) {
       break;
     }
     case 'clear': {
-      // Wald im eigenen Stadtgebiet roden: sofort Holz, das Feld wird Wiese (einmal je Stadt und Runde)
+      // Wald im eigenen Stadtgebiet roden: sofort Holz, das Feld wird Wiese
       if (canTerraform(state, pid, a.idx) !== 'clear') return null;
-      const c = state.cities[computeTerritory(state)[a.idx]];
       state.terrain[a.idx] = 'plain';
-      c.clearedTurn = state.turn;
       player.res.wood += CLEAR_WOOD;
       ev.push({ k: 'clear', idx: a.idx, wood: CLEAR_WOOD });
       break;
@@ -1172,6 +1195,7 @@ export function applyAction(state, a) {
         }
         hits.push(hit);
       }
+      player.res.mana -= MANA.storm;
       u.moved = u.attacked = u.acted = true;
       u.stormTurn = state.turn;
       // Flächenbrand bis zum nächsten eigenen Zug
@@ -1199,7 +1223,7 @@ export function applyAction(state, a) {
 // verbrennt alle Gegner darin und kehrt auf sein Feld zurück. Alle 3 Runden, verbraucht den ganzen Zug.
 export const STORM = { cooldown: 3, len: 4, dmg: 0.6, burnBase: 2, burnPct: 0.1 };
 export function canStorm(state, u) {
-  return !!u && u.type === 'dragon' && canMove(u) && canAttack(u) && stormWait(state, u) === 0;
+  return !!u && u.type === 'dragon' && canMove(u) && canAttack(u) && stormWait(state, u) === 0 && hasMana(state, u.owner, MANA.storm);
 }
 // Runden bis zum nächsten Feuersturm
 export function stormWait(state, u) {
@@ -1236,16 +1260,20 @@ export function stormDamage(state, u, t) {
   return Math.max(1, Math.ceil(computeCombat(state, u, t, u.idx).dmg * STORM.dmg - 1e-9));
 }
 
+// Genug Mana für einen Zauber?
+export function hasMana(state, pid, n) {
+  return (state.players[pid]?.res.mana || 0) >= n;
+}
+
 // Gelände umgestalten: 'plant' (Wiese aufforsten), 'clear' (Wald roden) oder null.
-// Nur im eigenen Stadtgebiet, nicht auf Städten oder Burgfeldern; je Stadt eine Schonung bzw. eine Rodung pro Runde.
+// Nur im eigenen Stadtgebiet, nicht auf Städten, Burgfeldern oder Manatrauben-Hainen; ohne Begrenzung je Stadt.
 export function canTerraform(state, pid, idx, territory = computeTerritory(state)) {
-  const ci = territory[idx];
-  const c = state.cities[ci];
+  const c = state.cities[territory[idx]];
   if (!c || c.owner !== pid || state.cityAt[idx] >= 0 || castleOf(state, idx)) return null;
-  if (state.plants?.some((p) => p.idx === idx)) return null;
+  if (state.plants?.some((p) => p.idx === idx) || state.grapes?.includes(idx)) return null;
   const t = state.terrain[idx];
-  if (t === 'plain') return state.plants?.some((p) => p.ci === ci) ? null : 'plant';
-  if (t === 'forest') return c.clearedTurn === state.turn ? null : 'clear';
+  if (t === 'plain') return 'plant';
+  if (t === 'forest') return 'clear';
   return null;
 }
 
@@ -1260,12 +1288,12 @@ export function skillOptions(u) {
 }
 // Zauberer: vereisbare Gegner und sprengbare Berge im Heilradius
 export function getFreezeTargets(state, u, fromIdx = u.idx) {
-  if (!hasSkill(u, 'freeze')) return [];
+  if (!hasSkill(u, 'freeze') || !hasMana(state, u.owner, MANA.freeze)) return [];
   const geo = geoOf(state);
   return state.units.filter((t) => t.owner !== u.owner && canPetrify(t) && !t.stoneNow && geo.dist(fromIdx, t.idx) <= HEAL.range);
 }
 export function getBombTargets(state, u, fromIdx = u.idx) {
-  if (!hasSkill(u, 'bomb')) return [];
+  if (!hasSkill(u, 'bomb') || !hasMana(state, u.owner, MANA.bomb)) return [];
   return geoOf(state).within(fromIdx, HEAL.range).filter((j) => state.terrain[j] === 'mountain' && state.cityAt[j] < 0);
 }
 

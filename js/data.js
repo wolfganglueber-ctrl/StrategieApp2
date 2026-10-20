@@ -1,11 +1,16 @@
 // Spieldaten: Gelände, Rohstoffe, Einheiten, Städte, Farben, Schwierigkeitsstufen.
 
-export const RES = ['food', 'wood', 'ore'];
+// Grundrohstoffe (Gelände, Stadtzentrum, Handel) und Mana für alles Magische
+export const BASE_RES = ['food', 'wood', 'ore'];
+export const RES = [...BASE_RES, 'mana'];
 export const RES_INFO = {
   food: { name: 'Nahrung', short: 'Nahr.' },
   wood: { name: 'Holz', short: 'Holz' },
   ore: { name: 'Erz', short: 'Erz' },
+  mana: { name: 'Mana', short: 'Mana' },
 };
+// Mana: Manatrauben-Haine im Stadtgebiet (+1, mit Kelterei +2 mehr) und Turm der Weisen (+1); Zauberkosten je Einsatz
+export const MANA = { grape: 1, press: 2, sanctum: 1, freeze: 3, bomb: 4, areaheal: 2, storm: 8 };
 
 // Gelände liefert Rohstoffe, wenn es im Gebiet einer eigenen Stadt liegt.
 // Bewegung: alles passierbar außer Gebirge und Wasser.
@@ -26,7 +31,7 @@ export const UNITS = {
   griffin: { name: 'Greifenreiter', cost: { food: 12, wood: 4, ore: 9 }, hp: 15, atk: 12, def: 4, move: 3, range: 1, flying: true, needs: 'barracks', desc: 'Ritter auf einem Greifen: Werte wie ein Ritter, fliegt aber über Berge, Seen und eigene Einheiten. Teurer als der Ritter, braucht eine Kaserne.' },
   knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 12, def: 4, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
   tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 8, def: 12, move: 0, range: 1, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
-  mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5 }, hp: 10, atk: 4, def: 4, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben bekommen 25 % weniger Schaden, Flächenschaden halbiert. Heilt statt anzugreifen, bis 3 Felder weit. Höchstens einer pro Stadt.' },
+  mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5, mana: 3 }, upkeep: { food: 2, mana: 1 }, hp: 10, atk: 4, def: 4, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben bekommen 25 % weniger Schaden, Flächenschaden halbiert. Heilt statt anzugreifen, bis 3 Felder weit. Kostet Mana und 1 Mana Unterhalt pro Runde. Höchstens einer pro Stadt.' },
   troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 28, def: 20, move: 4, range: 1, supply: 3, regen: 3, perRealm: 5, needs: 'lair', desc: 'Ein Titan: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben. Braucht eine Trollhöhle, höchstens 5 pro Reich.' },
   dragon: { name: 'Drache', cost: { food: 150, wood: 150, ore: 150 }, hp: 300, atk: 100, def: 40, move: 5, range: 1, supply: 3, regen: 6, perRealm: 1, flying: true, line: [0.75, 0.5], arrowWeak: true, needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten. Angriff 100, sein Feueratem trifft auch die Gegner auf den 2 Feldern hinter dem Ziel (75 % und 50 %). Schützen und Türme treffen ihn um 60 % härter. Nur einer pro Reich.' },
   barrier: { name: 'Steinwall', cost: { wood: 6, ore: 14 }, hp: 50, atk: 0, def: 24, move: 0, range: 0, structure: true, desc: 'Sehr stabiles Wallstück, blockiert den Weg. Im Stadtgebiet setzen; benachbarte Wallstücke verbinden sich zu einer Mauer und lenken den Gegner.' },
@@ -146,8 +151,8 @@ export const TECHS = {
   masonry: { branch: 'eco', name: 'Baukunst', icon: '🏛️', cost: { wood: 24, ore: 16 }, req: ['saw', 'mining'], desc: 'Stadtausbau 25 % günstiger' },
   medic: { branch: 'def', name: 'Heilkunde', icon: '🌿', cost: { food: 28 }, req: [], desc: 'Einheiten heilen 2 mehr' },
   stonework: { branch: 'def', name: 'Steinmetz', icon: '🧱', cost: { wood: 12, ore: 20 }, req: [], desc: 'Türme +6 Leben, Mauern stärker (×2,6)' },
-  enlight: { branch: 'def', name: 'Erleuchtung', icon: '✨', cost: { food: 20, ore: 18 }, req: ['medic'], desc: 'Schutzaura der Zauberer reicht 2 Felder weit' },
-  blessing: { branch: 'def', name: 'Segen', icon: '🙏', cost: { food: 24, wood: 14 }, req: ['medic'], desc: 'Zauberer heilen 2 mehr und beenden die Erschütterung' },
+  enlight: { branch: 'def', name: 'Erleuchtung', icon: '✨', cost: { food: 20, ore: 18, mana: 10 }, req: ['medic'], desc: 'Schutzaura der Zauberer reicht 2 Felder weit' },
+  blessing: { branch: 'def', name: 'Segen', icon: '🙏', cost: { food: 24, wood: 14, mana: 10 }, req: ['medic'], desc: 'Zauberer heilen 2 mehr und beenden die Erschütterung' },
   battlements: { branch: 'def', name: 'Wehrgang', icon: '🏯', cost: { wood: 20, ore: 30 }, req: ['stonework'], desc: 'Steinwälle +25 Leben' },
   keep: { branch: 'def', name: 'Burgausbau', icon: '🏰', cost: { food: 20, wood: 24, ore: 30 }, req: ['stonework'], desc: 'Alle 7 Burgfelder: Verteidigung +25 %' },
   towers2: { branch: 'def', name: 'Turmbaukunst', icon: '🗼', cost: { wood: 20, ore: 28 }, req: ['stonework'], mod: { tower: { range: 1, atk: 4 } }, desc: 'Türme +1 Reichweite, +4 Angriff' },
@@ -305,7 +310,7 @@ export function skillCost(type) {
 
 export const CITY_MAX_LEVEL = 8;
 export const CITY_NAMES = ['', 'Dorf', 'Siedlung', 'Stadt', 'Burgstadt', 'Metropole', 'Großmetropole', 'Residenzstadt', 'Kaiserstadt'];
-export const START_RES = { food: 6, wood: 6, ore: 4 };
+export const START_RES = { food: 6, wood: 6, ore: 4, mana: 0 };
 export const TRADE_RATE = 3;
 export const TRADE_RATE_GUILD = 2;
 
@@ -317,13 +322,14 @@ export const BUILDINGS = {
   barracks: { art: 'eine', name: 'Kaserne', icon: '🛡️', cost: { wood: 6, ore: 4 }, desc: 'Ritter möglich, neue Einheiten können sofort ziehen' },
   workshop: { art: 'eine', name: 'Werkstatt', icon: '⚙️', cost: { wood: 8, ore: 4 }, desc: 'Katapulte möglich' },
   wall: { art: 'eine', name: 'Mauer', icon: '🧱', cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt ×2,2' },
-  sanctum: { art: 'einen', name: 'Turm der Weisen', icon: '🔮', cost: { wood: 6, ore: 6 }, desc: 'Zauberer möglich' },
+  sanctum: { art: 'einen', name: 'Turm der Weisen', icon: '🔮', cost: { wood: 6, ore: 6 }, desc: 'Zauberer möglich, +1 Mana' },
+  press: { art: 'eine', name: 'Kelterei', icon: '🍇', cost: { food: 8, wood: 10 }, desc: 'Jeder Manatrauben-Hain im Stadtkreis liefert +2 Mana mehr' },
   nest: { art: 'ein', name: 'Basiliskennest', icon: '🦎', cost: { food: 10, wood: 8, ore: 12 }, minLevel: 3, desc: 'Basilisk möglich (Stadt ab Stufe 3)' },
   lair: { art: 'eine', name: 'Trollhöhle', icon: '🦴', cost: { food: 10, wood: 12, ore: 16 }, minLevel: 4, desc: 'Schwarzer Troll möglich (Stadt ab Stufe 4)' },
   market: { art: 'einen', name: 'Markt', icon: '⚖️', cost: { food: 16, wood: 16, ore: 8 }, perRealm: 1, desc: 'Erlaubt Handel (3:1, mit Handelsgilde 2:1), einer pro Reich' },
   dragonlair: { art: 'eine', name: 'Drachenhöhle', icon: '🐉', cost: { food: 20, wood: 20, ore: 30 }, perRealm: 1, desc: 'Drache möglich (nur eine im Reich)' },
 };
-export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'sanctum', 'nest', 'lair', 'dragonlair', 'wall', 'market'];
+export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'barracks', 'workshop', 'sanctum', 'nest', 'lair', 'dragonlair', 'wall', 'market', 'press'];
 
 // Stadtzentrum liefert von jedem Rohstoff so viel wie die Stufe
 // Ertrag des Stadtzentrums je Rohstoff: steigt mit jeder Stufe stärker, damit auch wenige große Städte genug liefern

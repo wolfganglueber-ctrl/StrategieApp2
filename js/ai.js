@@ -1,7 +1,7 @@
 // Computergegner. Bewertet für jede Einheit alle Züge (Bewegung + Angriff) und wählt den besten.
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
 import {
-  UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY, structureLimit,
+  UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, BASE_RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY, structureLimit,
   costTotal, UNIT_UPS, unitUpCost, boostCost, skillCost, PLANT_COST,
 } from './data.js';
 import {
@@ -325,9 +325,10 @@ function chooseBuilding(state, ctx, pid, ci, inc) {
   if (c.buildings.length >= citySlots(c)) return null;
   const res = state.players[pid].res;
   const territory = ctx.territory;
-  let forests = 0, rocks = 0;
+  let forests = 0, rocks = 0, grapes = 0;
   for (let i = 0; i < territory.length; i++) {
     if (territory[i] !== ci) continue;
+    if (state.grapes?.includes(i)) grapes++;
     if (state.terrain[i] === 'forest') forests++;
     if (state.terrain[i] === 'hill' || state.terrain[i] === 'mountain') rocks++;
   }
@@ -343,6 +344,7 @@ function chooseBuilding(state, ctx, pid, ci, inc) {
     sanctum: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'sanctum')) ? 1.5 : 0.3,
     wall: (ctx.cityDanger.get(c.idx) || 0) > 3 ? 3 : 0.4,
     market: ctx.ownCities.some((x) => hasBuilding(x, 'market')) ? 0 : ctx.ownCities.length >= 3 ? 2 : 1,
+    press: grapes ? 1.2 + grapes : 0, // Kelterei nur bei Manatrauben im Stadtkreis
   };
   let best = null;
   for (const [b, v] of Object.entries(score)) {
@@ -356,7 +358,7 @@ function tradeAction(state, pid) {
   const res = state.players[pid].res;
   const rate = tradeRate(state, pid);
   if (!rate) return null;
-  const sorted = RES.slice().sort((a, b) => res[a] - res[b]);
+  const sorted = BASE_RES.slice().sort((a, b) => res[a] - res[b]);
   const low = sorted[0], high = sorted[2];
   if (res[low] < 4 && res[high] >= rate + 8) return { type: 'trade', give: high, get: low };
   // Großer Überschuss: einen Teil auf einmal tauschen, statt Rohstoffe zu horten
@@ -401,7 +403,7 @@ function economyAction(state, ctx, P, pid, rng) {
     }
   }
   // Aufforsten, wenn Holz knapp ist und viel Wiese im Gebiet liegt (abseits der Gegner)
-  if (P.smart && rng() < 0.25 && canAfford(res, PLANT_COST)) {
+  if (P.smart && rng() < 0.25 && canAfford(res, PLANT_COST) && (state.plants || []).filter((p) => p.pid === pid).length < ctx.ownCities.length) {
     const inc = incomeOf(state, pid, ctx.territory);
     if (inc.wood * 3 < inc.food) {
       for (let i = 0; i < ctx.territory.length; i++) {
