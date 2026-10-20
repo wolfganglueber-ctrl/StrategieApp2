@@ -1769,7 +1769,7 @@ function renderCityPanel(panel, ci, occ) {
           const t = cityTiles(S, ci);
           const B = { food: 'farm', wood: 'lumber', ore: 'mine', mana: 'press' };
           const parts = RES.filter((k) => hasBuilding(c, B[k]) && t[k]).map((k) => `+${buildingYield(t[k], c.level + 1) - buildingYield(t[k], c.level)} ${RES_INFO[k].name}`).join(', ') || 'kein Mehrertrag ohne Wirtschaftsgebäude';
-          return `Ausbau zur ${CITY_NAMES[c.level + 1]}: ${citySlots({ level: c.level + 1 }) > citySlots(c) ? '+1 Bauplatz, ' : ''}${parts}`;
+          return `Ausbau zur ${CITY_NAMES[c.level + 1]}: +${citySlots({ level: c.level + 1 }) - citySlots(c)} Bauplätze, +${citySupply({ level: c.level + 1 }) - citySupply(c)} Versorgung, ${parts}`;
         })()),
         el('button', { class: 'btn small primary', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost, p.res))));
     } else {
@@ -2258,7 +2258,7 @@ function renderHelp() {
     <h3>So baust du dein Reich auf</h3>
     <p><b>1. Ausbreiten:</b> Besetze mit Reitern und Kriegern früh neutrale Dörfer – jedes bringt Gebiet und Rohstoffe.<br>
     <b>2. Wirtschaft:</b> Baue Gebäude passend zum Gebiet: eine <b>Mine</b> bei Hügeln und Bergen, einen <b>Holzfäller</b> bei Wäldern, einen <b>Bauernhof</b> sonst.<br>
-    <b>3. Wachsen:</b> Baue Städte aus (bis Stufe 5): mehr Bauplätze, mehr Ertrag. Jede Stadt besitzt 2 Felder Gebiet rundherum – eroberte Nachbarstädte bilden ein zusammenhängendes Reich.<br>
+    <b>3. Wachsen:</b> Baue Städte aus (bis Stufe 3): mehr Bauplätze, mehr Ertrag. Jede Stadt besitzt 2 Felder Gebiet rundherum – eroberte Nachbarstädte bilden ein zusammenhängendes Reich.<br>
     <b>4. Armee:</b> Eine <b>Kaserne</b> in Frontstädten lässt neue Einheiten sofort ziehen und ermöglicht Ritter. Fehlt ein Rohstoff, tippe oben auf die Rohstoffleiste und handle.<br>
     <b>5. Angriff:</b> Erst die Fernkämpfer schießen lassen, dann mit Nahkämpfern zuschlagen.</p>
     <h3>Ablauf einer Runde</h3>
@@ -2274,8 +2274,8 @@ function renderHelp() {
     <b>Erschüttert ⭐:</b> Greifen in einer Runde mindestens zwei verschiedene Einheiten denselben Gegner an (Katapult und Tribok: schon ein Angriff), ist er bis zu seinem nächsten Zug erschüttert: halbe Verteidigung, kein Gegenschlag. Troll und Drache werden nie erschüttert. Tipp: erst zwei Fernkämpfer, dann die Nahkämpfer.</p>
     <h3>Städte</h3>
     <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden; Türme und Steinwälle in ihrem Gebiet wechseln mit auf deine Seite.
-    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Jede Stufe bringt einen Bauplatz (höchstens ${MAX_SLOTS}) und mehr Ertrag.<br>
-    <b>Ertrag:</b> Felder im Stadtkreis liefern nur mit dem passenden Wirtschaftsgebäude: Bauernhof 1 Nahrung je Wiese/See, Holzfäller 1 Holz je Wald, Mine 1 Erz je Hügel, Lehm oder Erzgrube und 2 je Gebirge, Kelterei 1 Mana je Traubenhain – mit jeder weiteren Stadtstufe +½ je Feld (Stufe 8: 4½ je Feld). Ohne passendes Feld liefert ein Gebäude nichts, das Stadtzentrum selbst liefert nichts. Jede Hauptstadt startet mit Bauernhof, Holzfäller und Mine. Wirtschaftsgebäude belegen keinen Bauplatz, die Plätze sind für Einheiten-Gebäude, Mauer und Markt. Ob du zuerst baust oder ausbaust, ist egal. Hohe Stadtstufen sind teuer und zahlen sich erst über viele Runden aus – in langen Partien lohnen sie sich.</p>
+    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Bauplätze: 2 / 4 / 6.<br>
+    <b>Ertrag:</b> Felder im Stadtkreis liefern nur mit dem passenden Wirtschaftsgebäude: Bauernhof 1 Nahrung je Wiese/See, Holzfäller 1 Holz je Wald, Mine 1 Erz je Hügel, Lehm oder Erzgrube und 2 je Gebirge, Kelterei 1 Mana je Traubenhain – auf Stufe 2 das Doppelte, auf Stufe 3 das Dreifache (ein Gebirge also bis zu 6 Erz). Pflug, Sägewerk und Bergbau geben je +50 % auf die gesamte Nahrung, das Holz bzw. das Erz des Reichs. Ohne passendes Feld liefert ein Gebäude nichts, das Stadtzentrum selbst liefert nichts. Jede Hauptstadt startet mit Bauernhof, Holzfäller und Mine. Wirtschaftsgebäude belegen keinen Bauplatz, die Plätze sind für Einheiten-Gebäude, Mauer und Markt. Ob du zuerst baust oder ausbaust, ist egal. Jede Stufe bringt außerdem 2 Bauplätze und 2 Versorgung. Erobern lohnt sich früh, Ausbauen macht jede eroberte Stadt doppelt bzw. dreifach wertvoll.</p>
     <h3>Versorgung</h3>
     <p><b>Versorgung:</b> Oben neben ⚔ steht „Truppen/Versorgung“. Jede Stadt versorgt Truppen (${[1, 2, 3, 4, 5, 6, 7, 8].map((l) => citySupply({ level: l })).join(' / ')} je nach Stufe; Basilisk zählt 2, Troll und Drache 3). Jede Einheit isst 2 Nahrung pro Runde. Einheiten über der Versorgung kosten doppelten Unterhalt, über dem 1,5-Fachen dreifachen. Eine riesige Armee frisst also schnell den ganzen Ertrag – lieber wenige, gut verbesserte Einheiten.</p>
     <h3>Felder bearbeiten 🌱⛏️🍇🪓</h3>
@@ -2317,7 +2317,7 @@ function renderHelp() {
     <h3>Katapult und Flanke</h3>
     <p>Katapulte sind Belagerungswaffen: Gegen Städte, Türme und Wälle machen sie vollen Schaden, gegen Truppen im offenen Feld nur 60 %. Sie treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Gegenmittel: Reiter und Ritter, denn Katapulte haben keine Verteidigung und können nach einer Bewegung nicht schießen. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +10 % (höchstens +30 %): Einkesseln lohnt sich.</p>
     <h3>Schwarzer Troll</h3>
-    <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel und braucht eine Trollhöhle (Stadt ab Stufe 4). Höchstens 5 pro Reich.</p>
+    <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel und braucht eine Trollhöhle (Stadt ab Stufe 3). Höchstens 5 pro Reich.</p>
     <h3>Einheiten-Entwicklung ⬆</h3>
     <p>Im Forschungsfenster gibt es neben Militär, Wirtschaft und Verteidigung die Reiter <b>Nahkämpfer</b>, <b>Fernkämpfer</b>, <b>Zauberer</b>, <b>Katapulte</b> und <b>Titanen</b>. Dort wählst du eine Einheit und entwickelst sie in 5 Stufen weiter – das gilt sofort für alle Einheiten dieses Typs, auch für die schon aufgestellten. Auf Stufe 3 entscheidest du dich für eine von zwei Richtungen (z. B. Ritter → Chevalier mit extralanger Lanze oder Schwerer Ritter; Tribok → explosive Geschosse oder Riesenkugeln). So spezialisierst du dein Heer auf wenige starke Einheiten.</p>
     <p>Jede Stufe sieht man: goldene Steine am Sockel zählen die Stufen, neue Ausrüstung (Helm, Lanze, größerer Schild, zweites Schwert, Brandpfeile, Sprengbomben …), ab Stufe 4 schwarze Rüstung und auf Stufe 5 eine goldene Aura.</p>
@@ -2332,7 +2332,7 @@ function renderHelp() {
     <h3>Tribok</h3>
     <p>Die schwerste Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einzelnes Feld mit vollem Schaden (kein Flächenschaden, kein Abschlag gegen Truppen), kann aber nicht auf direkte Nachbarn schießen und nicht nach einer Bewegung. Braucht eine Werkstatt und die Forschung <b>Gegengewicht</b> (nach Ballistik), ohne Mengenbegrenzung, Unterhalt 1 Nahrung + 1 Holz. Ideal, um Burgverteidiger aus sicherer Entfernung zu treffen.</p>
     <h3>Basilisk 🦎</h3>
-    <p>Eine Riesenechse mit tödlichem Blick: Sie greift aus 2 Feldern an, und wer getroffen wird und überlebt, <b>versteinert</b> – er setzt seinen nächsten Zug aus und schlägt bis dahin nicht zurück (grau dargestellt). Troll, Drache, Türme und Wälle sind immun. Ideal, um einen starken Gegner festzuhalten, während deine Armee angreift. Braucht ein Basiliskennest (Stadt ab Stufe 3), höchstens 2 pro Reich.</p>
+    <p>Eine Riesenechse mit tödlichem Blick: Sie greift aus 2 Feldern an, und wer getroffen wird und überlebt, <b>versteinert</b> – er setzt seinen nächsten Zug aus und schlägt bis dahin nicht zurück (grau dargestellt). Troll, Drache, Türme und Wälle sind immun. Ideal, um einen starken Gegner festzuhalten, während deine Armee angreift. Braucht ein Basiliskennest (Stadt ab Stufe 2), höchstens 2 pro Reich.</p>
     <h3>Drache 🐉</h3>
     <p>Der mächtigste Titan: Er fliegt über Berge, Seen und eigene Einheiten hinweg (nicht über Gegner, und er landet nur auf freien Feldern), er hat Angriff 100, und sein Feueratem trifft auch die Gegner auf den 2 Feldern hinter dem Ziel (75 % und 50 %), und er heilt jede Runde 6 Leben. Er ist ein Endgegner und kostet je 300 Nahrung, Holz und Erz – bei jeder Stufe wählst du aus drei Spezialisierungen. Schwachstelle: Schützen und Türme treffen ihn um 60 % härter. Er braucht eine Drachenhöhle (in jeder Stadt baubar, aber nur eine im Reich – ein kleiner Drache auf dem Stadtturm zeigt, wo sie steht), und es gibt nur einen Drachen pro Reich.</p>
     <h3>Feuersturm 🔥</h3>

@@ -1022,12 +1022,15 @@ function miniDragon(ctx, x, y, s, col) {
   ctx.restore();
 }
 
-// Eine Stadt ist eine Burg, wenn sie voll ausgebaut ist (Stufe 5, alle Bauplätze belegt)
+// Eine Stadt ist eine Burg, wenn sie voll ausgebaut ist (Bild-Stufe 5, alle Bauplätze belegt)
 export function isFortress(city) {
   return city.level >= 5 && (city.buildings?.length || 0) >= 5;
 }
 
+// Bild der Stadt: die 3 Stadtstufen zeigen die Häuser der früheren Stufen 1, 3 und 5 (Sterne = echte Stufe)
+const CITY_LOOK = [0, 1, 3, 5];
 export function drawCity(ctx, city, x, y, H, col) {
+  if (city.stars == null) city = { ...city, stars: city.level, level: CITY_LOOK[city.level] ?? city.level };
   const s = H / 40;
   const big = isFortress(city);
   const walled = !!city.buildings?.includes('wall');

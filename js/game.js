@@ -5,7 +5,7 @@ import {
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
   PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, buildingYield, PLANT_COST, START_BUILDINGS, slotsUsed, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_PCT, SKILLS, skillsFor, boostCost, skillCost,
-  BASE_RES, MANA,
+  BASE_RES, MANA, ECO_TECH, ECO_TECH_PCT,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -51,7 +51,7 @@ export function createGame(config) {
   }
   // Hauptstädte zuweisen (Reihenfolge der Spieler gemischt durch Seed)
   const caps = state.cities.filter((c) => c.capital);
-  caps.forEach((c, i) => { c.owner = i; c.level = 2; c.castle = true; });
+  caps.forEach((c, i) => { c.owner = i; c.level = 1; c.castle = true; });
   for (const c of state.cities) c.buildings = c.capital ? [...START_BUILDINGS] : [];
   state.cities.forEach((c, i) => (state.cityAt[c.idx] = i));
   state.grapes = []; // Traubenhaine (angelegt von den Spielern)
@@ -504,14 +504,14 @@ export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp
   return { dmg, counter, kill, die: counter >= attHp };
 }
 
-// Gebiet: jedes Feld gehört der nächstgelegenen Stadt in Reichweite (Gleichstand: höhere Stufe)
+// Gebiet: jedes Feld gehört der nächstgelegenen Stadt in Reichweite (Gleichstand: höhere Stufe, dann Hauptstadt)
 export function computeTerritory(state) {
   const geo = geoOf(state);
   const owner = new Int16Array(geo.n).fill(-1);
   const best = new Float32Array(geo.n).fill(1e9);
   state.cities.forEach((c, ci) => {
     for (const j of geo.within(c.idx, cityRadius(c))) {
-      const d = geo.dist(c.idx, j) - c.level * 0.01;
+      const d = geo.dist(c.idx, j) - c.level * 0.01 - (c.capital ? 0.005 : 0);
       if (d < best[j]) { best[j] = d; owner[j] = ci; }
     }
   });
@@ -526,6 +526,8 @@ export function incomeOf(state, pid, territory = computeTerritory(state)) {
     const y = cityYield(state, ci, territory);
     for (const k of RES) inc[k] += y[k];
   });
+  // Pflug, Sägewerk, Bergbau: +50 % auf den gesamten Ertrag des Reichs, aufgerundet
+  for (const [k, t] of Object.entries(ECO_TECH)) if (hasTech(state, pid, t)) inc[k] += Math.ceil(inc[k] * ECO_TECH_PCT);
   const bonus = state.players[pid].incomeBonus || 0;
   if (bonus) for (const k of RES) inc[k] = Math.round(inc[k] * (1 + bonus));
   // Unterhalt der Armee wird vom Ertrag abgezogen (kann negativ werden)
@@ -557,12 +559,11 @@ export function cityYield(state, ci, territory = computeTerritory(state)) {
   const c = state.cities[ci];
   // Felder liefern nur mit passendem Gebäude: Bauernhof (Wiese/See), Holzfäller (Wald), Mine (Hügel, Lehm, Grube, Gebirge ×2), Kelterei (Traubenhain)
   const tiles = cityTiles(state, ci, territory);
-  const tech = (t) => c.owner >= 0 && hasTech(state, c.owner, t);
-  // Gebäude: je passendem Feld 1 auf Stufe 1, +½ je weiterer Stadtstufe; ohne passendes Feld nichts
+  // Gebäude: je passendem Feld so viel wie die Stadtstufe; ohne passendes Feld nichts (Forschung wirkt aufs ganze Reich, siehe incomeOf)
   const per = (n) => buildingYield(n, c.level);
-  if (hasBuilding(c, 'farm')) inc.food += per(tiles.food) + (tech('plough') ? 2 : 0) + (tech('rotation') ? 2 : 0);
-  if (hasBuilding(c, 'lumber')) inc.wood += per(tiles.wood) + (tech('saw') ? 2 : 0);
-  if (hasBuilding(c, 'mine')) inc.ore += per(tiles.ore) + (tech('mining') ? 2 : 0) + (tech('smelting') ? 2 : 0);
+  if (hasBuilding(c, 'farm')) inc.food += per(tiles.food);
+  if (hasBuilding(c, 'lumber')) inc.wood += per(tiles.wood);
+  if (hasBuilding(c, 'mine')) inc.ore += per(tiles.ore);
   if (hasBuilding(c, 'press')) inc.mana += per(tiles.mana);
   if (hasBuilding(c, 'sanctum')) inc.mana += MANA.sanctum;
   return inc;
@@ -1299,6 +1300,9 @@ export function migrateState(s) {
     s.v = STATE_VERSION;
     for (const u of s.units) u.hp = Math.max(1, Math.min(u.hp, statsOf(s, u).hp));
   }
+  // 0.73: nur noch 3 Stadtstufen, Dreifelderwirtschaft und Erzschmelze entfallen
+  for (const c of s.cities) c.level = Math.min(c.level, CITY_MAX_LEVEL);
+  for (const p of s.players) p.tech = (p.tech || []).filter((t) => TECHS[t]);
   return s;
 }
 

@@ -7,7 +7,7 @@ import {
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
   spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, unitUpOptions, unitUpList, canBuild, canPetrify, wouldShake,
-  DMG_K, canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage, canTerraform, cityTiles,
+  DMG_K, canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage, canTerraform, cityTiles, cityYield,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -320,6 +320,11 @@ function weightedPick(list, wf, rng) {
   return list[list.length - 1];
 }
 
+function cityYieldSum(state, ci, territory) {
+  const y = cityYield(state, ci, territory);
+  return y.food + y.wood + y.ore;
+}
+
 function chooseBuilding(state, ctx, pid, ci, inc) {
   const c = state.cities[ci];
   const full = slotsUsed(c) >= citySlots(c);
@@ -331,8 +336,8 @@ function chooseBuilding(state, ctx, pid, ci, inc) {
     mine: t.ore ? 1.5 + t.ore * 2 + (inc.ore < inc.wood ? 1 : 0) : 0,
     barracks: c.capital || ctx.ownCities.length >= 3 ? 2.2 : 0.3,
     workshop: ctx.ownCities.length >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'barracks')) ? 1.4 : 0.2,
-    dragonlair: c.level >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.6 : 0, // KI baut sie spät
-    lair: c.level >= 4 && !ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.5 : 0,
+    dragonlair: c.level >= 3 && ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.6 : 0, // KI baut sie spät
+    lair: c.level >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.5 : 0,
     nest: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'nest')) ? 1.3 : 0.1,
     sanctum: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'sanctum')) ? 1.5 : 0.3,
     wall: (ctx.cityDanger.get(c.idx) || 0) > 3 ? 3 : 0.4,
@@ -373,7 +378,15 @@ function economyAction(state, ctx, P, pid, rng) {
   }
   const totalDanger = [...ctx.cityDanger.values()].reduce((a, b) => a + b, 0);
   // Spieler haben kein Einheitenlimit; die KI hält sich an ein weiches Maß (Versorgung der Städte), bei Gefahr etwas mehr
-  const capped = unitCount(state, pid) >= unitCap(state, pid) * (P.armyCap || 1) + (totalDanger > 6 ? 2 : 0);
+  const incNow = incomeOf(state, pid, ctx.territory);
+  // Keine weiteren Einheiten, wenn die Nahrung schon jetzt kaum für den Unterhalt reicht (außer bei Gefahr)
+  const starving = incNow.food < 2 && totalDanger <= 6 && ctx.mine.length >= ctx.ownCities.length;
+  // Für den Stadtausbau sparen: genug Armee da, keine Gefahr, Holz und Erz reichen schon fast → keine neuen Einheiten
+  const upCity = P.upgrade >= 0.45 && totalDanger <= 6 && ctx.mine.length >= ctx.ownCities.length + 1
+    ? ctx.ownCities.filter((c) => c.level < CITY_MAX_LEVEL && (ctx.cityDanger.get(c.idx) || 0) < 4).sort((x, y) => x.level - y.level)[0] : null;
+  const upCost = upCity && upgradeCostOf(state, upCity);
+  const saveUp = !!upCost && res.wood >= upCost.wood * 0.7 && res.ore >= upCost.ore * 0.7 && res.food < upCost.food;
+  const capped = starving || saveUp || unitCount(state, pid) >= unitCap(state, pid) * (P.armyCap || 1) + (totalDanger > 6 ? 2 : 0);
   const wantArmy = !capped && (ctx.mine.length < ctx.ownCities.length + 2 || myArmy < maxEnemyArmy * 0.9 || totalDanger > 6);
   const cityIdx = (c) => state.cityAt[c.idx];
 
@@ -397,9 +410,10 @@ function economyAction(state, ctx, P, pid, rng) {
   }
   // Wiesen bearbeiten (abseits der Gegner): Wald bei Holzmangel, Grube bei Erzmangel, Traubenhain für Zauberer
   if (P.smart && rng() < 0.3 && canAfford(res, PLANT_COST) && (state.plants || []).filter((p) => p.pid === pid).length < ctx.ownCities.length) {
-    const inc = incomeOf(state, pid, ctx.territory);
+    const inc = incNow;
     const sanctum = ctx.ownCities.some((x) => hasBuilding(x, 'sanctum'));
-    const to = sanctum && inc.mana < 3 ? 'vine' : inc.ore * 2 < inc.food ? 'pit' : inc.wood * 2 < inc.food ? 'forest' : null;
+    // Wiesen nur umwandeln, wenn genug Nahrung übrig bleibt; das knappere von Holz und Erz zuerst
+    const to = inc.food < 6 ? null : sanctum && inc.mana < 3 ? 'vine' : Math.min(inc.wood, inc.ore) < 4 + ctx.ownCities.length * 2 ? (inc.wood <= inc.ore ? 'forest' : 'pit') : null;
     const need = { forest: 'lumber', pit: 'mine', vine: 'press' }[to];
     if (to) {
       for (let i = 0; i < ctx.territory.length; i++) {
@@ -415,19 +429,28 @@ function economyAction(state, ctx, P, pid, rng) {
   }
 
   // Wirtschaft: Gebäude und Ausbau, wenn keine akute Gefahr
-  if (P.upgrade > 0 && !saveTroll && (!wantArmy || capped || rng() < 0.3) && rng() < P.upgrade) {
-    const inc = incomeOf(state, pid, ctx.territory);
-    const safe = ctx.ownCities.filter((c) => (ctx.cityDanger.get(c.idx) || 0) < 4);
-    for (const c of safe.sort((a, b) => (b.capital - a.capital) || (b.level - a.level))) {
-      const b = chooseBuilding(state, ctx, pid, cityIdx(c), inc);
-      if (b) return { type: 'build', idx: c.idx, building: b };
+  // Wirtschaft zuerst: Bauernhof, Holzfäller, Mine, Kelterei überall, wo passende Felder liegen (belegen keinen Bauplatz)
+  if (P.upgrade > 0) {
+    for (const c of ctx.ownCities) {
+      const t = cityTiles(state, cityIdx(c), ctx.territory);
+      for (const b of ['farm', 'lumber', 'mine', 'press']) {
+        if (t[BUILDINGS[b].eco] && !canBuild(state, pid, c, b)) return { type: 'build', idx: c.idx, building: b };
+      }
     }
+  }
+  if (P.upgrade > 0 && !saveTroll && (!wantArmy || capped || rng() < 0.3) && rng() < P.upgrade) {
+    const safe = ctx.ownCities.filter((c) => (ctx.cityDanger.get(c.idx) || 0) < 4);
+    // Stadtausbau vor neuen Gebäuden: verdoppelt bzw. verdreifacht den Ertrag (Städte mit viel Ertrag zuerst)
     const ups = safe
-      .filter((c) => c.level < CITY_MAX_LEVEL && slotsUsed(c) >= citySlots(c) - 1 && canAfford(res, upgradeCostOf(state, c)))
-      .sort((a, b) => (b.capital - a.capital) || (a.level - b.level));
+      .filter((c) => c.level < CITY_MAX_LEVEL && canAfford(res, upgradeCostOf(state, c)))
+      .sort((a, b) => (a.level - b.level) || (cityYieldSum(state, cityIdx(b), ctx.territory) - cityYieldSum(state, cityIdx(a), ctx.territory)));
     if (ups.length) {
       memory.ctxKey = ''; // Ausbau verschiebt Gebietsgrenzen: Karte neu berechnen
       return { type: 'upgrade', idx: ups[0].idx };
+    }
+    for (const c of safe.sort((a, b) => (b.capital - a.capital) || (b.level - a.level))) {
+      const b = chooseBuilding(state, ctx, pid, cityIdx(c), incNow);
+      if (b) return { type: 'build', idx: c.idx, building: b };
     }
   }
   // Türme in bedrohten Städten
@@ -463,7 +486,9 @@ function economyAction(state, ctx, P, pid, rng) {
   // Forschung, wenn Rohstoffe übrig sind (Eifer je nach Stufe)
   if ((P.tech ?? P.upgrade) > 0 && !saveTroll && rng() < (P.tech ?? P.upgrade)) {
     const resSum = res.food + res.wood + res.ore;
-    const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'rotation', 'smelting', 'stirrups', 'keep', 'tactics', 'granary', 'counterweight', 'siegecart', 'battlements', 'medic', 'enlight', 'blessing', 'guild'].filter((t) => t !== 'guild' || tradeRate(state, pid));
+    // Wirtschaftsforschung (+50 % aufs Reich) lohnt sich erst mit mehreren Städten
+    const eco = ctx.ownCities.length >= 3 ? ['plough', 'mining', 'saw'] : [];
+    const prio = [...eco, 'bow', 'smith', 'horse', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'plough', 'mining', 'saw', 'stirrups', 'keep', 'tactics', 'granary', 'counterweight', 'siegecart', 'battlements', 'medic', 'enlight', 'blessing', 'guild'].filter((t) => t !== 'guild' || tradeRate(state, pid));
     if (resSum > (wantArmy ? 70 : 35)) {
       // Einheiten-Entwicklung: die meistgenutzten Einheiten gezielt verbessern (abwechselnd mit normaler Forschung)
       if (P.smart && rng() < 0.5) {

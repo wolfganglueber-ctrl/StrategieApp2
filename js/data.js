@@ -141,12 +141,10 @@ export const TECHS = {
   stirrups: { branch: 'mil', name: 'Steigbügel', icon: '🏇', cost: { food: 20, ore: 24 }, req: ['horse'], mod: { knight: { atk: 4 }, rider: { atk: 2 }, griffin: { atk: 4 } }, desc: 'Ritter und Greifenreiter +4 Angriff, Reiter +2 Angriff' },
   tactics: { branch: 'mil', name: 'Schlachtordnung', icon: '🚩', cost: { food: 24, wood: 12, ore: 20 }, req: ['smith'], desc: 'Flankenbonus +15 % statt +10 % je Nachbar' },
   roads: { branch: 'mil', name: 'Straßenbau', icon: '🛤️', cost: { food: 24, wood: 24, ore: 12 }, req: ['oxcart'], mod: { foot: { move: 1 } }, desc: 'Krieger, Schützen, Wächter +1 Bewegung' },
-  plough: { branch: 'eco', name: 'Pflug', icon: '🌱', cost: { wood: 16 }, req: [], desc: 'Bauernhöfe +2 Nahrung' },
-  saw: { branch: 'eco', name: 'Sägewerk', icon: '🪓', cost: { food: 16, ore: 8 }, req: [], desc: 'Holzfäller +2 Holz' },
-  mining: { branch: 'eco', name: 'Bergbau', icon: '⛏️', cost: { food: 16, wood: 16 }, req: [], desc: 'Minen +2 Erz' },
+  plough: { branch: 'eco', name: 'Pflug', icon: '🌱', cost: { food: 40, wood: 50, ore: 40 }, req: [], desc: '+50 % Nahrung im ganzen Reich' },
+  saw: { branch: 'eco', name: 'Sägewerk', icon: '🪓', cost: { food: 45, ore: 20 }, req: [], desc: '+50 % Holz im ganzen Reich' },
+  mining: { branch: 'eco', name: 'Bergbau', icon: '⛏️', cost: { food: 55, wood: 40 }, req: [], desc: '+50 % Erz im ganzen Reich' },
   guild: { branch: 'eco', name: 'Handelsgilde', icon: '💰', cost: { food: 45, wood: 40, ore: 30 }, req: ['plough'], desc: 'Handel 2:1 statt 3:1 (braucht einen Markt)' },
-  rotation: { branch: 'eco', name: 'Dreifelderwirtschaft', icon: '🌾', cost: { wood: 20, ore: 10 }, req: ['plough'], desc: 'Bauernhöfe weitere +2 Nahrung' },
-  smelting: { branch: 'eco', name: 'Erzschmelze', icon: '🔥', cost: { food: 20, wood: 20 }, req: ['mining'], desc: 'Minen weitere +2 Erz' },
   granary: { branch: 'eco', name: 'Kornspeicher', icon: '🏚️', cost: { food: 10, wood: 26, ore: 10 }, req: ['plough'], desc: 'Unterhalt der Armee: ein Viertel weniger Nahrung' },
   masonry: { branch: 'eco', name: 'Baukunst', icon: '🏛️', cost: { wood: 24, ore: 16 }, req: ['saw', 'mining'], desc: 'Stadtausbau 25 % günstiger' },
   medic: { branch: 'def', name: 'Heilkunde', icon: '🌿', cost: { food: 28 }, req: [], desc: 'Einheiten heilen 2 mehr' },
@@ -308,8 +306,12 @@ export function skillCost(type) {
   return pctCost(type, SKILL_COST);
 }
 
-export const CITY_MAX_LEVEL = 8;
-export const CITY_NAMES = ['', 'Dorf', 'Siedlung', 'Stadt', 'Burgstadt', 'Metropole', 'Großmetropole', 'Residenzstadt', 'Kaiserstadt'];
+// Drei Stadtstufen: Stufe 2 verdoppelt, Stufe 3 verdreifacht den Ertrag je Feld
+export const CITY_MAX_LEVEL = 3;
+export const CITY_NAMES = ['', 'Dorf', 'Stadt', 'Metropole'];
+// Wirtschaftsforschung: +50 % auf den gesamten Ertrag des Reichs (aufgerundet)
+export const ECO_TECH = { food: 'plough', wood: 'saw', ore: 'mining' };
+export const ECO_TECH_PCT = 0.5;
 export const START_RES = { food: 6, wood: 6, ore: 4, mana: 0 };
 export const TRADE_RATE = 3;
 export const TRADE_RATE_GUILD = 2;
@@ -324,8 +326,8 @@ export const BUILDINGS = {
   wall: { art: 'eine', name: 'Mauer', icon: '🧱', cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt ×2,2' },
   sanctum: { art: 'einen', name: 'Turm der Weisen', icon: '🔮', cost: { wood: 6, ore: 6 }, desc: 'Zauberer möglich, +1 Mana' },
   press: { art: 'eine', name: 'Kelterei', icon: '🍇', eco: 'mana', cost: { food: 10, wood: 10 }, desc: '1 Mana je Traubenhain im Stadtkreis, mit jeder weiteren Stadtstufe +½ je Feld' },
-  nest: { art: 'ein', name: 'Basiliskennest', icon: '🦎', cost: { food: 10, wood: 8, ore: 12 }, minLevel: 3, desc: 'Basilisk möglich (Stadt ab Stufe 3)' },
-  lair: { art: 'eine', name: 'Trollhöhle', icon: '🦴', cost: { food: 10, wood: 12, ore: 16 }, minLevel: 4, desc: 'Schwarzer Troll möglich (Stadt ab Stufe 4)' },
+  nest: { art: 'ein', name: 'Basiliskennest', icon: '🦎', cost: { food: 10, wood: 8, ore: 12 }, minLevel: 2, desc: 'Basilisk möglich (Stadt ab Stufe 2)' },
+  lair: { art: 'eine', name: 'Trollhöhle', icon: '🦴', cost: { food: 10, wood: 12, ore: 16 }, minLevel: 3, desc: 'Schwarzer Troll möglich (Stadt ab Stufe 3)' },
   market: { art: 'einen', name: 'Markt', icon: '⚖️', cost: { food: 16, wood: 16, ore: 8 }, perRealm: 1, desc: 'Erlaubt Handel (3:1, mit Handelsgilde 2:1), einer pro Reich' },
   dragonlair: { art: 'eine', name: 'Drachenhöhle', icon: '🐉', cost: { food: 20, wood: 20, ore: 30 }, perRealm: 1, desc: 'Drache möglich (nur eine im Reich)' },
 };
@@ -340,7 +342,7 @@ export function slotsUsed(city) {
 export const START_BUILDINGS = ['farm', 'lumber', 'mine'];
 // Versorgung: wie viele Einheiten eine Stadt unterhält (bewusst knapp: wenige, aber wertvolle Einheiten)
 export function citySupply(city) {
-  return [0, 2, 2, 3, 4, 5, 6, 7, 8][city.level];
+  return [0, 3, 5, 7][city.level] ?? 7;
 }
 // Jede Stadt besitzt 2 Felder Gebiet um sich herum
 export function cityRadius() {
@@ -353,18 +355,16 @@ export const PLANT_COST = { food: 10, wood: 5 };
 export const PLANT_KINDS = { forest: { name: 'Aufforsten', icon: '🌱', what: 'Wald' }, pit: { name: 'Grube graben', icon: '⛏️', what: 'Erzgrube' }, vine: { name: 'Traubenhain', icon: '🍇', what: 'Traubenhain' } };
 export const PLANT_ROUNDS = 3;
 export const CLEAR_WOOD = 15;
-// Bauernhof/Holzfäller/Mine/Kelterei: je passendem Feld 1 auf Stufe 1 (ohne Feld nichts), mit jeder weiteren Stadtstufe +½ je Feld
-// (gleichmäßiger Zuwachs, aufgerundet auf die ganze Stadt) – hohe Stufen lohnen sich in langen Partien
+// Bauernhof/Holzfäller/Mine/Kelterei: je passendem Feld so viel wie die Stadtstufe (1, 2, 3; ohne Feld nichts)
 export function buildingYield(tiles, level) {
-  return Math.ceil((tiles * (level + 1)) / 2);
+  return tiles * level;
 }
 // Versorgung: Einheiten über der Versorgung der Städte kosten doppelten, über dem 1,5-Fachen dreifachen Unterhalt
 export function citySlots(city) {
-  return Math.min(MAX_SLOTS, city.level);
+  return Math.min(MAX_SLOTS, city.level * 2);
 }
 export function upgradeCost(city) {
-  return [null, { food: 8, wood: 8 }, { food: 14, wood: 12, ore: 6 }, { food: 26, wood: 22, ore: 16 }, { food: 44, wood: 38, ore: 32 },
-    { food: 70, wood: 62, ore: 54 }, { food: 105, wood: 95, ore: 85 }, { food: 150, wood: 135, ore: 120 }][city.level];
+  return [null, { food: 45, wood: 12, ore: 12 }, { food: 65, wood: 22, ore: 22 }][city.level];
 }
 export function cityDefense(city, stonework = false) {
   return city.buildings?.includes('wall') ? (stonework ? 2.6 : 2.2) : 1.5;

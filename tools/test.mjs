@@ -107,6 +107,11 @@ const t0 = Date.now();
   check(['farm', 'lumber', 'mine'].every((b) => cap.buildings.includes(b)), 'Startgebäude');
   const ci = s.cities.indexOf(cap), t = cityTiles(s, ci), y = cityYield(s, ci);
   check(y.food === buildingYield(t.food, cap.level) && y.ore === buildingYield(t.ore, cap.level), 'Ertrag nur über Gebäude');
+  cap.level = 3;
+  check(cityYield(s, ci).food === 3 * t.food, 'Stufe 3 verdreifacht den Ertrag');
+  const before = incomeOf(s, 0).food, gross = s.cities.reduce((a, c, k) => a + (c.owner === 0 ? cityYield(s, k).food : 0), 0);
+  s.players[0].tech.push('plough');
+  check(incomeOf(s, 0).food - before === Math.ceil(gross / 2), 'Pflug +50 % Nahrung');
   cap.buildings = [];
   check(Object.values(cityYield(s, ci)).every((v) => v === 0), 'Ohne Gebäude kein Ertrag');
 }
