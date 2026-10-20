@@ -573,7 +573,7 @@ export function cityYield(state, ci, territory = computeTerritory(state)) {
   if (hasBuilding(c, 'farm')) inc.food += per('food', tiles.food);
   if (hasBuilding(c, 'lumber')) inc.wood += per('wood', tiles.wood);
   if (hasBuilding(c, 'mine')) inc.ore += per('ore', tiles.ore);
-  if (hasBuilding(c, 'press')) inc.mana += per(tiles.mana);
+  if (hasBuilding(c, 'press')) inc.mana += per('mana', tiles.mana);
   if (hasBuilding(c, 'sanctum')) inc.mana += MANA.sanctum;
   return inc;
 }

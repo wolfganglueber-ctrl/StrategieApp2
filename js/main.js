@@ -1486,6 +1486,25 @@ function updateHud() {
       onclick: () => (mana ? toast(`🍇 ${info}. Mana kommt aus Traubenhainen (Wiese bearbeiten) mit Kelterei und vom Turm der Weisen. Es lässt sich nicht handeln.`, 5000) : openTrade(k)),
     }, icon(k), el('b', {}, human.res[k] || 0), el('small', {}, `+${gross[k]}`)));
   }
+  // Testmodus: Vorrat und Reichsertrag der Gegner, dazu Armee und Städte (Stufen)
+  const eb = $('enemyBar');
+  eb.innerHTML = '';
+  const showEnemy = settings.enemyRes !== false;
+  eb.classList.toggle('hidden', !showEnemy);
+  if (showEnemy) {
+    for (const p of S.players.filter((x) => x.id !== human.id && x.alive)) {
+      const y = realmYield(S, p.id), net = incomeOf(S, p.id);
+      const cs = S.cities.filter((c) => c.owner === p.id);
+      eb.append(el('div', { class: 'enemy-row', title: `${p.name}: Vorrat und Ertrag pro Runde (rot: Unterhalt frisst mehr)` },
+        el('span', { class: 'dot', style: `background:${PLAYER_COLORS[p.id].main}` }),
+        el('b', {}, DIFFICULTIES[(p.ai || 3) - 1]?.name || p.name),
+        ...RES.map((k) => el('span', { class: 'er' + (net[k] < 0 ? ' short' : '') }, icon(k), `${p.res[k] || 0}`, el('small', {}, `+${y[k]}`))),
+        el('span', { class: 'er' }, `⚔ ${unitCount(S, p.id)}`),
+        el('span', { class: 'er' }, `🏰 ${cs.length} (${[1, 2, 3].map((l) => cs.filter((c) => c.level === l).length).join('/')})`),
+        el('span', { class: 'er' }, `🔬 ${p.tech.length}`)));
+    }
+  }
+  updateHudTop();
   // Armee-Unterhalt pro Runde neben der Einheitenzahl
   const up = upkeepTotal(S, human.id);
   const used = unitCount(S, human.id), sup = unitCap(S, human.id);
@@ -1998,7 +2017,8 @@ function toast(text, ms = 2400) {
 // Im Spiel bleiben Rundenanzeige und Rohstoffe oben immer sichtbar
 function updateHudTop() {
   const inGame = !$('hud').classList.contains('hidden');
-  const top = inGame ? Math.ceil($('resBar').getBoundingClientRect().bottom) + 6 : 0;
+  const eb = $('enemyBar');
+  const top = inGame ? Math.ceil(Math.max($('resBar').getBoundingClientRect().bottom, eb.classList.contains('hidden') ? 0 : eb.getBoundingClientRect().bottom)) + 6 : 0;
   document.documentElement.style.setProperty('--hud-top', top + 'px');
   $('modal').classList.toggle('ingame', inGame);
 }
@@ -2193,6 +2213,8 @@ function openSettings(onClose) {
     seg([[true, 'An'], [false, 'Aus']], settings.fx !== false, (v) => { settings.fx = v; store.saveSettings(settings); R.fx = v; }),
     el('label', {}, 'Türme schießen am Zugende automatisch'),
     seg([[true, 'An'], [false, 'Aus']], settings.towerAuto !== false, (v) => { settings.towerAuto = v; store.saveSettings(settings); }),
+    el('label', {}, 'Rohstoffe der Gegner oben anzeigen (Testmodus)'),
+    seg([[true, 'An'], [false, 'Aus']], settings.enemyRes !== false, (v) => { settings.enemyRes = v; store.saveSettings(settings); updateHud(); }),
     el('label', {}, 'Alle Level freischalten (Testmodus)'),
     toggle('unlockAll'),
     el('button', { class: 'btn primary big', onclick: () => { closeModal(); if (onClose) onClose(); } }, 'Fertig'),

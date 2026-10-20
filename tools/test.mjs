@@ -114,6 +114,9 @@ const t0 = Date.now();
   s.players[0].tech.push('plough');
   check(incomeOf(s, 0).food - before === gross.reduce((a, v) => a + Math.ceil(v / 2), 0), 'Pflug +50 % Nahrung');
   check(realmYield(s, 0).food === cityFood(), 'Reichsertrag = Summe der Städte');
+  const g = [...s.terrain.keys()].find((i) => canTerraform(s, 0, i) === 'plant');
+  s.grapes.push(g); cap.buildings.push('press');
+  check(Number.isFinite(realmYield(s, 0).mana) && cityYield(s, ci).mana >= 3, 'Mana aus Traubenhain mit Kelterei');
   cap.buildings = [];
   check(Object.values(cityYield(s, ci)).every((v) => v === 0), 'Ohne Gebäude kein Ertrag');
 }
