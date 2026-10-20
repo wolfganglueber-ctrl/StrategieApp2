@@ -1,9 +1,9 @@
 # Stand
 Spiel-Link: https://claude.ai/artifact/DSHgsarxYi3z7aj65QHMEA (wird bei /fertig aktualisiert)
 
-Version 0.70 (Branch `ccr-8aa711c1-0bv1jz`), Name **KnightyKnight** (intern weiter `hexkrone`), spielbar im Browser/als PWA.
+Version 0.71 (Branch `ccr-8aa711c1-0bv1jz`), Name **KnightyKnight** (intern weiter `hexkrone`), spielbar im Browser/als PWA.
 - Hexkarte (Wiese, Wald, Hügel, Gebirge, See, Lehm), 7 Kartengrößen, 5 Landschaften, Karten-Code, Nebel-Schalter; Kampagne mit 50 Leveln, Freies Spiel, 10 Speicherplätze, Rückgängig.
-- Wirtschaft: Aufforsten (Wiese → Wald in 3 Runden) und Roden (Wald → Wiese, +15 Holz) im Stadtgebiet. Städte mit 8 Stufen, gleichmäßiger Ertrag (+½ je Feld und Stufe), teure hohe Stufen, Versorgung mit steigendem Unterhalt (×2/×3), Markt/Handel, keine Lagergrenze.
+- Wirtschaft: Mana als 4. Rohstoff (Manatrauben-Haine, Kelterei, Turm der Weisen; nur für Magie, nicht handelbar). Aufforsten (Wiese → Wald in 3 Runden) und Roden (Wald → Wiese, +15 Holz) im Stadtgebiet ohne Begrenzung. Städte mit 8 Stufen, gleichmäßiger Ertrag (+½ je Feld und Stufe), teure hohe Stufen, Versorgung mit steigendem Unterhalt (×2/×3), Markt/Handel, keine Lagergrenze.
 - 12 Einheiten inkl. Greifenreiter, Troll, Basilisk, Tribok, Drache (1,6× groß, Feuersturm 3/4/3 alle 3 Runden mit Flächenbrand); alle Werte ganzzahlig.
 - Entwicklung: Forschungsbaum, Einheiten-Entwicklung je Typ (5 Stufen, Optik), Einzel-Verbesserungen je Einheit (Angriff/Verteidigung/Leben + Fähigkeiten, Zauberer: Vereisen/Flächenheilung/Bergsprengung), Ränge mit Spezialisierungen.
 - Kampf: Erschüttert erst nach 2 Angreifern (nie Titanen), Flanke, Schutzaura, Kampf-Tooltip, rote Ziele auch nach dem Ziehen erreichbar (Tipp = heranziehen + angreifen), Gruppen bis alle fertig sind.
@@ -11,6 +11,7 @@ Version 0.70 (Branch `ccr-8aa711c1-0bv1jz`), Name **KnightyKnight** (intern weit
 - KI in 6 Stufen; Balance zuletzt: 4v3 23:7 (M), 5v4 17:3 (L).
 
 Versionsverlauf (neueste zuerst):
+- 0.71 Mana: `RES` = `BASE_RES` + 'mana' (data.js), `MANA` (grape 1, press +2, sanctum 1; Kosten freeze 3, bomb 4, areaheal 2, storm 8). `state.grapes` (placeGrapes in game.js: je Hauptstadt einer im Abstand 2, bei ~jedem 2. Dorf einer; alte Spielstände ohne Haine). Ertrag in cityYield, Zauberer kostet 6 Mana (nach Preisverdopplung) + 1 Mana Unterhalt (steigt nicht mit Versorgung), Erleuchtung/Segen je 10 Mana, Zauber prüfen `hasMana`. Handel nur mit BASE_RES. Gebäude Kelterei `press`. KI baut Kelterei bei Hainen. UI: 4. Pill in der Rohstoffleiste (Antippen erklärt Mana), Mana-Kosten auf Zauberknöpfen, Haine gezeichnet (`drawGrapes` in art.js), Feldinfo, Hilfe. Aufforsten/Roden ohne Begrenzung je Stadt (nicht auf Hainen). Ohne Simulation.
 - 0.70 Aufforsten/Roden: Aktionen `plant`/`clear`, `canTerraform` in game.js (eigenes Stadtgebiet, nicht Stadt/Burgfelder; eine Schonung je Stadt, eine Rodung je Stadt und Runde), `state.plants` [{idx, pid, ci, done}] wird am Rundenbeginn des Besitzers zu Wald, Schonung liefert nichts. Kosten `PLANT_COST` 10 Nahrung + 5 Holz, `PLANT_ROUNDS` 3, `CLEAR_WOOD` 15 (data.js). UI: im Gebäude-Reiter „Aufforsten / Roden → Felder wählen“ (`sel.terraform`, helle Felder, Modus bleibt offen), Setzlinge in render.js `drawPlants`. KI forstet auf, wenn Holz < ⅓ Nahrung (fern von Gegnern). Ohne Simulation.
 - 0.69 Gewählte Einheit, die noch ziehen kann: auch Gegner, die erst nach dem Ziehen erreichbar sind, rot markiert (Vorschau vom besten Angriffsfeld, `reachTargets` in main.js; Fernkämpfer halten Abstand). Tipp darauf: ziehen + angreifen (`doApproachAttack`). Nicht für Einheiten, die nach dem Ziehen nicht schießen dürfen (Katapult, Tribok).
 - 0.68 Gruppe löst sich nur noch auf, wenn kein Mitglied mehr ziehen oder angreifen kann (`groupDone`); mehrere Ziele nacheinander mit derselben Gruppe möglich.
@@ -89,10 +90,10 @@ Versionsverlauf (neueste zuerst):
 
 # Offene Aufgaben
 - **Am Ende der Entwicklung erinnern (Wolfgang hat darum gebeten):** LICENSE „Alle Rechte vorbehalten“ anlegen, kurze Datenschutzerklärung/Impressum-Hinweis ins Spiel, Markenrecherche „KnightyKnight“ (Looney Tunes „Knighty Knight Bugs“), Repo ggf. privat, eigenes Hosting statt Artefakt für kommerzielle Nutzung. Emojis in Menüs (Darstellung = Geräteschrift von Apple/Google) für Werbematerial ggf. durch eigene Symbole ersetzen.
-- Wolfgang testet 0.70 und gibt Rückmeldung: Aufforsten/Roden (Kosten, Dauer, Bedienung)? Stadtausbau lohnend genug? Wirtschaft ohne Lagergrenze knapp genug? Feuersturm zu stark? Kampfeffekte/zZZ gut, ruckelt etwas am Handy? Preise der Einzel-Verbesserungen, Greifenreiter, Vereisen? Erschüttert-Regel so gemeint (Katapult als Ziel schon nach einem Angriff)?
+- Wolfgang testet 0.71 und gibt Rückmeldung: Mana (genug Haine? Kosten der Zauber? Zauberer zu teuer?), Aufforsten/Roden? Stadtausbau lohnend genug? Wirtschaft ohne Lagergrenze knapp genug? Feuersturm zu stark? Kampfeffekte/zZZ gut, ruckelt etwas am Handy? Preise der Einzel-Verbesserungen, Greifenreiter, Vereisen? Erschüttert-Regel so gemeint (Katapult als Ziel schon nach einem Angriff)?
 - Angebot offen: Feldwahl beim Heranziehen soll auch andere Gegner meiden (Schütze landete im Test neben einem zweiten Gegner).
 - Angebot offen: Schwingenfeld (Drache blockiert ein zweites Feld) und freie Schüsse von Schützen/Türmen beim Feuersturm.
 - Ideen von früher: Marschbefehl (automatisches Ziehen über mehrere Runden); Balancing Troll (in Städten mit Mauer sehr zäh) und KI-Heilen (selten genutzt).
 
 # Nächster Schritt
-Als Nächstes Mana als 4. Rohstoff (Konzept: seltene Manatrauben-Haine + Kelterei, nur für Magie – Zauberer, Zauber, Feuersturm, magische Forschung) – vorher Rückmeldung zu 0.70 einholen und daraus gesammelt (vorher fragen) die nächsten Änderungen umsetzen – am besten in einer neuen Sitzung mit /start.
+Rückmeldung zu 0.71 (Mana) einholen; danach ggf. Balance-Simulation (vorher fragen) und daraus gesammelt (vorher fragen) die nächsten Änderungen umsetzen – am besten in einer neuen Sitzung mit /start.

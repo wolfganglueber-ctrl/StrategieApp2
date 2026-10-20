@@ -285,6 +285,61 @@ export function drawForest(ctx, x, y, H, seed) {
   }
 }
 
+// Manatrauben-Hain: Rebstock mit leuchtenden violetten Trauben und magischem Schimmer
+export function drawGrapes(ctx, x, y, H, seed) {
+  const s = H / 40;
+  ctx.save();
+  // magischer Schein am Boden
+  const g = ctx.createRadialGradient(x, y + 2 * s, 2 * s, x, y + 2 * s, 22 * s);
+  g.addColorStop(0, 'rgba(216,180,254,0.55)');
+  g.addColorStop(1, 'rgba(168,85,247,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(x, y + 2 * s, 22 * s, 14 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+  for (const [dx, dy] of [[-9, 4], [8, 6], [0, -4]]) {
+    const bx = x + dx * s, by = y + dy * s;
+    // Rebpfahl und Ranke
+    ctx.strokeStyle = '#5b3a1e';
+    ctx.lineWidth = 1.6 * s;
+    ctx.beginPath();
+    ctx.moveTo(bx, by + 8 * s);
+    ctx.lineTo(bx, by - 8 * s);
+    ctx.stroke();
+    ctx.fillStyle = '#4d7c0f';
+    for (const [lx, ly, r] of [[-3.5, -7, 3.4], [3.5, -6, 3], [0, -9.5, 2.8]]) {
+      ctx.beginPath();
+      ctx.ellipse(bx + lx * s, by + ly * s, r * s, r * 0.75 * s, lx * 0.15, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Traube: Beeren in Dreiecksform
+    const berries = [[-2.4, -3], [0, -3], [2.4, -3], [-1.2, -0.8], [1.2, -0.8], [0, 1.4]];
+    for (const [ox, oy] of berries) {
+      ctx.fillStyle = hash(seed * 7 + ox * 3 + oy) > 0.5 ? '#9333ea' : '#7e22ce';
+      ctx.beginPath();
+      ctx.arc(bx + ox * s, by + oy * s, 1.5 * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(245,208,254,0.85)';
+      ctx.beginPath();
+      ctx.arc(bx + (ox - 0.5) * s, by + (oy - 0.5) * s, 0.5 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // Funkeln
+  ctx.fillStyle = '#fef3c7';
+  for (let k = 0; k < 3; k++) {
+    const px = x + (hash(seed * 13 + k) - 0.5) * 26 * s, py = y + (hash(seed * 17 + k) - 0.5) * 18 * s - 4 * s;
+    ctx.beginPath();
+    ctx.moveTo(px, py - 2.2 * s);
+    ctx.lineTo(px + 0.7 * s, py);
+    ctx.lineTo(px, py + 2.2 * s);
+    ctx.lineTo(px - 0.7 * s, py);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 export function drawHill(ctx, x, y, H, seed) {
   const s = H / 40;
   const mounds = [[-11, 6, 15, 11], [10, -2, 17, 13], [2, 15, 11, 7]];

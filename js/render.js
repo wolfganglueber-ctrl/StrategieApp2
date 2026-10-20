@@ -4,7 +4,7 @@ import { hexCenter, pixelToIndex, boardSize, SQRT3, getGeo } from './hex.js';
 import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS, PERKS } from './data.js';
 import { computeTerritory, statsOf, inAura } from './game.js';
 import {
-  hash, hexPath, mix, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, drawWallLink, FIG_BOX, drawCastle, drawCourt, CASTLE_BOX,
+  hash, hexPath, mix, drawGrapes, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, drawWallLink, FIG_BOX, drawCastle, drawCourt, CASTLE_BOX,
 } from './art.js';
 
 export const HEX = 40;
@@ -921,6 +921,7 @@ export class Renderer {
         else if (T[i] === 'forest') drawForest(ctx, c.x, c.y, HEX, i);
         else if (T[i] === 'hill') drawHill(ctx, c.x, c.y, HEX, i);
         else if (T[i] === 'mountain') drawMountain(ctx, c.x, c.y, HEX, i);
+        if (s.grapes?.includes(i)) drawGrapes(ctx, c.x, c.y, HEX, i);
       }
     }
     // Städte groß über die Nachbarfelder (je höher die Stufe, desto größer), damit man sie auch mit Einheit darauf gut erkennt

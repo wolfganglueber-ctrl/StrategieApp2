@@ -12,7 +12,7 @@ import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
 import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
-  upgradeCost, cityDefense, citySupply, canAfford, RES, RES_INFO, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
+  upgradeCost, cityDefense, citySupply, canAfford, RES, BASE_RES, RES_INFO, MANA, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
   RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, CENTER_YIELD, MAX_SLOTS, BUILDING_FLAT, buildingYield, PLANT_COST, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
   BOOST_PCT, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
@@ -962,13 +962,13 @@ function openTrade(preGet) {
   const draw = () => {
     const p = S.players[S.current];
     const rate = tradeRate(S, p.id);
-    if (!give || give === get) give = RES.filter((k) => k !== get).sort((a, b) => p.res[b] - p.res[a])[0];
-    if (!get || get === give) get = RES.find((k) => k !== give);
+    if (!give || give === get) give = BASE_RES.filter((k) => k !== get).sort((a, b) => p.res[b] - p.res[a])[0];
+    if (!get || get === give) get = BASE_RES.find((k) => k !== give);
     const max = Math.floor(p.res[give] / rate + 1e-9);
     n = Math.max(0, Math.min(n, max));
     if (n === 0 && max > 0) n = 1;
     const row = (label, cur, onPick) => el('div', { class: 'trade-row' }, el('span', { class: 'muted' }, label),
-      ...RES.map((k) => el('button', { class: 'tchip' + (cur === k ? ' active' : ''), onclick: () => { onPick(k); draw(); } }, icon(k), el('b', {}, p.res[k]))));
+      ...BASE_RES.map((k) => el('button', { class: 'tchip' + (cur === k ? ' active' : ''), onclick: () => { onPick(k); draw(); } }, icon(k), el('b', {}, p.res[k]))));
 
     const slider = el('input', { type: 'range', id: 'tradeSlider', min: 0, max: Math.max(1, max), step: 1, value: n, disabled: max === 0 });
     const amount = el('div', { class: 'trade-amount' });
@@ -1448,6 +1448,7 @@ const ICONS = {
   food: '<svg viewBox="0 0 16 16"><path d="M8 15.5V4" stroke="#a16207" stroke-width="1.4" fill="none"/><ellipse cx="8" cy="3.6" rx="1.7" ry="2.8" fill="#fcd34d"/><ellipse cx="5.4" cy="7.4" rx="1.4" ry="2.6" transform="rotate(-32 5.4 7.4)" fill="#facc15"/><ellipse cx="10.6" cy="7.4" rx="1.4" ry="2.6" transform="rotate(32 10.6 7.4)" fill="#facc15"/><ellipse cx="5.6" cy="11.2" rx="1.3" ry="2.4" transform="rotate(-32 5.6 11.2)" fill="#eab308"/><ellipse cx="10.4" cy="11.2" rx="1.3" ry="2.4" transform="rotate(32 10.4 11.2)" fill="#eab308"/></svg>',
   wood: '<svg viewBox="0 0 16 16"><rect x="0.8" y="4.5" width="12.5" height="7.5" rx="3.7" fill="#9a5b2a"/><path d="M2.5 7h7M3.5 9.6h6" stroke="#6b3a15" stroke-width="0.9"/><ellipse cx="12.4" cy="8.25" rx="2.8" ry="3.7" fill="#e8b47c" stroke="#7a451c" stroke-width="0.9"/><ellipse cx="12.4" cy="8.25" rx="1.2" ry="1.7" fill="none" stroke="#b9773d" stroke-width="0.7"/></svg>',
   ore: '<svg viewBox="0 0 16 16"><path d="M1.5 13 3.8 6.2 8 2.8 12.8 5.6 14.6 13Z" fill="#9aa1ab"/><path d="M8 2.8 12.8 5.6 14.6 13H8.8Z" fill="#6b727c"/><path d="M5 9.5 6.4 8 7.6 9.4 6.2 10.9Z" fill="#7dd3fc"/><path d="M10 7.5 11 6.6 11.8 7.8 10.8 8.6Z" fill="#7dd3fc"/></svg>',
+  mana: '<svg viewBox="0 0 16 16"><path d="M8 1.2c.4 1.4 1.6 1.8 2.6 1.6" stroke="#4d7c0f" stroke-width="1.1" fill="none" stroke-linecap="round"/><circle cx="6" cy="5.6" r="2.1" fill="#a855f7"/><circle cx="10" cy="5.6" r="2.1" fill="#9333ea"/><circle cx="8" cy="8.6" r="2.2" fill="#a855f7"/><circle cx="5.4" cy="9.6" r="1.9" fill="#7e22ce"/><circle cx="10.6" cy="9.6" r="1.9" fill="#9333ea"/><circle cx="8" cy="12.6" r="2" fill="#7e22ce"/><circle cx="5.4" cy="5" r=".7" fill="#f5d0fe"/><circle cx="7.4" cy="8" r=".7" fill="#f5d0fe"/><circle cx="12.6" cy="3.2" r=".8" fill="#fde68a"/></svg>',
   atk: '<svg viewBox="0 0 16 16"><path d="M3 13 12.5 3.5" stroke="#e5e7eb" stroke-width="2.2" stroke-linecap="round"/><path d="M2 9.5 6.5 14" stroke="#d4a017" stroke-width="2" stroke-linecap="round"/></svg>',
   def: '<svg viewBox="0 0 16 16"><path d="M8 1.5 13.5 3.5V8c0 3.2-2.4 5.4-5.5 6.5C4.9 13.4 2.5 11.2 2.5 8V3.5Z" fill="#93c5fd" stroke="#1e3a8a" stroke-width="1"/></svg>',
   move: '<svg viewBox="0 0 16 16"><path d="M3 9h7l-2.5-3M10 9l-2.5 3" stroke="#e5e7eb" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 4v10" stroke="#e5e7eb" stroke-width="1.8" stroke-linecap="round"/></svg>',
@@ -1475,8 +1476,12 @@ function updateHud() {
   bar.innerHTML = '';
   for (const k of RES) {
     const up = upkeepTotal(S, human.id)[k];
-    bar.append(el('button', { class: 'pill', title: `${RES_INFO[k].name}: Ertrag pro Runde nach Abzug von ${up} Unterhalt für die Armee – tippen zum Handeln`, onclick: () => openTrade(k) },
-      icon(k), el('b', {}, human.res[k]), el('small', { class: inc[k] < 0 ? 'neg' : '' }, inc[k] < 0 ? `${inc[k]}` : `+${inc[k]}`)));
+    const mana = k === 'mana';
+    bar.append(el('button', {
+      class: 'pill' + (mana ? ' mana' : ''),
+      title: mana ? 'Mana: für Zauberer, Zauber, Feuersturm und magische Forschung – nicht handelbar' : `${RES_INFO[k].name}: Ertrag pro Runde nach Abzug von ${up} Unterhalt für die Armee – tippen zum Handeln`,
+      onclick: () => (mana ? toast('🍇 Mana kommt aus Manatrauben-Hainen im Stadtgebiet (mit Kelterei mehr) und vom Turm der Weisen. Es lässt sich nicht handeln.', 4000) : openTrade(k)),
+    }, icon(k), el('b', {}, human.res[k] || 0), el('small', { class: inc[k] < 0 ? 'neg' : '' }, inc[k] < 0 ? `${inc[k]}` : `+${inc[k]}`)));
   }
   // Armee-Unterhalt pro Runde neben der Einheitenzahl
   const up = upkeepTotal(S, human.id);
@@ -1565,7 +1570,7 @@ function cityTitle(c) {
 function tileInfo(i) {
   const c = cityOn(S, i);
   if (c) return `${cityTitle(c)} · Verteidigung ×${fmt(cityDefense(c, hasTech(S, c.owner, 'stonework')))}`;
-  return TERRAIN[S.terrain[i]].name;
+  return TERRAIN[S.terrain[i]].name + (S.grapes?.includes(i) ? ' · 🍇 Manatrauben-Hain' : '');
 }
 
 let cityTab = 'units';
@@ -1634,8 +1639,8 @@ function advice(occ) {
   if (rc) return { text: 'Rekrutiere Einheiten: Mische Fernkämpfer (Schützen) und Nahkämpfer.', city: rc.idx, tab: 'units' };
   // 6. Handel
   const rate = tradeRate(S, pid);
-  const low = RES.slice().sort((a, b) => p.res[a] - p.res[b])[0];
-  const high = RES.slice().sort((a, b) => p.res[b] - p.res[a])[0];
+  const low = BASE_RES.slice().sort((a, b) => p.res[a] - p.res[b])[0];
+  const high = BASE_RES.slice().sort((a, b) => p.res[b] - p.res[a])[0];
   if (rate && p.res[low] < 4 && p.res[high] >= rate + 4) return { text: `Dir fehlt ${RES_INFO[low].name}. Tausche ${RES_INFO[high].name} – tippe oben auf die Rohstoffleiste.`, trade: low };
   if (canStill.length) return { text: `${canStill.length} Einheit${canStill.length > 1 ? 'en können' : ' kann'} noch handeln (leuchtender Ring).`, unit: canStill[0].id };
   return { text: 'Alles erledigt – beende deinen Zug.' };
@@ -1714,11 +1719,11 @@ function renderCityPanel(panel, ci, occ) {
           }, costEl(UNITS[type].cost, p.res))));
       }
       // Gelände umgestalten: Wiese aufforsten oder Wald roden
-      const growing = (S.plants || []).find((x) => x.ci === ci);
+      const growing = (S.plants || []).filter((x) => x.ci === ci).length;
       list.append(el('div', { class: 'build-row tower-row' },
         el('span', { class: 'bicon' }, '🌱'),
         el('div', { class: 'binfo' }, el('b', {}, 'Aufforsten / Roden'),
-          el('span', { class: 'muted' }, growing ? `Schonung wächst – Wald in ${Math.max(0, growing.done - S.turn)} Runden` : `Wiese → Wald in ${PLANT_ROUNDS} Runden · Wald → Wiese, +${CLEAR_WOOD} Holz`)),
+          el('span', { class: 'muted' }, `Wiese → Wald in ${PLANT_ROUNDS} Runden · Wald → Wiese, +${CLEAR_WOOD} Holz${growing ? ` · ${growing} Schonung${growing > 1 ? 'en' : ''} wachsen` : ''}`)),
         el('button', { class: 'btn small', onclick: () => { clearSel(); sel.terraform = ci; refresh(); } }, 'Felder wählen')));
     };
     const order = BUILDING_ORDER;
@@ -1746,7 +1751,7 @@ function renderCityPanel(panel, ci, occ) {
           // Zuwachs: Stadtzentrum + je Feld mit passendem Gebäude (Bauernhof/Holzfäller/Mine) +1
           const t = cityTiles(S, ci);
           const B = { food: 'farm', wood: 'lumber', ore: 'mine' };
-          const parts = RES.map((k) => `+${CENTER_YIELD[c.level + 1] - CENTER_YIELD[c.level] + (hasBuilding(c, B[k]) ? (t[k] ? buildingYield(t[k], c.level + 1) - buildingYield(t[k], c.level) : 1) : 0)} ${RES_INFO[k].name}`).join(', ');
+          const parts = BASE_RES.map((k) => `+${CENTER_YIELD[c.level + 1] - CENTER_YIELD[c.level] + (hasBuilding(c, B[k]) ? (t[k] ? buildingYield(t[k], c.level + 1) - buildingYield(t[k], c.level) : 1) : 0)} ${RES_INFO[k].name}`).join(', ');
           return `Ausbau zur ${CITY_NAMES[c.level + 1]}: ${citySlots({ level: c.level + 1 }) > citySlots(c) ? '+1 Bauplatz, ' : ''}${parts}`;
         })()),
         el('button', { class: 'btn small primary', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost, p.res))));
@@ -1788,11 +1793,10 @@ function renderPanelContent(panel) {
   if (curVis) for (const x of S.units) if (x.owner !== S.current && !curVis[x.idx]) occ[x.idx] = null;
   if (sel.terraform != null) {
     const ci = sel.terraform;
-    const busyPlant = (S.plants || []).find((x) => x.ci === ci);
     panel.append(el('div', { class: 'city-head' },
       el('span', { class: 'title' }, '🌱 Aufforsten / 🪓 Roden'),
       el('button', { class: 'btn small', onclick: () => { const idx = S.cities[ci].idx; clearSel(); sel.cityIdx = idx; cityTab = 'build'; refresh(); } }, 'Fertig')));
-    panel.append(el('div', { class: 'note' }, `Tippe eine helle Wiese an, um sie aufzuforsten (${costText(PLANT_COST)}, nach ${PLANT_ROUNDS} Runden Wald, eine Schonung je Stadt${busyPlant ? ' – gerade wächst schon eine' : ''}), oder einen hellen Wald, um ihn zu roden (+${CLEAR_WOOD} Holz sofort, einmal je Runde).`));
+    panel.append(el('div', { class: 'note' }, `Tippe helle Wiesen an, um sie aufzuforsten (je ${costText(PLANT_COST)}, nach ${PLANT_ROUNDS} Runden Wald), oder helle Wälder, um sie zu roden (je +${CLEAR_WOOD} Holz sofort). Beliebig viele Felder.`));
     return;
   }
   if (sel.placeTower != null) {
@@ -1862,12 +1866,12 @@ function renderPanelContent(panel) {
       actions.append(el('button', { class: 'btn small primary', title: 'Angriff, Verteidigung, Leben und Fähigkeiten nur dieser Einheit verbessern', onclick: () => openBoost(u) }, '⬆ Verbessern'));
       if (u.type === 'dragon') {
         const w = stormWait(S, u);
-        actions.append(el('button', { class: 'btn small merge', disabled: !canStorm(S, u), title: 'Großangriff: überfliegt 4 Felder samt Nachbarn und setzt alles in Brand (alle 3 Runden)', onclick: () => { sel.magic = 'storm'; sel.stormTo = null; refresh(); } }, w ? `🔥 Feuersturm (in ${w} R.)` : '🔥 Feuersturm'));
+        actions.append(el('button', { class: 'btn small merge', disabled: !canStorm(S, u), title: `Großangriff: überfliegt 4 Felder samt Nachbarn und setzt alles in Brand (alle 3 Runden, ${MANA.storm} Mana)`, onclick: () => { sel.magic = 'storm'; sel.stormTo = null; refresh(); } }, w ? `🔥 Feuersturm (in ${w} R.)` : `🔥 Feuersturm · ${MANA.storm}`, icon('mana')));
       }
       for (const k of ['freeze', 'bomb']) {
         if (!hasSkill(u, k) || !canAttack(u)) continue;
         const n = (k === 'freeze' ? getFreezeTargets(S, u).filter((x) => !curVis || curVis[x.idx]) : getBombTargets(S, u)).length;
-        actions.append(el('button', { class: 'btn small merge', disabled: !n, onclick: () => { sel.magic = k; refresh(); } }, `${SKILLS[k].icon} ${SKILLS[k].name}`));
+        actions.append(el('button', { class: 'btn small merge', disabled: !n, onclick: () => { sel.magic = k; refresh(); } }, `${SKILLS[k].icon} ${SKILLS[k].name} · ${MANA[k]}`, icon('mana')));
       }
       panel.append(actions);
     }
@@ -2256,7 +2260,10 @@ function renderHelp() {
     <h3>Versorgung</h3>
     <p><b>Versorgung:</b> Oben neben ⚔ steht „Truppen/Versorgung“. Jede Stadt versorgt Truppen (${[1, 2, 3, 4, 5, 6, 7, 8].map((l) => citySupply({ level: l })).join(' / ')} je nach Stufe; Basilisk zählt 2, Troll und Drache 3). Jede Einheit isst 2 Nahrung pro Runde. Einheiten über der Versorgung kosten doppelten Unterhalt, über dem 1,5-Fachen dreifachen. Eine riesige Armee frisst also schnell den ganzen Ertrag – lieber wenige, gut verbesserte Einheiten.</p>
     <h3>Aufforsten und Roden 🌱🪓</h3>
-    <p>Im Reiter „Gebäude“ einer Stadt wählst du „Aufforsten / Roden“ und tippst helle Felder im Stadtgebiet an: Eine <b>Wiese</b> wird für ${costText(PLANT_COST)} zur Schonung und nach ${PLANT_ROUNDS} Runden zu Wald (solange liefert das Feld nichts; eine Schonung je Stadt gleichzeitig). Einen <b>Wald</b> rodest du sofort zur Wiese und bekommst ${CLEAR_WOOD} Holz (einmal je Stadt und Runde). So gleichst du Holzmangel aus – und Wald bremst Angreifer, weil er 2 Bewegung kostet.</p>
+    <p>Im Reiter „Gebäude“ einer Stadt wählst du „Aufforsten / Roden“ und tippst helle Felder im Stadtgebiet an: Eine <b>Wiese</b> wird für ${costText(PLANT_COST)} zur Schonung und nach ${PLANT_ROUNDS} Runden zu Wald (solange liefert das Feld nichts). Einen <b>Wald</b> rodest du sofort zur Wiese und bekommst ${CLEAR_WOOD} Holz. Beliebig viele Felder, nur nicht auf Manatrauben-Hainen.</p>
+    <h3>Mana 🍇</h3>
+    <p>Mana ist der Rohstoff für alles Magische. Es kommt aus <b>Manatrauben-Hainen</b> (violette Trauben auf Wiese oder Wald; jede Hauptstadt hat einen am Rand ihres Gebiets, weitere liegen bei manchen Dörfern): ${MANA.grape} Mana je Hain im Stadtgebiet, mit einer <b>Kelterei</b> in der Stadt ${MANA.grape + MANA.press}. Der Turm der Weisen liefert zusätzlich ${MANA.sanctum}. Mana lässt sich nicht handeln.<br>
+    Wofür: Zauberer kosten Mana und 1 Mana Unterhalt pro Runde; Vereisen ${MANA.freeze}, Bergsprengung ${MANA.bomb}, Flächenheilung ${MANA.areaheal} (sonst heilt der Zauberer nur das Ziel), Feuersturm des Drachen ${MANA.storm}; die Forschungen Erleuchtung und Segen kosten ebenfalls Mana. Manatrauben-Haine sind deshalb lohnende Eroberungsziele. So gleichst du Holzmangel aus – und Wald bremst Angreifer, weil er 2 Bewegung kostet.</p>
     <h3>Gebäude</h3>
     <p>${BUILDING_ORDER.map((b) => `${BUILDINGS[b].icon} <b>${BUILDINGS[b].name}</b>: ${BUILDINGS[b].desc}`).join('<br>')}</p>
     <h3>Abreißen 🗑</h3>
