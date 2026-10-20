@@ -1,7 +1,7 @@
 # Stand
 Spiel-Link: https://claude.ai/artifact/DSHgsarxYi3z7aj65QHMEA (wird bei /fertig aktualisiert)
 
-Version 0.77 (Branch `ccr-8aa711c1-0bv1jz`), Name **KnightyKnight** (intern weiter `hexkrone`), spielbar im Browser/als PWA.
+Version 0.78 (Branch `ccr-8aa711c1-0bv1jz`), Name **KnightyKnight** (intern weiter `hexkrone`), spielbar im Browser/als PWA.
 - Hexkarte (Wiese, Wald, Hügel, Gebirge, See, Lehm), 7 Kartengrößen, 5 Landschaften, Karten-Code, Nebel-Schalter; Kampagne mit 50 Leveln, Freies Spiel, 10 Speicherplätze, Rückgängig.
 - Wirtschaft: Mana als 4. Rohstoff (Manatrauben-Haine, Kelterei, Turm der Weisen; nur für Magie, nicht handelbar). Aufforsten (Wiese → Wald in 3 Runden) und Roden (Wald → Wiese, +15 Holz) im Stadtgebiet ohne Begrenzung. Städte mit 8 Stufen, gleichmäßiger Ertrag (+½ je Feld und Stufe), teure hohe Stufen, Versorgung mit steigendem Unterhalt (×2/×3), Markt/Handel, keine Lagergrenze.
 - 12 Einheiten inkl. Greifenreiter, Troll, Basilisk, Tribok, Drache (1,6× groß, Feuersturm 3/4/3 alle 3 Runden mit Flächenbrand); alle Werte ganzzahlig.
@@ -11,6 +11,7 @@ Version 0.77 (Branch `ccr-8aa711c1-0bv1jz`), Name **KnightyKnight** (intern weit
 - KI in 6 Stufen; Balance zuletzt: 4v3 23:7 (M), 5v4 17:3 (L).
 
 Versionsverlauf (neueste zuerst):
+- 0.78 Stadtmenü behält beim Tippen auf eine andere eigene Stadt den Reiter (Einheiten/Gebäude, Gruppe). Mauer belegt keinen Bauplatz (`noSlot`, `usesSlot` in data.js). Feste Einheitenpreise `UNIT_COST_FIXED` (nicht verdoppelt): Wächter 10/10/10, Ritter 20/10/12, Greifenreiter 25/12/15, Katapult 0/25/25. Einzeln verbesserte Einheiten (boost/skills): bläulicher Schein mit funkelnden 4-Zack-Lichtern über dem Kopf, Anzahl wächst mit Verbesserungen (render.js drawUnit), Rendern pulsiert dafür weiter.
 - 0.77 Ertrags-Plakette über Städten kleiner, immer alle 4 Rohstoffe als 2×2 (Nahrung/Holz oben, Erz/Mana unten, 0 blass). Hauptstadt-Gebiet: Hauptstädte haben in `computeTerritory` Vorrang (−3), ihre 2 Ringe gehören immer ihnen (vorher verloren ~50 % 1–4 Felder an Dörfer); Stadtfeld gehört immer der Stadt. Kartengenerator: Hauptstädte bevorzugt ≥ 2 Felder vom Rand (alle innen mit Abstand ≥ 5 schlägt großen Mindestabstand; Mindestabstand notfalls 5) → volle 18 Felder auf S/2, M/2–3, L/2–4 Spieler; zu eng bleibt es auf S mit 3–4 und M mit 4 Spielern. Hauptstädte liegen dadurch teils näher beieinander (z. B. M/3: 7,9 → 5,5). Kampagnenkarten ändern sich dadurch.
 - 0.76 Ertrag über jeder Stadt auf der Karte (`drawYields` in render.js): Plakette in Spielerfarbe mit Symbol + Zahl je Rohstoff > 0 (Werte `R.cityYields` aus `cityYield`, inkl. Ausbau und Forschung; Symbole = HUD-SVGs als Bilder `R.resIcons`). Einstellung „Ertrag über den Städten anzeigen“ (Standard an).
 - 0.75 Fehler behoben: Kelterei-Mana war NaN (per-Aufruf ohne Rohstoff). Testmodus-Zeile unter den Rohstoffen (`#enemyBar`, Einstellung „Rohstoffe der Gegner oben anzeigen“, Standard an): je Gegner Stufe, Vorrat + Reichsertrag je Rohstoff (rot = Unterhalt frisst mehr), Einheiten, Städte (Anzahl, Stufen 1/2/3), Forschungen.

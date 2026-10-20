@@ -2,7 +2,7 @@
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
 import {
   UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, BASE_RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY, structureLimit,
-  costTotal, UNIT_UPS, unitUpCost, boostCost, skillCost, PLANT_COST, slotsUsed,
+  costTotal, UNIT_UPS, unitUpCost, boostCost, skillCost, PLANT_COST, slotsUsed, usesSlot,
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
@@ -346,7 +346,7 @@ function chooseBuilding(state, ctx, pid, ci, inc) {
   };
   let best = null;
   for (const [b, v] of Object.entries(score)) {
-    if (v <= 0.5 || (full && !BUILDINGS[b].eco) || canBuild(state, pid, c, b)) continue;
+    if (v <= 0.5 || (full && usesSlot(b)) || canBuild(state, pid, c, b)) continue;
     if (!best || v > best.v) best = { b, v };
   }
   return best && best.b;

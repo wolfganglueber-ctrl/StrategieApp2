@@ -586,8 +586,9 @@ function onTap(sx, sy) {
     return;
   }
   const c = cityOn(S, i);
+  const wasCity = sel.cityIdx != null; // offenes Stadtmenü: gewählten Reiter (Einheiten/Gebäude) für die nächste Stadt behalten
   clearSel();
-  if (c && c.owner === S.current && !u) { if (sel.cityIdx !== i) cityTab = 'units'; sel.cityIdx = i; }
+  if (c && c.owner === S.current && !u) { if (!wasCity) { cityTab = 'units'; buildGroup = null; } sel.cityIdx = i; }
   else sel.infoIdx = i;
   refresh();
 }
@@ -2331,7 +2332,7 @@ function renderHelp() {
     <h3>Städte</h3>
     <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden; Türme und Steinwälle in ihrem Gebiet wechseln mit auf deine Seite.
     Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Bauplätze: 2 / 4 / 6.<br>
-    <b>Ertrag:</b> Felder im Stadtkreis liefern nur mit dem passenden Wirtschaftsgebäude: Bauernhof 1 Nahrung je Wiese/See, Holzfäller 1 Holz je Wald, Mine 1 Erz je Hügel, Lehm oder Erzgrube und 2 je Gebirge, Kelterei 1 Mana je Traubenhain – auf Stufe 2 das Doppelte, auf Stufe 3 das Dreifache (ein Gebirge also bis zu 6 Erz). Pflug, Sägewerk und Bergbau geben je +50 % auf die gesamte Nahrung, das Holz bzw. das Erz des Reichs. Ohne passendes Feld liefert ein Gebäude nichts, das Stadtzentrum selbst liefert nichts. Jede Hauptstadt startet mit Bauernhof, Holzfäller und Mine. Wirtschaftsgebäude belegen keinen Bauplatz, die Plätze sind für Einheiten-Gebäude, Mauer und Markt. Ob du zuerst baust oder ausbaust, ist egal. Jede Stufe bringt außerdem 2 Bauplätze und 2 Versorgung. Erobern lohnt sich früh, Ausbauen macht jede eroberte Stadt doppelt bzw. dreifach wertvoll.</p>
+    <b>Ertrag:</b> Felder im Stadtkreis liefern nur mit dem passenden Wirtschaftsgebäude: Bauernhof 1 Nahrung je Wiese/See, Holzfäller 1 Holz je Wald, Mine 1 Erz je Hügel, Lehm oder Erzgrube und 2 je Gebirge, Kelterei 1 Mana je Traubenhain – auf Stufe 2 das Doppelte, auf Stufe 3 das Dreifache (ein Gebirge also bis zu 6 Erz). Pflug, Sägewerk und Bergbau geben je +50 % auf die gesamte Nahrung, das Holz bzw. das Erz des Reichs. Ohne passendes Feld liefert ein Gebäude nichts, das Stadtzentrum selbst liefert nichts. Jede Hauptstadt startet mit Bauernhof, Holzfäller und Mine. Wirtschaftsgebäude und die Mauer belegen keinen Bauplatz, die Plätze sind für Einheiten-Gebäude und den Markt. Ob du zuerst baust oder ausbaust, ist egal. Jede Stufe bringt außerdem 2 Bauplätze und 2 Versorgung. Erobern lohnt sich früh, Ausbauen macht jede eroberte Stadt doppelt bzw. dreifach wertvoll.</p>
     <h3>Versorgung</h3>
     <p><b>Versorgung:</b> Oben neben ⚔ steht „Truppen/Versorgung“. Jede Stadt versorgt Truppen (${[1, 2, 3, 4, 5, 6, 7, 8].map((l) => citySupply({ level: l })).join(' / ')} je nach Stufe; Basilisk zählt 2, Troll und Drache 3). Jede Einheit isst 2 Nahrung pro Runde. Einheiten über der Versorgung kosten doppelten Unterhalt, über dem 1,5-Fachen dreifachen. Eine riesige Armee frisst also schnell den ganzen Ertrag – lieber wenige, gut verbesserte Einheiten.</p>
     <h3>Felder bearbeiten 🌱⛏️🍇🪓</h3>
@@ -2378,7 +2379,7 @@ function renderHelp() {
     <p>Im Forschungsfenster gibt es neben Militär, Wirtschaft und Verteidigung die Reiter <b>Nahkämpfer</b>, <b>Fernkämpfer</b>, <b>Zauberer</b>, <b>Katapulte</b> und <b>Titanen</b>. Dort wählst du eine Einheit und entwickelst sie in 5 Stufen weiter – das gilt sofort für alle Einheiten dieses Typs, auch für die schon aufgestellten. Auf Stufe 3 entscheidest du dich für eine von zwei Richtungen (z. B. Ritter → Chevalier mit extralanger Lanze oder Schwerer Ritter; Tribok → explosive Geschosse oder Riesenkugeln). So spezialisierst du dein Heer auf wenige starke Einheiten.</p>
     <p>Jede Stufe sieht man: goldene Steine am Sockel zählen die Stufen, neue Ausrüstung (Helm, Lanze, größerer Schild, zweites Schwert, Brandpfeile, Sprengbomben …), ab Stufe 4 schwarze Rüstung und auf Stufe 5 eine goldene Aura.</p>
     <h3>Einzel-Verbesserungen ⬆</h3>
-    <p>Wähle eine eigene Einheit und tippe „⬆ Verbessern“: Diese Verbesserungen gelten nur für genau diese eine Einheit. <b>Angriff</b>, <b>Verteidigung</b> und <b>Leben</b> haben je 3 Stufen (+25 %, +75 %, +150 %, immer aufgerundet); jede Stufe kostet ${BOOST_COST.join(' / ')} % des Kaufpreises der Einheit – also etwas weniger als eine neue. Dazu kommen <b>Fähigkeiten</b> (je ${SKILL_COST} % des Kaufpreises):<br>
+    <p>Wähle eine eigene Einheit und tippe „⬆ Verbessern“: Diese Verbesserungen gelten nur für genau diese eine Einheit – verbesserte Einheiten erkennst du an funkelnden bläulichen Lichtern über dem Kopf (je mehr Verbesserungen, desto mehr Funken). <b>Angriff</b>, <b>Verteidigung</b> und <b>Leben</b> haben je 3 Stufen (+25 %, +75 %, +150 %, immer aufgerundet); jede Stufe kostet ${BOOST_COST.join(' / ')} % des Kaufpreises der Einheit – also etwas weniger als eine neue. Dazu kommen <b>Fähigkeiten</b> (je ${SKILL_COST} % des Kaufpreises):<br>
     Nahkämpfer: 💚 Selbstheilung (10 % des Lebens pro Runde), 🪨 Stellung halten (+20 % Verteidigung, wenn sie in ihrem Zug nicht gezogen ist).<br>
     Fernkämpfer (Schütze, Basilisk): 🏹 Weitschuss (+1 Reichweite), 🎯 Fernschuss (+2), 🔥 Brandpfeile (Nachbarn des Ziels bekommen 25 % des Schadens), 💚 Selbstheilung.<br>
     Zauberer: ❄️ Vereisen (ein Gegner bis 3 Felder weit setzt eine Runde aus, Titanen sind immun), ✨ Flächenheilung (beim Heilen bekommen die eigenen Nachbarn des Ziels 25 % ihres Lebens zurück), 💣 Bergsprengung (ein Gebirge bis 3 Felder weit wird zu begehbarem Lehm).<br>

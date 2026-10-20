@@ -42,11 +42,19 @@ export const UNITS = {
 // Wert einer Einheit für die KI (Rohstoffsumme / 2), danach Kaufpreise verdoppeln:
 // Einheiten sollen im Verhältnis zum Ertrag teuer sein (halb so viele wie früher)
 export const UNIT_PRICE = 2;
+// Feste Endpreise (Nahrung, Holz, Erz), werden nicht verdoppelt
+export const UNIT_COST_FIXED = {
+  defender: { food: 10, wood: 10, ore: 10 },
+  knight: { food: 20, wood: 10, ore: 12 },
+  griffin: { food: 25, wood: 12, ore: 15 },
+  catapult: { wood: 25, ore: 25 },
+};
 for (const k of Object.keys(UNITS)) {
+  if (UNIT_COST_FIXED[k]) UNITS[k].cost = { ...UNIT_COST_FIXED[k] };
+  else if (!UNITS[k].structure) for (const r of Object.keys(UNITS[k].cost)) UNITS[k].cost[r] *= UNIT_PRICE;
   let t = 0;
   for (const v of Object.values(UNITS[k].cost)) t += v;
-  UNITS[k].value = t / 2;
-  if (!UNITS[k].structure) for (const r of Object.keys(UNITS[k].cost)) UNITS[k].cost[r] *= UNIT_PRICE;
+  UNITS[k].value = (UNITS[k].structure ? t : t / UNIT_PRICE) / 2;
 }
 export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'griffin', 'catapult', 'trebuchet', 'mage', 'basilisk', 'troll', 'dragon'];
 // Höchste Zugweite bei voller Entwicklung (gilt auch für Sprünge über eigene Einheiten)
@@ -323,7 +331,7 @@ export const BUILDINGS = {
   mine: { art: 'eine', name: 'Mine', icon: '⛏️', eco: 'ore', cost: { food: 10, wood: 10 }, desc: '1 Erz je Hügel, Lehm oder Grube im Stadtkreis, 2 je Gebirge, mit jeder weiteren Stadtstufe +½ je Feld' },
   barracks: { art: 'eine', name: 'Kaserne', icon: '🛡️', cost: { wood: 6, ore: 4 }, desc: 'Ritter möglich, neue Einheiten können sofort ziehen' },
   workshop: { art: 'eine', name: 'Werkstatt', icon: '⚙️', cost: { wood: 8, ore: 4 }, desc: 'Katapulte möglich' },
-  wall: { art: 'eine', name: 'Mauer', icon: '🧱', cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt ×2,2' },
+  wall: { art: 'eine', name: 'Mauer', icon: '🧱', noSlot: true, cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt ×2,2, belegt keinen Bauplatz' },
   sanctum: { art: 'einen', name: 'Turm der Weisen', icon: '🔮', cost: { wood: 6, ore: 6 }, desc: 'Zauberer möglich, +1 Mana' },
   press: { art: 'eine', name: 'Kelterei', icon: '🍇', eco: 'mana', cost: { food: 10, wood: 10 }, desc: '1 Mana je Traubenhain im Stadtkreis, mit jeder weiteren Stadtstufe +½ je Feld' },
   nest: { art: 'ein', name: 'Basiliskennest', icon: '🦎', cost: { food: 10, wood: 8, ore: 12 }, minLevel: 2, desc: 'Basilisk möglich (Stadt ab Stufe 2)' },
@@ -334,9 +342,12 @@ export const BUILDINGS = {
 export const BUILDING_ORDER = ['farm', 'lumber', 'mine', 'press', 'market', 'barracks', 'workshop', 'sanctum', 'nest', 'lair', 'dragonlair', 'wall'];
 // Gruppen im Bau-Menü
 export const ECO_BUILDINGS = ['farm', 'lumber', 'mine', 'press', 'market'];
-// Bauernhof, Holzfäller, Mine und Kelterei belegen keinen Bauplatz
+// Bauernhof, Holzfäller, Mine, Kelterei und Mauer belegen keinen Bauplatz
+export function usesSlot(b) {
+  return !!BUILDINGS[b] && !BUILDINGS[b].eco && !BUILDINGS[b].noSlot;
+}
 export function slotsUsed(city) {
-  return city.buildings.filter((b) => !BUILDINGS[b]?.eco).length;
+  return city.buildings.filter(usesSlot).length;
 }
 // Jede Hauptstadt startet mit Bauernhof, Holzfäller und Mine
 export const START_BUILDINGS = ['farm', 'lumber', 'mine'];

@@ -1108,6 +1108,38 @@ export class Renderer {
     if (exhausted) ctx.globalAlpha *= 0.8;
     ctx.drawImage(sp.cv, x - B.left * s * scale * big, y - B.top * s * scale * big, (B.left + B.right) * s * scale * big, (B.top + B.bottom) * s * scale * big);
     if (exhausted) ctx.globalAlpha /= 0.8;
+    // Einzeln verbessert (Verbesserungen, Fähigkeiten): bläulicher Schein mit funkelnden Lichtern über dem Kopf,
+    // je mehr Verbesserungen, desto mehr Funken (bewusst anders als die gelben Erschüttert-Sterne)
+    const ups = (u.boost ? (u.boost.atk || 0) + (u.boost.def || 0) + (u.boost.hp || 0) : 0) + (u.skills?.length || 0);
+    if (ups > 0) {
+      const hy = y - (u.shaken ? 56 : 47) * s * scale * Math.min(big, 1.3);
+      const pulse = 0.5 + 0.5 * Math.sin(now / 420 + u.id);
+      const g = ctx.createRadialGradient(x, hy, 1, x, hy, 19 * s);
+      g.addColorStop(0, `rgba(191,219,254,${0.55 + 0.25 * pulse})`);
+      g.addColorStop(1, 'rgba(129,140,248,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(x, hy, 20 * s, 10 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const n = Math.min(5, 1 + Math.ceil(ups / 2));
+      for (let k = 0; k < n; k++) {
+        const ph = now / 650 + k * 1.7 + u.id * 0.37;
+        const tw = 0.55 + 0.45 * Math.sin(ph * 2.3);
+        const px = x + ((k - (n - 1) / 2) * 8 + Math.sin(ph) * 1.5) * s, py = hy - (k % 2 ? 3.5 : -0.5) * s;
+        const r = (3.4 + 1.8 * tw) * s;
+        ctx.fillStyle = `rgba(255,255,255,${0.75 + 0.25 * tw})`;
+        ctx.strokeStyle = 'rgba(99,102,241,0.9)';
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const ang = (i * Math.PI) / 4, rr = i % 2 ? r * 0.28 : r;
+          ctx.lineTo(px + rr * Math.cos(ang), py + rr * Math.sin(ang));
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
     if (u.shaken) {
       // Erschüttert: kreisende Sterne über dem Kopf
       const t = now / 300;
@@ -1266,7 +1298,7 @@ export class Renderer {
       }
       this.dirty = true;
     }
-    const pulsing = this.state?.burns?.length || this.overlay.targets?.size || this.overlay.ready?.size || this.overlay.upgrade?.size || this.state?.units.some((u) => u.shaken);
+    const pulsing = this.state?.burns?.length || this.overlay.targets?.size || this.overlay.ready?.size || this.overlay.upgrade?.size || this.state?.units.some((u) => u.shaken || u.boost || u.skills?.length);
     if (!this.dirty && pulsing && now - (this.lastDraw || 0) > 40) this.dirty = true; // Pulsieren mit ~25 fps
     if (!this.dirty) return;
     this.lastDraw = now;

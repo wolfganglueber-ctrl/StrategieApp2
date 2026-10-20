@@ -4,7 +4,7 @@ import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
-  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, buildingYield, PLANT_COST, START_BUILDINGS, slotsUsed, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_PCT, SKILLS, skillsFor, boostCost, skillCost,
+  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, buildingYield, PLANT_COST, START_BUILDINGS, slotsUsed, usesSlot, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_PCT, SKILLS, skillsFor, boostCost, skillCost,
   BASE_RES, MANA, ECO_TECH, ECO_TECH_PCT,
 } from './data.js';
 import { generateMap } from './mapgen.js';
@@ -621,7 +621,7 @@ export function canBuild(state, pid, c, b) {
   if (B.tech && !hasTech(state, pid, B.tech)) return 'tech';
   if (c.level < (B.minLevel || 0)) return 'level';
   if (B.perRealm && state.cities.filter((x) => x.owner === pid && hasBuilding(x, b)).length >= B.perRealm) return 'realm';
-  if (!B.eco && slotsUsed(c) >= citySlots(c)) return 'slots';
+  if (usesSlot(b) && slotsUsed(c) >= citySlots(c)) return 'slots';
   if (!canAfford(state.players[pid].res, B.cost)) return 'cost';
   return null;
 }
