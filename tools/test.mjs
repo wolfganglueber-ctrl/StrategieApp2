@@ -1,5 +1,5 @@
 // Schnelltests: alle Kampagnenlevel erzeugen, Zufallsspiele in allen Größen ohne Fehler durchspielen.
-import { createGame, applyAction, cloneState, statsOf, getBombTargets, migrateState, stormArea, canTerraform, incomeOf, cityTiles, cityYield } from '../js/game.js';
+import { createGame, applyAction, cloneState, statsOf, getBombTargets, migrateState, stormArea, canTerraform, incomeOf, realmYield, cityTiles, cityYield } from '../js/game.js';
 import { getGeo } from '../js/hex.js';
 import { planAction } from '../js/ai.js';
 import { getLevels } from '../js/levels.js';
@@ -109,9 +109,11 @@ const t0 = Date.now();
   check(y.food === buildingYield(t.food, cap.level) && y.ore === buildingYield(t.ore, cap.level), 'Ertrag nur über Gebäude');
   cap.level = 3;
   check(cityYield(s, ci).food === 3 * t.food, 'Stufe 3 verdreifacht den Ertrag');
-  const before = incomeOf(s, 0).food, gross = s.cities.reduce((a, c, k) => a + (c.owner === 0 ? cityYield(s, k).food : 0), 0);
+  const cityFood = () => s.cities.reduce((a, c, k) => a + (c.owner === 0 ? cityYield(s, k).food : 0), 0);
+  const before = incomeOf(s, 0).food, gross = s.cities.map((c, k) => (c.owner === 0 ? cityYield(s, k).food : 0));
   s.players[0].tech.push('plough');
-  check(incomeOf(s, 0).food - before === Math.ceil(gross / 2), 'Pflug +50 % Nahrung');
+  check(incomeOf(s, 0).food - before === gross.reduce((a, v) => a + Math.ceil(v / 2), 0), 'Pflug +50 % Nahrung');
+  check(realmYield(s, 0).food === cityFood(), 'Reichsertrag = Summe der Städte');
   cap.buildings = [];
   check(Object.values(cityYield(s, ci)).every((v) => v === 0), 'Ohne Gebäude kein Ertrag');
 }

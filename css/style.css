@@ -416,3 +416,4 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .build-group .bg-icon { font-size: 28px; }
 .terra-btns { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .terra-row { align-items: flex-start; }
+.resbar .pill.short { border-color: rgba(248, 113, 113, 0.85); box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.5); }

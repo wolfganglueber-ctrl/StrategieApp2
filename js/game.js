@@ -518,18 +518,27 @@ export function computeTerritory(state) {
   return owner;
 }
 
-// Rohstoffertrag pro Runde, aufgeschlüsselt
-export function incomeOf(state, pid, territory = computeTerritory(state)) {
+// Ertrag eines Wirtschaftsgebäudes inklusive Forschung (Pflug, Sägewerk, Bergbau: +50 %, aufgerundet)
+export function boostedYield(state, pid, k, base) {
+  return pid >= 0 && ECO_TECH[k] && hasTech(state, pid, ECO_TECH[k]) ? base + Math.ceil(base * ECO_TECH_PCT) : base;
+}
+
+// Ertrag des ganzen Reichs pro Runde vor Unterhalt: Summe aller Städte (inkl. Forschung), Kaiser-KI +50 %
+export function realmYield(state, pid, territory = computeTerritory(state)) {
   const inc = { food: 0, wood: 0, ore: 0, mana: 0 };
   state.cities.forEach((c, ci) => {
     if (c.owner !== pid) return;
     const y = cityYield(state, ci, territory);
     for (const k of RES) inc[k] += y[k];
   });
-  // Pflug, Sägewerk, Bergbau: +50 % auf den gesamten Ertrag des Reichs, aufgerundet
-  for (const [k, t] of Object.entries(ECO_TECH)) if (hasTech(state, pid, t)) inc[k] += Math.ceil(inc[k] * ECO_TECH_PCT);
   const bonus = state.players[pid].incomeBonus || 0;
   if (bonus) for (const k of RES) inc[k] = Math.round(inc[k] * (1 + bonus));
+  return inc;
+}
+
+// Rohstoffertrag pro Runde nach Abzug des Unterhalts
+export function incomeOf(state, pid, territory = computeTerritory(state)) {
+  const inc = realmYield(state, pid, territory);
   // Unterhalt der Armee wird vom Ertrag abgezogen (kann negativ werden)
   const up = upkeepTotal(state, pid);
   for (const k of RES) inc[k] -= up[k];
@@ -559,11 +568,11 @@ export function cityYield(state, ci, territory = computeTerritory(state)) {
   const c = state.cities[ci];
   // Felder liefern nur mit passendem Gebäude: Bauernhof (Wiese/See), Holzfäller (Wald), Mine (Hügel, Lehm, Grube, Gebirge ×2), Kelterei (Traubenhain)
   const tiles = cityTiles(state, ci, territory);
-  // Gebäude: je passendem Feld so viel wie die Stadtstufe; ohne passendes Feld nichts (Forschung wirkt aufs ganze Reich, siehe incomeOf)
-  const per = (n) => buildingYield(n, c.level);
-  if (hasBuilding(c, 'farm')) inc.food += per(tiles.food);
-  if (hasBuilding(c, 'lumber')) inc.wood += per(tiles.wood);
-  if (hasBuilding(c, 'mine')) inc.ore += per(tiles.ore);
+  // Gebäude: je passendem Feld so viel wie die Stadtstufe; ohne passendes Feld nichts; Pflug/Sägewerk/Bergbau +50 %
+  const per = (k, n) => boostedYield(state, c.owner, k, buildingYield(n, c.level));
+  if (hasBuilding(c, 'farm')) inc.food += per('food', tiles.food);
+  if (hasBuilding(c, 'lumber')) inc.wood += per('wood', tiles.wood);
+  if (hasBuilding(c, 'mine')) inc.ore += per('ore', tiles.ore);
   if (hasBuilding(c, 'press')) inc.mana += per(tiles.mana);
   if (hasBuilding(c, 'sanctum')) inc.mana += MANA.sanctum;
   return inc;

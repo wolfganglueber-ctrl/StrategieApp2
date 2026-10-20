@@ -3,7 +3,7 @@ import { Renderer } from './render.js';
 import { attachInput } from './input.js';
 import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
-  incomeOf, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
+  incomeOf, realmYield, boostedYield, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, flankers, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, defenseMult,
   canBoost, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, canStorm, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
@@ -14,7 +14,7 @@ import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, BASE_RES, RES_INFO, MANA, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
-  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, MAX_SLOTS, buildingYield, PLANT_COST, PLANT_KINDS, ECO_BUILDINGS, slotsUsed, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
+  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, MAX_SLOTS, buildingYield, ECO_TECH, ECO_TECH_PCT, PLANT_COST, PLANT_KINDS, ECO_BUILDINGS, slotsUsed, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
   BOOST_PCT, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
@@ -880,7 +880,7 @@ function openTech() {
       const reqTxt = T.req.length ? `benötigt ${T.req.map((r) => TECHS[r].name).join(' + ')}` : '';
       list.append(el('div', { class: 'tech-card' + (done ? ' done' : avail ? '' : ' locked') + (T.req.length ? ' child' : '') },
         el('span', { class: 'ticon' }, T.icon),
-        el('div', { class: 'binfo' }, el('b', {}, T.name), el('span', {}, T.desc), reqTxt ? el('span', { class: 'muted' }, (avail || done ? '↳ ' : '🔒 ') + reqTxt) : null),
+        el('div', { class: 'binfo' }, el('b', {}, T.name), el('span', {}, T.desc), ecoTechPreview(t, pid), reqTxt ? el('span', { class: 'muted' }, (avail || done ? '↳ ' : '🔒 ') + reqTxt) : null),
         done ? el('span', { class: 'done' }, '✓')
           : el('button', {
             class: 'btn small', disabled: !avail || !my || !canAfford(p.res, T.cost),
@@ -1472,17 +1472,19 @@ function updateHud() {
   const cur = S.players[S.current];
   $('turnDot').style.background = PLAYER_COLORS[cur.id].main;
   $('turnText').textContent = `Runde ${S.turn} · ${cur.human ? 'Dein Zug' : cur.name}`;
-  const inc = incomeOf(S, human.id);
+  // Grün: Ertrag des ganzen Reichs (alle Städte inkl. Ausbau und Forschung); rot umrandet, wenn der Unterhalt mehr frisst
+  const gross = realmYield(S, human.id), upk = upkeepTotal(S, human.id);
   const bar = $('resBar');
   bar.innerHTML = '';
   for (const k of RES) {
-    const up = upkeepTotal(S, human.id)[k];
+    const up = upk[k], net = gross[k] - up;
     const mana = k === 'mana';
+    const info = `${RES_INFO[k].name}: Reich +${gross[k]} pro Runde (alle Städte inkl. Ausbau und Forschung), Unterhalt −${up}, bleibt ${net >= 0 ? '+' : ''}${net}`;
     bar.append(el('button', {
-      class: 'pill' + (mana ? ' mana' : ''),
-      title: mana ? 'Mana: für Zauberer, Zauber, Feuersturm und magische Forschung – nicht handelbar' : `${RES_INFO[k].name}: Ertrag pro Runde nach Abzug von ${up} Unterhalt für die Armee – tippen zum Handeln`,
-      onclick: () => (mana ? toast('🍇 Mana kommt aus Traubenhainen (Wiese bearbeiten) mit Kelterei und vom Turm der Weisen. Es lässt sich nicht handeln.', 4000) : openTrade(k)),
-    }, icon(k), el('b', {}, human.res[k] || 0), el('small', { class: inc[k] < 0 ? 'neg' : '' }, inc[k] < 0 ? `${inc[k]}` : `+${inc[k]}`)));
+      class: 'pill' + (mana ? ' mana' : '') + (net < 0 ? ' short' : ''),
+      title: mana ? `${info} – für Zauberer, Zauber, Feuersturm und magische Forschung, nicht handelbar` : `${info} – tippen zum Handeln`,
+      onclick: () => (mana ? toast(`🍇 ${info}. Mana kommt aus Traubenhainen (Wiese bearbeiten) mit Kelterei und vom Turm der Weisen. Es lässt sich nicht handeln.`, 5000) : openTrade(k)),
+    }, icon(k), el('b', {}, human.res[k] || 0), el('small', {}, `+${gross[k]}`)));
   }
   // Armee-Unterhalt pro Runde neben der Einheitenzahl
   const up = upkeepTotal(S, human.id);
@@ -1562,6 +1564,18 @@ function unitCard(u, subtitle) {
     el('div', { class: 'uc-main' },
       el('div', { class: 'uc-top' }, el('span', { class: 'title' }, name), hpBar(u)),
       el('div', { class: 'uc-bottom' }, el('span', { class: 'muted' }, subtitle), statRow(u))));
+}
+
+// Vorschau für Pflug/Sägewerk/Bergbau: was die Forschung beim jetzigen Reich pro Runde bringt (bzw. bringt)
+function ecoTechPreview(t, pid) {
+  const k = Object.keys(ECO_TECH).find((r) => ECO_TECH[r] === t);
+  if (!k) return null;
+  const terr = computeTerritory(S);
+  let base = 0;
+  const B = { food: 'farm', wood: 'lumber', ore: 'mine' }[k];
+  S.cities.forEach((c, ci) => { if (c.owner === pid && hasBuilding(c, B)) base += buildingYield(cityTiles(S, ci, terr)[k], c.level); });
+  const gain = S.cities.reduce((a, c, ci) => a + (c.owner === pid && hasBuilding(c, B) ? Math.ceil(buildingYield(cityTiles(S, ci, terr)[k], c.level) * ECO_TECH_PCT) : 0), 0);
+  return el('span', { class: 'muted' }, `${hasTech(S, pid, t) ? 'Bringt dir' : 'Würde dir bringen'}: +${gain} ${RES_INFO[k].name} pro Runde (Reich ohne Forschung +${base})`);
 }
 
 function cityTitle(c) {
@@ -1705,8 +1719,14 @@ function renderCityPanel(panel, ci, occ) {
   } else {
     // Gebäude in zwei Gruppen: Wirtschaft und Einheiten (breiter Bildschirm: nebeneinander, Handy: erst Gruppe wählen)
     const tiles = cityTiles(S, ci);
-    const eco = (n, what, res) => n ? `+${buildingYield(n, c.level)} ${res} (Feldwert ${n} ${what}, Stufe ${c.level})` : `Kein ${what} im Stadtkreis – liefert nichts`;
-    const ecoDesc = { farm: eco(tiles.food, 'Wiese/See', 'Nahrung'), lumber: eco(tiles.wood, 'Wald', 'Holz'), mine: eco(tiles.ore, 'Hügel/Lehm/Grube/Gebirge', 'Erz'), press: eco(tiles.mana, 'Traubenhain', 'Mana') };
+    // Vorschau je Wirtschaftsgebäude: Feldwert × Stufe, plus freigeschaltete Forschung
+    const eco = (k, what) => {
+      const n = tiles[k];
+      if (!n) return `Kein ${what} im Stadtkreis – liefert nichts`;
+      const base = buildingYield(n, c.level), v = boostedYield(S, p.id, k, base);
+      return `+${v} ${RES_INFO[k].name} (Feldwert ${n} ${what} × Stufe ${c.level}${v > base ? `, +${v - base} ${TECHS[ECO_TECH[k]].name}` : ''})`;
+    };
+    const ecoDesc = { farm: eco('food', 'Wiese/See'), lumber: eco('wood', 'Wald'), mine: eco('ore', 'Hügel/Lehm/Grube/Gebirge'), press: eco('mana', 'Traubenhain') };
     const buildingRow = (list, b) => {
       const B = BUILDINGS[b];
       const built = hasBuilding(c, b);
@@ -1768,7 +1788,8 @@ function renderCityPanel(panel, ci, occ) {
           // Zuwachs: je Feld mit passendem Gebäude (Bauernhof/Holzfäller/Mine/Kelterei) +½
           const t = cityTiles(S, ci);
           const B = { food: 'farm', wood: 'lumber', ore: 'mine', mana: 'press' };
-          const parts = RES.filter((k) => hasBuilding(c, B[k]) && t[k]).map((k) => `+${buildingYield(t[k], c.level + 1) - buildingYield(t[k], c.level)} ${RES_INFO[k].name}`).join(', ') || 'kein Mehrertrag ohne Wirtschaftsgebäude';
+          const gain = (k) => boostedYield(S, p.id, k, buildingYield(t[k], c.level + 1)) - boostedYield(S, p.id, k, buildingYield(t[k], c.level));
+          const parts = RES.filter((k) => hasBuilding(c, B[k]) && t[k]).map((k) => `+${gain(k)} ${RES_INFO[k].name}`).join(', ') || 'kein Mehrertrag ohne Wirtschaftsgebäude';
           return `Ausbau zur ${CITY_NAMES[c.level + 1]}: +${citySlots({ level: c.level + 1 }) - citySlots(c)} Bauplätze, +${citySupply({ level: c.level + 1 }) - citySupply(c)} Versorgung, ${parts}`;
         })()),
         el('button', { class: 'btn small primary', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost, p.res))));
@@ -2263,7 +2284,7 @@ function renderHelp() {
     <b>5. Angriff:</b> Erst die Fernkämpfer schießen lassen, dann mit Nahkämpfern zuschlagen.</p>
     <h3>Ablauf einer Runde</h3>
     <p>Jede Einheit darf pro Runde einmal ziehen und einmal angreifen (erst ziehen, dann angreifen). Über eigene Einheiten springst du hinweg – das kostet keine Bewegung.
-    Du kannst pro Runde beliebig viele Einheiten rekrutieren (begrenzt nur durch Rohstoffe). Sie erscheinen auf freien Feldern im Stadtgebiet und handeln ab der nächsten Runde – mit Kaserne sofort. Jede Einheit kostet aber <b>Unterhalt</b>: 2 Nahrung pro Runde (Basilisk 4, Troll und Drache 6, Katapult und Tribok 2 Nahrung + 1 Holz), über der Versorgung deiner Städte doppelt bzw. dreifach (siehe Versorgung). Der Ertrag oben zeigt schon den Betrag nach Abzug – wird er rot, schrumpfen deine Vorräte.
+    Du kannst pro Runde beliebig viele Einheiten rekrutieren (begrenzt nur durch Rohstoffe). Sie erscheinen auf freien Feldern im Stadtgebiet und handeln ab der nächsten Runde – mit Kaserne sofort. Jede Einheit kostet aber <b>Unterhalt</b>: 2 Nahrung pro Runde (Basilisk 4, Troll und Drache 6, Katapult und Tribok 2 Nahrung + 1 Holz), über der Versorgung deiner Städte doppelt bzw. dreifach (siehe Versorgung). Oben steht in Grün der Ertrag des ganzen Reichs, daneben bei ⚔ der Unterhalt. Ist ein Rohstoff rot umrandet, frisst der Unterhalt mehr als der Ertrag – deine Vorräte schrumpfen.
     Einheiten, die noch etwas tun können, haben einen leuchtenden Ring.</p>
     <h3>Gemeinsam angreifen 👥</h3>
     <p>Wähle eine Einheit und tippe auf „👥 Alle in der Nähe“ (alle eigenen Einheiten im Umkreis) oder „👥 Alle Ritter“ usw. (nur gleiche Einheiten im Umkreis); am PC geht auch Shift + Klick. Danach ist der Gruppenmodus aktiv. Weitere eigene Einheiten fügst du per Tipp hinzu oder nimmst sie wieder heraus.
