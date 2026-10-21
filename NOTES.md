@@ -2,13 +2,13 @@
 Spiel-Link: https://claude.ai/artifact/DSHgsarxYi3z7aj65QHMEA (wird bei /fertig aktualisiert)
 
 Version 0.86 (Branch `ccr-8aa711c1-0bv1jz`), Name **KnightyKnight** (intern weiter `hexkrone`), spielbar im Browser/als PWA.
-- Hexkarte (Wiese, Wald, Hügel, Gebirge, See, Lehm), 7 Kartengrößen, 5 Landschaften, Karten-Code, Nebel-Schalter; Kampagne mit 50 Leveln, Freies Spiel, 10 Speicherplätze, Rückgängig.
-- Wirtschaft: Mana als 4. Rohstoff (Manatrauben-Haine, Kelterei, Turm der Weisen; nur für Magie, nicht handelbar). Aufforsten (Wiese → Wald in 3 Runden) und Roden (Wald → Wiese, +15 Holz) im Stadtgebiet ohne Begrenzung. Städte mit 8 Stufen, gleichmäßiger Ertrag (+½ je Feld und Stufe), teure hohe Stufen, Versorgung mit steigendem Unterhalt (×2/×3), Markt/Handel, keine Lagergrenze.
-- 12 Einheiten inkl. Greifenreiter, Troll, Basilisk, Tribok, Drache (1,6× groß, Feuersturm 3/4/3 alle 3 Runden mit Flächenbrand); alle Werte ganzzahlig.
-- Entwicklung: Forschungsbaum, Einheiten-Entwicklung je Typ (5 Stufen, Optik), Einzel-Verbesserungen je Einheit (Angriff/Verteidigung/Leben + Fähigkeiten, Zauberer: Vereisen/Flächenheilung/Bergsprengung), Ränge mit Spezialisierungen.
-- Kampf: Erschüttert erst nach 2 Angreifern (nie Titanen), Flanke, Schutzaura, Kampf-Tooltip, rote Ziele auch nach dem Ziehen erreichbar (Tipp = heranziehen + angreifen), Gruppen bis alle fertig sind.
-- Darstellung: Kampfeffekte (abschaltbar), Besiegte schlafen mit zZZ ein, Burg über 7 Felder, Scrollen über den Rand, neues Logo (icons/logo.svg).
-- KI in 6 Stufen; Balance zuletzt: 4v3 23:7 (M), 5v4 17:3 (L).
+- Hexkarte (Wiese, Wald, Hügel, Gebirge, See, Lehm), 4 Kartengrößen (Riesig, Gewaltig, Kolossal, Episch), 5 Landschaften, Karten-Code, Nebel; Städte immer mit ≥ 4 freien Feldern Abstand, Regler normal/viele/voll; Kampagne mit 50 Leveln, Freies Spiel, 10 Speicherplätze, Rückgängig.
+- Wirtschaft: Felder im inneren Ring liefern immer, äußerer Ring je Rohstoff mit Bauernhof/Holzfäller/Mine/Kelterei; 3 Stadtstufen (×1/×2/×3, Bauplätze 2/4/6); Pflug/Sägewerk/Bergbau +50 %; Wiese bearbeiten (Wald 5 Nahrung, Erzgrube/Traubenhain 10 N + 5 H); Mana nur aus Traubenhainen/Turm der Weisen.
+- Kampf ohne verborgene Formel: Schaden = Angriff × (100 % − Verteidigung je Angriffsart), unabhängig vom Leben; Durchschlag als Einzel-Verbesserung; feste Zuschläge (Stadt/Mauer/Burg, Flanke, Rang); kein Erschüttert; Heilung nur durch Zauberer und einzeln gekaufte Verbesserungen.
+- 12 Einheiten inkl. Greifenreiter, Troll, Basilisk, Tribok, Drache (Feuersturm); Einheiten-Entwicklung je Typ, Einzel-Verbesserungen mit 1–3 Schimmersternen über dem Kopf.
+- Anzeigen: Reichsertrag oben, Ertrags-Plakette 2×2 über jeder Stadt, Testmodus-Zeile mit Rohstoffen der Gegner, Bau-Menü Wirtschaft/Einheiten.
+- KI in 6 Stufen, per Simulation abgestimmt (0.83, Groß): 3:2 16:4, 4:3 15:5, 5:4 15:5, 6:5 14:6; Rohstoffbonus Schwer +15 %, Meister +30 %, Kaiser +50 %; Stufe 1/2 erobern höchstens 3/5 Städte.
+- Großes Scrollen auf Episch entschärft (Kacheln begrenzt und vorab berechnet).
 
 Versionsverlauf (neueste zuerst):
 - 0.86 Regler „Städte auf der Karte“ nur noch normal / viele (Standard) / voll (`CITY_DENSITY` 18 / −1 / 0 in main.js, `setup.citiesV` 2 setzt alte Auswahl auf „viele“). Kartengenerator: `villageDensity` ≤ 0 legt Dörfer auf das dichteste Gitter (Abstand genau 5, f = (q + 8r) mod 19, die 19er-Gebiete kacheln die Ebene; beste der 19 Verschiebungen), 0 füllt danach jede Lücke zufällig; Wertung zählt dann mehr Dörfer als besser. Immer ≥ 4 freie Felder zwischen Städten (geprüft). Ø Städte bei 2 Spielern normal/viele/voll: Riesig 13/14/14, Gewaltig 18/19/20, Kolossal 23/26/27, Episch 84/106/109. Kampagne unverändert (normal).
@@ -112,10 +112,15 @@ Startwerte und Kampfformel (Commit e094f32, 16.10.) stammen aus dem Vorbild *The
 
 # Offene Aufgaben
 - **Am Ende der Entwicklung erinnern (Wolfgang hat darum gebeten):** LICENSE „Alle Rechte vorbehalten“ anlegen, kurze Datenschutzerklärung/Impressum-Hinweis ins Spiel, Markenrecherche „KnightyKnight“ (Looney Tunes „Knighty Knight Bugs“), Repo ggf. privat, eigenes Hosting statt Artefakt für kommerzielle Nutzung. Emojis in Menüs (Darstellung = Geräteschrift von Apple/Google) für Werbematerial ggf. durch eigene Symbole ersetzen.
-- Wolfgang testet 0.83 (KI-Stufen: greifen leichte Gegner selten, aber entschlossen an? Stufen spürbar schwerer?) und das Kampfsystem; offen: Wächter in Städten zu stark? und gibt Rückmeldung: drei Stadtstufen, Ausbaukosten, Wirtschaftsforschung +50 %, Wirtschaft zu knapp (Unterhalt 2 Nahrung je Einheit)? Gruben/Traubenhaine, Bau-Menü Wirtschaft/Einheiten; Mana-Kosten der Zauber? Stadtausbau lohnend genug? Wirtschaft ohne Lagergrenze knapp genug? Feuersturm zu stark? Kampfeffekte/zZZ gut, ruckelt etwas am Handy? Preise der Einzel-Verbesserungen, Greifenreiter, Vereisen? Erschüttert-Regel so gemeint (Katapult als Ziel schon nach einem Angriff)?
+- Wolfgang testet 0.86: Ring-Ertrag (innen immer, außen mit Gebäude), Städteregler, KI-Stufen (greifen leichte Gegner selten, aber entschlossen an?), Kampfsystem mit Verteidigung je Angriffsart und Durchschlag, Scrollen auf Episch am Handy.
+- Balance-Simulation der KI-Stufen nach der Ring-Regel (0.85) und den dichteren Karten (0.86) – vorher fragen.
+- Bekanntes Problem: Wächter in Städten (bis 70 % Verteidigung gegen Nahkampf) sind für Krieger/Reiter fast unverwundbar; Stellschrauben: Leben des Wächters oder Stadtbonus.
+- Bekanntes Problem: Stufe 2 bleibt nach ihren 5 Städten neben gegnerischen Städten stehen, ohne anzugreifen (gewollt kein Erobern, sieht aber unschön aus).
+- Frage offen: Soll die Kampagne auch „viele“ Städte bekommen (derzeit „normal“)?
+- Hinweis: Episch „voll“ braucht zum Erzeugen am PC ~0,6 s.
 - Angebot offen: Feldwahl beim Heranziehen soll auch andere Gegner meiden (Schütze landete im Test neben einem zweiten Gegner).
 - Angebot offen: Schwingenfeld (Drache blockiert ein zweites Feld) und freie Schüsse von Schützen/Türmen beim Feuersturm.
 - Ideen von früher: Marschbefehl (automatisches Ziehen über mehrere Runden); Balancing Troll (in Städten mit Mauer sehr zäh) und KI-Heilen (selten genutzt).
 
 # Nächster Schritt
-Rückmeldung zu 0.73 (drei Stadtstufen, Wirtschaftsforschung) einholen; danach ggf. Balance-Simulation (KI kommt mit der knapperen Wirtschaft zurecht?) (vorher fragen) und daraus gesammelt (vorher fragen) die nächsten Änderungen umsetzen – am besten in einer neuen Sitzung mit /start.
+Rückmeldung von Wolfgang zu 0.86 einholen und danach (vorher fragen) eine Stufen-Simulation laufen lassen, um die KI-Abstufung mit Ring-Ertrag und dichteren Karten zu prüfen.
