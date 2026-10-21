@@ -1,5 +1,5 @@
 // Schnelltests: alle Kampagnenlevel erzeugen, Zufallsspiele in allen Größen ohne Fehler durchspielen.
-import { createGame, applyAction, cloneState, statsOf, getBombTargets, migrateState, stormArea, canTerraform, incomeOf, realmYield, cityTiles, cityYield } from '../js/game.js';
+import { createGame, applyAction, cloneState, computeCombat, statsOf, getBombTargets, migrateState, stormArea, canTerraform, incomeOf, realmYield, cityTiles, cityYield } from '../js/game.js';
 import { getGeo } from '../js/hex.js';
 import { planAction } from '../js/ai.js';
 import { getLevels } from '../js/levels.js';
@@ -134,6 +134,28 @@ const t0 = Date.now();
   const f = [...s.terrain.keys()].find((i) => canTerraform(s, s.current, i) === 'clear');
   const w = s.players[s.current].res.wood;
   check(f != null && applyAction(s, { type: 'clear', idx: f }) && s.terrain[f] === 'plain' && s.players[s.current].res.wood > w, 'Roden');
+}
+// Kampf ohne verborgene Formel: Angriff × (100 % − Verteidigung je Angriffsart), unabhängig vom Leben
+{
+  const s = createGame({ seed: 5, cols: 12, rows: 14, biome: 'plains', players: [{ ai: 3 }, { ai: 3 }] });
+  s.units = [];
+  const geo = getGeo(s.cols, s.rows);
+  const free = [...s.terrain.keys()].filter((i) => s.terrain[i] === 'plain' && s.cityAt[i] < 0 && !geo.nb[i].some((j) => s.cityAt[j] >= 0) && geo.within(i, 2).every((j) => s.cityAt[j] < 0 || geo.dist(i, j) > 2));
+  const a0 = free[0], b0 = geo.nb[a0].find((j) => free.includes(j));
+  const mk = (id, type, owner, idx) => ({ id, type, owner, idx, hp: UNITS[type].hp, rank: 1, xp: 0, moved: false, attacked: false });
+  const w1 = mk(1, 'warrior', 0, a0), w2 = mk(2, 'warrior', 1, b0);
+  s.units.push(w1, w2);
+  let r = computeCombat(s, w1, w2);
+  check(r.dmg === 4 && r.counter === 4, `Krieger gegen Krieger 4/4 (${r.dmg}/${r.counter})`);
+  w2.hp = 5; w1.hp = 3;
+  r = computeCombat(s, w1, w2);
+  check(r.dmg === 4 && r.counter === 4, 'Schaden unabhängig vom Leben');
+  const ar = mk(3, 'archer', 0, a0), ca = mk(4, 'catapult', 1, b0);
+  s.units = [ar, ca];
+  r = computeCombat(s, ar, ca);
+  check(r.dmg === 2, `Schütze gegen Katapult halber Schaden (${r.dmg})`);
+  ar.boost = { pen: 2 };
+  check(computeCombat(s, ar, ca).dmg === 3, 'Durchschlag 20 senkt die Verteidigung');
 }
 for (const l of getLevels()) {
   const s = createGame({ seed: l.seed, cols: l.cols, rows: l.rows, biome: l.biome, players: [{ human: true }, ...l.ais.map((ai) => ({ ai }))] });

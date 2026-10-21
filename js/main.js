@@ -5,7 +5,7 @@ import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
   incomeOf, realmYield, boostedYield, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
-  perkOptions, flankers, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, defenseMult,
+  perkOptions, flankers, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, terrainDefense,
   canBoost, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, canStorm, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
 } from './game.js';
 import { planAction } from './ai.js';
@@ -16,7 +16,7 @@ import {
   upgradeCost, cityDefense, citySupply, canAfford, RES, BASE_RES, RES_INFO, MANA, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
   RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, MAX_SLOTS, buildingYield, ECO_TECH, ECO_TECH_PCT, PLANT_COST, PLANT_KINDS, ECO_BUILDINGS, slotsUsed, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
-  BOOST_PCT, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
+  BOOST_ADD, AURA, defenseWords, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
 import { store } from './storage.js';
@@ -607,22 +607,24 @@ function onTap(sx, sy) {
 function unitStatsText(u, isPreview) {
   const st = statsOf(S, u);
   const hp = isPreview ? st.hp : `${u.hp}/${st.hp}`;
-  return `❤ ${hp} · ⚔ ${fmt(st.atk)} · 🛡 ${fmt(st.def)} · 👣 ${st.move} · 🎯 ${st.range}`;
+  return `❤ ${hp} · ⚔ ${st.atk}${st.pen ? ` · 🗡 ${st.pen}` : ''} · 👣 ${st.move} · 🎯 ${st.range}`;
 }
 
 function unitNotes(u) {
-  const notes = [UNITS[u.type].desc];
-  if (u.shaken) notes.push('⭐ Erschüttert: halbe Verteidigung, kein Gegenschlag.');
+  const notes = [UNITS[u.type].desc, defenseWords(u.type)];
+  const stx = statsOf(S, u);
+  if (stx.def) notes.push(`🛡 Verteidigung +${stx.def} % (Rang, Entwicklung, Verbesserung).`);
+  if (stx.pen) notes.push(`🗡 Durchschlag ${stx.pen}: senkt die Verteidigung des Gegners um ${stx.pen} %.`);
   if (u.stone) notes.push('🪨 Versteinert: setzt den nächsten Zug aus und schlägt nicht zurück.');
   else if (u.stoneNow) notes.push('🪨 Versteinert: setzt diesen Zug aus.');
-  if (inAura(S, u)) notes.push('🛡 Schutzaura: 25 % weniger Schaden, Flächenschaden halbiert.');
+  if (inAura(S, u)) notes.push(`🛡 Schutzaura: +${AURA.def} % Verteidigung, Flächenschaden halbiert.`);
   if (UNITS[u.type].healer) notes.push(`Heilt ${healAmount(S, u)} Leben bis 3 Felder weit.`);
   if (!UNITS[u.type].structure) {
     const r = u.rank || 1;
     notes.push(r < MAX_RANK ? `${UNITS[u.type].healer ? 'Heilungen' : 'Besiegte Gegner'}: ${u.xp || 0}/${RANK_XP[r + 1]} bis ${RANK_NAMES[r + 1]}.` : 'Höchste Stufe erreicht.');
   }
   for (const p of u.perks || []) notes.push(`${PERKS[p].icon} ${PERKS[p].name}: ${PERKS[p].desc}.`);
-  const b = BOOST_STATS.filter(([k]) => u.boost?.[k]).map(([k, name, ic]) => `${ic} ${name} +${BOOST_PCT[u.boost[k]]} %`);
+  const b = BOOST_STATS.filter(([k]) => u.boost?.[k]).map(([k, name, ic]) => `${ic} ${name} ${boostText(k, u.boost[k])}`);
   if (b.length) notes.push(`⬆ Verbessert: ${b.join(', ')}.`);
   for (const k of u.skills || []) notes.push(`${SKILLS[k].icon} ${SKILLS[k].name}: ${SKILLS[k].desc}.`);
   if (u.iced || u.ice) notes.push('❄️ Vereist.');
@@ -679,8 +681,7 @@ function showCombatTip(x, y) {
     el('div', { class: 'tip-grid' },
       el('div', {}, el('span', {}, 'Schaden'), el('b', { class: c.kill ? 'ok' : 'bad' }, c.kill ? `−${c.dmg} ✖ besiegt` : `−${c.dmg} (bleibt ${ct.t.hp - c.dmg})`)),
       el('div', {}, el('span', {}, 'Gegenschlag'), el('b', {}, c.kill ? '–' : c.lance ? '– (lange Lanze)' : c.counter ? `−${c.counter}${c.die ? ' ✖ fällt' : ''}` : '–')),
-      el('div', {}, el('span', {}, 'Dein Angriff'), el('b', {}, `${fmt(c.atk)} × ${fmt(Math.round(c.atkMult * 100) / 100)}`)),
-      el('div', {}, el('span', {}, 'Gegner-Verteidigung'), el('b', {}, `${fmt(c.def)}${c.defMult > 1 ? ` × ${fmt(Math.round(c.defMult * 100) / 100)}` : ''}`)),
+      el('div', {}, el('span', {}, 'Rechnung'), el('b', {}, `${c.atkValue} Angriff × (100 % − ${c.defPct} %) = ${c.dmg}`)),
       c.extra.length ? el('div', {}, el('span', {}, 'Mitgetroffen'), el('b', {}, c.extra.map((h) => `${UNITS[h.unit.type].name} −${h.dmg}`).join(', '))) : null),
     c.atkNotes.length ? el('div', { class: 'tip-desc' }, '⬆ ' + c.atkNotes.join(' · ')) : null,
     c.defNotes.length ? el('div', { class: 'tip-desc' }, '🛡 ' + c.defNotes.join(' · ')) : null);
@@ -770,7 +771,12 @@ function magicTargets(u) {
   return [];
 }
 
-// Einzel-Verbesserungen einer Einheit: Angriff, Verteidigung, Leben (je 3 Stufen) und Fähigkeiten
+// Zuschlag einer Verbesserungsstufe als Text: Angriff/Leben/Durchschlag als Zahl, Verteidigung in Prozent
+function boostText(k, lvl) {
+  return `+${BOOST_ADD[k][lvl]}${k === 'def' ? ' %' : ''}`;
+}
+
+// Einzel-Verbesserungen einer Einheit: Angriff, Verteidigung, Leben, Durchschlag (je 3 Stufen) und Fähigkeiten
 function openBoost(u0) {
   const draw = () => {
     const u = unitById(S, u0.id);
@@ -792,7 +798,7 @@ function openBoost(u0) {
         el('span', { class: 'ticon' }, ic),
         el('div', { class: 'binfo' },
           el('b', {}, `${name} ${'●'.repeat(lvl)}${'○'.repeat(3 - lvl)}`),
-          el('span', {}, lvl < 3 ? `+${BOOST_PCT[lvl + 1]} %: ${now} → ${then}` : `+${BOOST_PCT[3]} %: ${now}`)),
+          el('span', {}, k === 'def' ? (lvl < 3 ? `${boostText(k, lvl + 1)} (Zuschlag ${now} % → ${then} %)` : `${boostText(k, 3)}`) : lvl < 3 ? `${boostText(k, lvl + 1)}: ${now} → ${then}` : `${boostText(k, 3)}: ${now}`)),
         lvl >= 3 ? el('span', { class: 'done' }, '✓')
           : el('button', { class: 'btn small', disabled: !my || !canAfford(p.res, cost), onclick: () => buy({ type: 'boost', unitId: u.id, stat: k }) }, costEl(cost, p.res))));
     }
@@ -1278,7 +1284,7 @@ async function playEvent(ev, f, isAI, pan = true) {
         if (ev.stone) {
           R.floatText(def.idx, 'versteinert!', '#d6d3d1', 1200 * f, hit + 350 * f);
           sound.play('petrify', { pan: panOf(def.idx), vol: isAI === 'quiet' ? 0.6 : 1, delay: hit / 1000 + 0.1 });
-        } else if (ev.shaken) R.floatText(def.idx, 'erschüttert!', '#fde68a', 1100 * f, hit + 350 * f);
+        }
         if (ev.counter > 0) R.floatText(att.idx, `−${ev.counter}`, '#fecaca', 900 * f, hit + 200 * f);
         for (const h of ev.splash || []) {
           if (h.killed) R.ghost({ ...h.snap, hp: 0 }, hit + 420 * f, hit / (hit + 420 * f));
@@ -1430,7 +1436,7 @@ async function playEvent(ev, f, isAI, pan = true) {
     case 'boost':
       if (f > 0) R.ring(ev.idx, '#fde047', 500 * f);
       sound.play('chime', { pan: panOf(ev.idx), vol: isAI ? 0.3 : 1 });
-      R.floatText(ev.idx, `${BOOST_STATS.find((b) => b[0] === ev.stat)[2]} +${BOOST_PCT[ev.level]} %`, '#fde68a', 1000 * Math.max(f, 0.6));
+      R.floatText(ev.idx, `${BOOST_STATS.find((b) => b[0] === ev.stat)[2]} ${boostText(ev.stat, ev.level)}`, '#fde68a', 1000 * Math.max(f, 0.6));
       break;
     case 'skill':
       if (f > 0) R.ring(ev.idx, '#fde047', 500 * f);
@@ -1582,13 +1588,12 @@ function hpBar(u) {
     el('span', {}, `${u.hp}/${max}`));
 }
 
-// Tatsächliche Werte inkl. Forschung, Stufe und Spezialisierungen; Verteidigung mit Stadt-/Burgbonus des Feldes
+// Tatsächliche Werte inkl. Forschung, Stufe und Spezialisierungen (Verteidigung steht in Worten in der Beschreibung)
 function statRow(u) {
   const T = statsOf(S, u);
-  const dm = UNITS[u.type].structure ? 1 : defenseMult(S, u.idx);
   return el('div', { class: 'stats-row' },
-    el('span', { title: 'Angriff (inkl. Forschung, Stufe, Spezialisierung)' }, icon('atk'), fmt(T.atk)),
-    el('span', { title: dm > 1 ? `Verteidigung ${fmt(T.def)} × ${fmt(Math.round(dm * 100) / 100)} Stadt-/Burgbonus` : 'Verteidigung' }, icon('def'), dm > 1 ? `${Math.ceil(T.def * dm - 1e-9)}` : fmt(T.def), dm > 1 ? el('small', { class: 'bonus' }, '🏰') : null),
+    el('span', { title: 'Angriff (inkl. Forschung, Stufe, Verbesserung)' }, icon('atk'), T.atk),
+    T.pen ? el('span', { title: 'Durchschlag: senkt die Verteidigung des Gegners' }, '🗡', T.pen) : null,
     T.move ? el('span', { title: 'Bewegung' }, icon('move'), T.move) : null,
     el('span', { title: 'Reichweite' }, icon('range'), T.range));
 }
@@ -1625,7 +1630,7 @@ function cityTitle(c) {
 
 function tileInfo(i) {
   const c = cityOn(S, i);
-  if (c) return `${cityTitle(c)} · Verteidigung ×${fmt(cityDefense(c, hasTech(S, c.owner, 'stonework')))}`;
+  if (c) return `${cityTitle(c)} · Verteidigung +${terrainDefense(S, i)} %`;
   if (S.grapes?.includes(i)) return '🍇 Traubenhain (Mana mit Kelterei)';
   if (S.pits?.includes(i)) return '⛏️ Erzgrube (Erz mit Mine)';
   const pl = S.plants?.find((x) => x.idx === i);
@@ -1653,20 +1658,9 @@ function advice(occ) {
   const mine = S.units.filter((u) => u.owner === pid);
   const canStill = mine.filter((u) => canMove(u) || unitTargets(u, occ).length);
   const territory = computeTerritory(S);
-  // 1. Erschütterte Gegner angreifen
-  for (const u of canStill) {
-    if (UNITS[u.type].range > 1) continue;
-    const reach = canMove(u) ? [u.idx, ...getMoves(S, u, occ).keys()] : [u.idx];
-    for (const f of reach) {
-      for (const j of geo.nb[f]) {
-        const e = occ[j];
-        if (e && e.owner !== pid && e.shaken && canAttack(u)) return { text: `Ein Gegner ist erschüttert ⭐ – greife ihn jetzt mit deinem ${UNITS[u.type].name} an: kein Gegenschlag!`, unit: u.id };
-      }
-    }
-  }
   // 2. Fernkämpfer zuerst
   const shooter = canStill.find((u) => !UNITS[u.type].structure && statsOf(S, u).range > 1 && canAttack(u) && (unitTargets(u, occ).length || canMove(u) && [...getMoves(S, u, occ).keys()].some((f) => getTargets(S, u, f, occ).length)));
-  if (shooter) return { text: `Lass zuerst deinen ${UNITS[shooter.type].name} schießen: Getroffene Gegner sind erschüttert und wehren sich nicht.`, unit: shooter.id };
+  if (shooter) return { text: `Lass zuerst deinen ${UNITS[shooter.type].name} schießen: Fernkämpfer bekommen keinen Gegenschlag.`, unit: shooter.id };
   // 3. Dörfer besetzen
   const free = S.cities.filter((c) => c.owner !== pid && !occ[c.idx]);
   for (const u of canStill.filter(canMove)) {
@@ -2001,7 +1995,7 @@ function renderPanelContent(panel) {
         el('span', { class: 'title' }, t.name),
         el('span', { class: 'yield' }, icon(t.res), `${ownerTxt} 1 ${RES_INFO[t.res].name}`)));
       if (!t.pass) panel.append(el('div', { class: 'note' }, 'Unpassierbar.'));
-      if (castleOf(S, i)) panel.append(el('div', { class: 'note' }, `🏰 Burgfeld: Verteidiger bekommen ×${fmt(defenseMult(S, i))} Verteidigung.`));
+      if (castleOf(S, i)) panel.append(el('div', { class: 'note' }, `🏰 Burgfeld: Verteidiger bekommen +${terrainDefense(S, i)} % Verteidigung.`));
     }
     return;
   }
@@ -2325,7 +2319,7 @@ function renderHelp() {
   const costTxt = (c) => RES.filter((k) => c[k]).map((k) => `${c[k]} ${RES_INFO[k].name}`).join(', ');
   const rows = UNIT_ORDER.map((k) => {
     const T = UNITS[k];
-    return `<tr><td>${T.name}</td><td>${T.hp}</td><td>${fmt(T.atk)}</td><td>${fmt(T.def)}</td><td>${T.move}</td><td>${T.range}</td></tr><tr class="sub"><td colspan="6">${costTxt(T.cost)}</td></tr>`;
+    return `<tr><td>${T.name}</td><td>${T.hp}</td><td>${T.atk}</td><td>${T.move}</td><td>${T.range}</td></tr><tr class="sub"><td colspan="5">${costTxt(T.cost)} · ${defenseWords(k)}</td></tr>`;
   }).join('');
   $('helpContent').innerHTML = `
     <h3>Ziel</h3>
@@ -2350,7 +2344,9 @@ function renderHelp() {
     <h3>Angreifen</h3>
     <p>Wählst du eine Einheit, zeigen rote Felder alle Ziele – auch solche, die sie erst nach dem Ziehen erreicht. Die Blase über dem Ziel nennt den Schaden (↩ = Gegenschlag, ✖ = Ziel wird besiegt). Ein Tipp auf das Ziel greift an; ist es noch zu weit weg, zieht die Einheit vorher auf das beste Feld (Fernkämpfer halten Abstand).
     Nahkämpfer rücken nach einem Sieg auf das Feld vor.<br>
-    <b>Erschüttert ⭐:</b> Greifen in einer Runde mindestens zwei verschiedene Einheiten denselben Gegner an (Katapult und Tribok: schon ein Angriff), ist er bis zu seinem nächsten Zug erschüttert: halbe Verteidigung, kein Gegenschlag. Troll und Drache werden nie erschüttert. Tipp: erst zwei Fernkämpfer, dann die Nahkämpfer.</p>
+    <b>Schaden:</b> Angriff × (100 % − Verteidigung des Ziels), gerundet, mindestens 1 – unabhängig vom aktuellen Leben. Beispiel: Ritter (Angriff 7) gegen Krieger (20 % gegen Nahkampf) = 7 × 0,8 = 6. Der Gegenschlag rechnet genauso mit dem Angriff des Verteidigers. Die Blase über dem Ziel zeigt das Ergebnis, langes Drücken (PC: Maus darüber) die Rechnung.<br>
+    <b>Verteidigung</b> hängt von der Angriffsart ab (Nahkampf, Fernkampf, Wucht, Feuer/Magie) – in der Einheitenbeschreibung steht, wogegen eine Einheit robust oder anfällig ist (z. B. halten Katapulte und Trolle Pfeilen stand). Dazu kommen Zuschläge: Stadt +20 %, mit Mauer +40 % (Steinmetz +50 %), Burgfelder +30 % (Burgausbau +40 %) – gegen Wucht nur halb –, Schutzaura +15 %, Rang, Entwicklung und Verbesserungen. Höchstens 80 %.<br>
+    <b>Durchschlag 🗡</b> senkt die Verteidigung des Ziels um so viele Prozentpunkte. Ihn gibt es nicht von Anfang an, sondern als Einzel-Verbesserung (10 / 20 / 30) und durch die Spezialisierungen Belagerer (gegen Städte und Bauwerke) und Jäger (gegen Reiterei und Titanen).</p>
     <h3>Städte</h3>
     <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden; Türme und Steinwälle in ihrem Gebiet wechseln mit auf deine Seite.
     Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Bauplätze: 2 / 4 / 6.<br>
@@ -2384,24 +2380,24 @@ function renderHelp() {
     <h3>Heilung</h3>
     <p>Einheiten, die eine Runde nichts tun, heilen 2 Lebenspunkte – in der Nähe eigener Städte 4. Zauberer heilen sofort.</p>
     <h3>Einheiten</h3>
-    <table><tr><th>Einheit</th><th>❤</th><th>Angr.</th><th>Vert.</th><th>Bew.</th><th>Reichw.</th></tr>${rows}</table>
+    <table><tr><th>Einheit</th><th>❤</th><th>Angr.</th><th>Bew.</th><th>Reichw.</th></tr>${rows}</table>
     <p>Ritter und Greifenreiter brauchen eine Kaserne, Katapulte und Triboks eine Werkstatt, Zauberer einen Turm der Weisen, der Basilisk ein Basiliskennest, der Schwarze Troll eine Trollhöhle, der Drache eine Drachenhöhle. Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
     <h3>Zugweite</h3>
     <p>Auch voll entwickelt ziehen Fußtruppen höchstens 4 Felder, Katapulte 3, Reiter, Ritter und Greifenreiter 6 – auch wenn sie über eigene Einheiten springen.</p>
     <h3>Ränge und Fähigkeiten ★</h3>
-    <p>Einheiten steigen durch <b>Siege</b> auf – überall auf der Karte, ganz ohne Stadt oder Kaserne: Je 5 besiegte Gegner bringen eine Stufe (Zauberer zählen stattdessen ihre Heilungen), höchstens 3 Stufen: ${RANK_NAMES.slice(1).join(' → ')}. Jede Stufe gibt +20 % Leben und +15 % Angriff und Verteidigung, Reiter, Ritter und Greifenreiter ab Veteran +1 Bewegung, alle Helden +1 Bewegung.
+    <p>Einheiten steigen durch <b>Siege</b> auf – überall auf der Karte, ganz ohne Stadt oder Kaserne: Je 5 besiegte Gegner bringen eine Stufe (Zauberer zählen stattdessen ihre Heilungen), höchstens 3 Stufen: ${RANK_NAMES.slice(1).join(' → ')}. Jede Stufe gibt +2 Leben, +1 Angriff und +5 % Verteidigung, Reiter, Ritter und Greifenreiter ab Veteran +1 Bewegung, alle Helden +1 Bewegung.
     Bei jeder Stufe wählst du eine <b>Spezialisierung</b>. Einheiten, die gerade eine wählen dürfen, schimmern golden, blinken auf und tragen ein ⬆; gewählte Spezialisierungen erscheinen als kleines Abzeichen neben der Figur: ${Object.values(PERKS).map((p) => `${p.icon} ${p.name} (${p.desc})`).join(', ')}.</p>
     <h3>Zauberer 🔮</h3>
-    <p>Eigene Einheiten neben einem Zauberer (blaues Schild-Symbol) bekommen 25 % weniger Schaden, Flächenschaden halbiert. Statt anzugreifen heilt der Zauberer eine eigene Einheit bis 3 Felder entfernt (grün markiert antippen). Höchstens ein Zauberer pro Stadt.</p>
+    <p>Eigene Einheiten neben einem Zauberer (blaues Schild-Symbol) bekommen +15 % Verteidigung, Flächenschaden halbiert. Statt anzugreifen heilt der Zauberer eine eigene Einheit bis 3 Felder entfernt (grün markiert antippen). Höchstens ein Zauberer pro Stadt.</p>
     <h3>Katapult und Flanke</h3>
-    <p>Katapulte sind Belagerungswaffen: Gegen Städte, Türme und Wälle machen sie vollen Schaden, gegen Truppen im offenen Feld nur 60 %. Sie treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Gegenmittel: Reiter und Ritter, denn Katapulte haben keine Verteidigung und können nach einer Bewegung nicht schießen. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +10 % (höchstens +30 %): Einkesseln lohnt sich.</p>
+    <p>Katapulte sind Belagerungswaffen (Wucht): Türme und Wälle haben dagegen keine Verteidigung, und Stadt- und Burgboni zählen nur halb. Sie treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Gegenmittel: Reiter und Ritter, denn Katapulte haben keine Verteidigung und können nach einer Bewegung nicht schießen. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +1 Angriff (Schlachtordnung +2, höchstens 3 Nachbarn): Einkesseln lohnt sich.</p>
     <h3>Schwarzer Troll</h3>
-    <p>Ein Titan für das späte Spiel: etwa zehnmal so stark wie ein Krieger, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel und braucht eine Trollhöhle (Stadt ab Stufe 3). Höchstens 5 pro Reich.</p>
+    <p>Ein Titan für das späte Spiel: viel Leben und harte Schläge, heilt jede Runde 3 Leben und kann ebenfalls Ränge sammeln. Er kostet viel und braucht eine Trollhöhle (Stadt ab Stufe 3). Höchstens 5 pro Reich.</p>
     <h3>Einheiten-Entwicklung ⬆</h3>
     <p>Im Forschungsfenster gibt es neben Militär, Wirtschaft und Verteidigung die Reiter <b>Nahkämpfer</b>, <b>Fernkämpfer</b>, <b>Zauberer</b>, <b>Katapulte</b> und <b>Titanen</b>. Dort wählst du eine Einheit und entwickelst sie in 5 Stufen weiter – das gilt sofort für alle Einheiten dieses Typs, auch für die schon aufgestellten. Auf Stufe 3 entscheidest du dich für eine von zwei Richtungen (z. B. Ritter → Chevalier mit extralanger Lanze oder Schwerer Ritter; Tribok → explosive Geschosse oder Riesenkugeln). So spezialisierst du dein Heer auf wenige starke Einheiten.</p>
     <p>Jede Stufe sieht man: goldene Steine am Sockel zählen die Stufen, neue Ausrüstung (Helm, Lanze, größerer Schild, zweites Schwert, Brandpfeile, Sprengbomben …), ab Stufe 4 schwarze Rüstung und auf Stufe 5 eine goldene Aura.</p>
     <h3>Einzel-Verbesserungen ⬆</h3>
-    <p>Wähle eine eigene Einheit und tippe „⬆ Verbessern“: Diese Verbesserungen gelten nur für genau diese eine Einheit – verbesserte Einheiten erkennst du an schimmernden Sternen über dem Kopf: 1 Stern = verbessert, 2 Sterne = Angriff, Verteidigung oder Leben auf Stufe 3, 3 violette Sterne = alles voll freigeschaltet. <b>Angriff</b>, <b>Verteidigung</b> und <b>Leben</b> haben je 3 Stufen (+25 %, +75 %, +150 %, immer aufgerundet); jede Stufe kostet ${BOOST_COST.join(' / ')} % des Kaufpreises der Einheit – also etwas weniger als eine neue. Dazu kommen <b>Fähigkeiten</b> (je ${SKILL_COST} % des Kaufpreises):<br>
+    <p>Wähle eine eigene Einheit und tippe „⬆ Verbessern“: Diese Verbesserungen gelten nur für genau diese eine Einheit – verbesserte Einheiten erkennst du an schimmernden Sternen über dem Kopf: 1 Stern = verbessert, 2 Sterne = Angriff, Verteidigung, Leben oder Durchschlag auf Stufe 3, 3 violette Sterne = alles voll freigeschaltet. <b>Angriff</b> (+1 / +2 / +3), <b>Verteidigung</b> (+5 / +10 / +15 %), <b>Leben</b> (+3 / +6 / +10) und <b>Durchschlag</b> (10 / 20 / 30) haben je 3 Stufen; jede Stufe kostet ${BOOST_COST.join(' / ')} % des Kaufpreises der Einheit – also etwas weniger als eine neue. Dazu kommen <b>Fähigkeiten</b> (je ${SKILL_COST} % des Kaufpreises):<br>
     Nahkämpfer: 💚 Selbstheilung (10 % des Lebens pro Runde), 🪨 Stellung halten (+20 % Verteidigung, wenn sie in ihrem Zug nicht gezogen ist).<br>
     Fernkämpfer (Schütze, Basilisk): 🏹 Weitschuss (+1 Reichweite), 🎯 Fernschuss (+2), 🔥 Brandpfeile (Nachbarn des Ziels bekommen 25 % des Schadens), 💚 Selbstheilung.<br>
     Zauberer: ❄️ Vereisen (ein Gegner bis 3 Felder weit setzt eine Runde aus, Titanen sind immun), ✨ Flächenheilung (beim Heilen bekommen die eigenen Nachbarn des Ziels 25 % ihres Lebens zurück), 💣 Bergsprengung (ein Gebirge bis 3 Felder weit wird zu begehbarem Lehm).<br>

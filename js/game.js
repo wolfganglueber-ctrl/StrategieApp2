@@ -4,7 +4,7 @@ import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
-  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, buildingYield, PLANT_COST, START_BUILDINGS, slotsUsed, usesSlot, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_PCT, SKILLS, skillsFor, boostCost, skillCost,
+  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, buildingYield, PLANT_COST, START_BUILDINGS, slotsUsed, usesSlot, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_ADD, ATK_TYPE, DEF_TABLE, DEF_MAX, SKILLS, skillsFor, boostCost, skillCost,
   BASE_RES, MANA, ECO_TECH, ECO_TECH_PCT,
 } from './data.js';
 import { generateMap } from './mapgen.js';
@@ -91,7 +91,8 @@ export function hasTech(state, pid, t) {
 // Werte einer Einheit inkl. Turmstufe und Forschung
 export function statsOf(state, u) {
   const T = UNITS[u.type];
-  const st = { hp: T.hp, atk: T.atk, def: T.def, move: T.move, range: T.range };
+  // def = Zuschlag auf die Verteidigung in Prozentpunkten (Grundwerte je Angriffsart in DEF_TABLE), pen = Durchschlag
+  const st = { hp: T.hp, atk: T.atk, def: T.def || 0, pen: 0, move: T.move, range: T.range };
   if (u.type === 'tower') {
     Object.assign(st, TOWER_LEVELS[u.level || 1]);
     if (hasTech(state, u.owner, 'stonework')) st.hp += 6;
@@ -113,26 +114,25 @@ export function statsOf(state, u) {
   for (const id of unitUpList(state, u.owner, u.type)) {
     for (const [k, v] of Object.entries(UP_INDEX[id]?.mod || {})) if (k in st) st[k] += v;
   }
-  // Rang und Fähigkeiten
-  // Alle Werte sind ganze Zahlen: Zuschläge werden aufgerundet
+  // Rang und Fähigkeiten: feste Zuschläge je Rangstufe
   const r = (u.rank || 1) - 1;
   if (r > 0) {
-    st.hp = ceilMul(st.hp, 1 + RANK_BONUS.hp * r);
-    st.atk = ceilMul(st.atk, 1 + RANK_BONUS.atk * r);
-    st.def = ceilMul(st.def, 1 + RANK_BONUS.def * r);
+    st.hp += RANK_BONUS.hp * r;
+    st.atk += RANK_BONUS.atk * r;
+    st.def += RANK_BONUS.def * r;
     if (r >= 1 && CAVALRY.includes(u.type)) st.move++;
     if (r >= 3) st.move++;
   }
   if (hasPerk(u, 'tough')) st.hp = ceilMul(st.hp, 1.25);
-  if (hasPerk(u, 'shieldwall')) st.def = ceilMul(st.def, 1.3);
+  if (hasPerk(u, 'shieldwall')) st.def += 15;
   if (hasPerk(u, 'swift')) st.move++;
   st.move = Math.min(st.move, moveCap(u.type));
   // Einzel-Verbesserungen dieser einen Einheit
-  if (u.boost) for (const k of ['atk', 'def', 'hp']) if (u.boost[k]) st[k] = ceilMul(st[k], 1 + BOOST_PCT[u.boost[k]] / 100);
+  if (u.boost) for (const k of ['atk', 'def', 'hp', 'pen']) if (u.boost[k]) st[k] += BOOST_ADD[k][u.boost[k]];
   if (hasSkill(u, 'range1')) st.range++;
   if (hasSkill(u, 'range2')) st.range++;
-  // Stellung halten: nicht gezogen → +20 % Verteidigung
-  if (hasSkill(u, 'hold') && !u.walked) st.def = ceilMul(st.def, 1.2);
+  // Stellung halten: nicht gezogen → +10 % Verteidigung
+  if (hasSkill(u, 'hold') && !u.walked) st.def += 10;
   st.atk = Math.ceil(st.atk - 1e-9);
   st.def = Math.ceil(st.def - 1e-9);
   st.hp = Math.ceil(st.hp - 1e-9);
@@ -145,24 +145,6 @@ function ceilMul(v, f) {
 
 export function hasSkill(u, k) {
   return !!u.skills?.includes(k);
-}
-
-// Erschüttern: Titanen und Bauwerke nie; Katapulte/Triböke nach einem Angriff, alle anderen nach zwei Angreifern pro Runde
-export function canShake(t) {
-  return !isStructure(t) && t.type !== 'troll' && t.type !== 'dragon';
-}
-export function shakeNeed(t) {
-  return t.type === 'catapult' || t.type === 'trebuchet' ? 1 : 2;
-}
-// Wie viele verschiedene Gegner das Ziel in dieser Runde schon angegriffen haben
-export function shakeHits(state, t) {
-  return t.hitKey === state.turn * 10 + state.current ? t.hitBy.length : 0;
-}
-// Würde dieser Angriff das Ziel erschüttern (falls es überlebt)?
-export function wouldShake(state, att, t) {
-  if (!canShake(t) || t.shaken) return false;
-  const hits = shakeHits(state, t) - (t.hitKey === state.turn * 10 + state.current && t.hitBy.includes(att.id) ? 1 : 0);
-  return hits + 1 >= shakeNeed(t);
 }
 
 export function canPetrify(t) {
@@ -195,43 +177,65 @@ function upMod(state, u, k) {
   return v;
 }
 
-// Angriffsfaktor aus Fähigkeiten und Flankenbonus
-export function attackMult(state, att, def, fromIdx = att.idx) {
-  let m = 1;
-  if (hasPerk(att, 'charge') && (att.moved || fromIdx !== att.idx)) m += 0.3;
-  if (hasPerk(att, 'siege') && (cityOn(state, def.idx) || isStructure(def))) m += 0.3;
-  if (hasPerk(att, 'hunter') && (CAVALRY.includes(def.type) || def.type === 'troll' || def.type === 'dragon')) m += 0.4;
-  // Drachen sind anfällig gegen Pfeile
-  if (UNITS[def.type].arrowWeak && (att.type === 'archer' || att.type === 'tower')) m += 0.6;
-  if (!isStructure(att)) m += (hasTech(state, att.owner, 'tactics') ? 0.15 : FLANK_BONUS) * flankers(state, att, def);
-  // Belagerungswaffen: gegen Truppen im offenen Feld schwächer
-  if (UNITS[att.type].fieldMult && !isStructure(def) && !cityOn(state, def.idx)) m *= UNITS[att.type].fieldMult;
-  return m;
+// Kampf ohne verborgene Formel: Schaden = Angriff × (100 % − Verteidigung), gerundet, mindestens 1.
+// Angriff = fester Wert + Entwicklung/Rang/Verbesserung + Sturmangriff + Flanke.
+// Verteidigung = Grundwert gegen die Angriffsart des Angreifers + Zuschläge + Gelände (+ Schutzaura) − Durchschlag (0–80 %).
+export function attackValue(state, att, def, fromIdx = att.idx) {
+  const A = statsOf(state, att);
+  let v = A.atk;
+  if (hasPerk(att, 'charge') && (att.moved || fromIdx !== att.idx)) v += 2;
+  if (!isStructure(att)) v += (hasTech(state, att.owner, 'tactics') ? 2 : FLANK_BONUS) * flankers(state, att, def);
+  return v;
+}
+// Geländezuschlag in Prozentpunkten: Stadt 20, mit Mauer 40 (Steinmetz 50), Burgfelder 30 (Burgausbau 40)
+export function terrainDefense(state, idx) {
+  const c = cityOn(state, idx) || castleOf(state, idx);
+  if (!c) return 0;
+  const d = cityDefense(c, c.owner >= 0 && hasTech(state, c.owner, 'stonework'));
+  if (!c.castle) return d;
+  return Math.max(d, CASTLE_DEF + (c.owner >= 0 && hasTech(state, c.owner, 'keep') ? 10 : 0));
+}
+// Durchschlag des Angreifers gegen dieses Ziel (Verbesserung, Belagerer gegen Städte/Bauwerke, Jäger gegen Reiterei/Titanen)
+export function penetration(state, att, def, defIdx = def.idx) {
+  let p = statsOf(state, att).pen;
+  if (hasPerk(att, 'siege') && (cityOn(state, defIdx) || castleOf(state, defIdx) || isStructure(def))) p += 20;
+  if (hasPerk(att, 'hunter') && (CAVALRY.includes(def.type) || def.type === 'troll' || def.type === 'dragon')) p += 20;
+  return p;
+}
+// Verteidigung des Ziels gegen diesen Angreifer, aufgeschlüsselt
+export function defenseVs(state, att, def, defIdx = def.idx) {
+  const kind = ATK_TYPE[att.type] || 'melee';
+  const base = DEF_TABLE[def.type]?.[kind] ?? 0;
+  const bonus = statsOf(state, def).def;
+  const t = terrainDefense(state, defIdx);
+  const terrain = kind === 'siege' ? Math.round(t / 2) : t; // Wucht: Mauern und Burg zählen nur halb
+  const aura = inAura(state, def, defIdx) ? AURA.def : 0;
+  const pen = penetration(state, att, def, defIdx);
+  const pct = Math.max(0, Math.min(DEF_MAX, base + bonus + terrain + aura - pen));
+  return { kind, base, bonus, terrain, aura, pen, pct };
+}
+export function hitDamage(atk, pct) {
+  return atk > 0 ? Math.max(1, Math.round((atk * (100 - pct)) / 100)) : 0;
 }
 
-// Aufschlüsselung eines Angriffs für die Anzeige (gleiche Regeln wie computeCombat/attackMult)
+// Aufschlüsselung eines Angriffs für die Anzeige (gleiche Regeln wie computeCombat)
 export function combatInfo(state, att, def, fromIdx = att.idx) {
   const r = computeCombat(state, att, def, fromIdx);
-  const A = statsOf(state, att), D = statsOf(state, def);
+  const A = statsOf(state, att);
   const atkNotes = [], defNotes = [];
-  if (hasPerk(att, 'charge') && (att.moved || fromIdx !== att.idx)) atkNotes.push('Sturmangriff +30 %');
-  if (hasPerk(att, 'siege') && (cityOn(state, def.idx) || isStructure(def))) atkNotes.push('Belagerer +30 %');
-  if (hasPerk(att, 'hunter') && (CAVALRY.includes(def.type) || def.type === 'troll' || def.type === 'dragon')) atkNotes.push('Jäger +40 %');
-  if (UNITS[def.type].arrowWeak && (att.type === 'archer' || att.type === 'tower')) atkNotes.push('Pfeile gegen Drachen +60 %');
+  if (hasPerk(att, 'charge') && (att.moved || fromIdx !== att.idx)) atkNotes.push('Sturmangriff +2');
   const fl = isStructure(att) ? 0 : flankers(state, att, def);
-  if (fl) atkNotes.push(`Flanke ${fl}× +${Math.round((hasTech(state, att.owner, 'tactics') ? 0.15 : FLANK_BONUS) * 100 * fl)} %`);
-  if (UNITS[att.type].fieldMult && !isStructure(def) && !cityOn(state, def.idx)) atkNotes.push(`im Feld ×${UNITS[att.type].fieldMult}`);
-  const dm = defenseMult(state, def.idx);
-  if (hasSkill(def, 'hold') && !def.walked) defNotes.push('Stellung gehalten +20 %');
-  if (dm > 1) defNotes.push(`${castleOf(state, def.idx) && !cityOn(state, def.idx) ? 'Burgfeld' : 'Stadt/Burg'} ×${Math.round(dm * 100) / 100}`);
-  if (def.shaken) defNotes.push('erschüttert ×0,5');
-  else if (wouldShake(state, att, def)) atkNotes.push('erschüttert das Ziel ⭐');
-  if (inAura(state, def)) defNotes.push('Schutzaura −25 % Schaden');
-  if (def.hp < D.hp) defNotes.push(`angeschlagen ${def.hp}/${D.hp}`);
-  if (att.hp < A.hp) atkNotes.push(`angeschlagen ${att.hp}/${A.hp}`);
+  if (fl) atkNotes.push(`Flanke ${fl}× +${(hasTech(state, att.owner, 'tactics') ? 2 : FLANK_BONUS) * fl}`);
+  const dv = defenseVs(state, att, def);
+  defNotes.push(`gegen ${ATK_LABEL[dv.kind]} ${dv.base} %`);
+  if (dv.bonus) defNotes.push(`Zuschläge +${dv.bonus} %`);
+  if (dv.terrain) defNotes.push(`${castleOf(state, def.idx) && !cityOn(state, def.idx) ? 'Burgfeld' : 'Stadt/Burg'} +${dv.terrain} %${dv.kind === 'siege' ? ' (Wucht: halb)' : ''}`);
+  if (dv.aura) defNotes.push(`Schutzaura +${dv.aura} %`);
+  if (dv.pen) defNotes.push(`Durchschlag −${dv.pen}`);
   const extra = (splashOf(att) || UNITS[att.type].line) ? splashDamage(state, att, def.idx, r.dmg, fromIdx) : [];
-  return { ...r, atk: A.atk, atkMult: attackMult(state, att, def, fromIdx), atkNotes, def: D.def, defMult: dm, defNotes, extra, lance: hasPerk(att, 'lance') && unitRange(state, def) <= 1 };
+  return { ...r, atk: A.atk, atkValue: attackValue(state, att, def, fromIdx), atkNotes, defPct: dv.pct, defNotes, extra, lance: hasPerk(att, 'lance') && unitRange(state, def) <= 1 };
 }
+const ATK_LABEL = { melee: 'Nahkampf', ranged: 'Fernkampf', siege: 'Wucht', magic: 'Feuer/Magie' };
 
 // Andere eigene Einheiten direkt neben dem Ziel
 export function flankers(state, att, def) {
@@ -369,13 +373,6 @@ export function unitRange(state, u) {
 }
 
 // Nur Städte (und alle 7 Burgfelder) geben Verteidigungsbonus, Gelände nicht
-export function defenseMult(state, idx) {
-  const c = cityOn(state, idx) || castleOf(state, idx);
-  if (!c) return 1;
-  const d = cityDefense(c, c.owner >= 0 && hasTech(state, c.owner, 'stonework'));
-  if (!c.castle) return d;
-  return Math.max(d, CASTLE_DEF) * (c.owner >= 0 && hasTech(state, c.owner, 'keep') ? 1.25 : 1);
-}
 
 // Burg: die Hauptstadt belegt ihr Feld und die 6 Nachbarfelder
 export function castleOf(state, idx) {
@@ -482,24 +479,16 @@ export function getTargets(state, u, fromIdx, occ = buildOcc(state)) {
   return res;
 }
 
-// Schadensfaktor (Angriff/Verteidigung sind seit 0.57 viermal so groß wie früher, damit alles ganzzahlig ist)
-export const DMG_K = 1.125;
-
+// Schaden und Gegenschlag hängen nicht vom aktuellen Leben ab: was die Vorschau zeigt, gilt immer
 export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp) {
-  const A = statsOf(state, att), D = statsOf(state, def);
-  const atk = A.atk * attackMult(state, att, def, fromIdx);
-  const aF = atk * (attHp / A.hp);
-  const dF = D.def * (def.hp / D.hp) * defenseMult(state, def.idx) * (def.shaken ? 0.5 : 1);
-  const tot = aF + dF;
-  // Schaden in ganzen Zahlen (aufgerundet)
-  const dmg = Math.ceil((aF / tot) * atk * DMG_K * (inAura(state, def) ? 1 - AURA.reduce : 1) - 1e-9);
+  const dmg = hitDamage(attackValue(state, att, def, fromIdx), defenseVs(state, att, def).pct);
   const kill = dmg >= def.hp;
   let counter = 0;
   const geo = geoOf(state);
   // Chevalier mit langer Lanze: Nahkämpfer kommen nicht zum Gegenschlag
   const lance = hasPerk(att, 'lance') && unitRange(state, def) <= 1;
-  if (!kill && !lance && !def.shaken && !def.stone && !def.stoneNow && geo.dist(fromIdx, def.idx) <= unitRange(state, def)) {
-    counter = Math.ceil((dF / tot) * D.def * DMG_K * (inAura(state, att, fromIdx) ? 1 - AURA.reduce : 1) - 1e-9);
+  if (!kill && !lance && !def.stone && !def.stoneNow && geo.dist(fromIdx, def.idx) <= unitRange(state, def)) {
+    counter = hitDamage(statsOf(state, def).atk, defenseVs(state, def, att, fromIdx).pct);
   }
   return { dmg, counter, kill, die: counter >= attHp };
 }
@@ -771,7 +760,6 @@ export function startTurn(state) {
     u.walked = false;
     u.attacked = false;
     u.acted = false;
-    u.shaken = false;
     u.ice = false;
     // Versteinert: diesen Zug aussetzen, danach wieder frei
     if (u.stone) {
@@ -826,7 +814,7 @@ export function healAmount(state, u) {
   return HEAL.base + (hasTech(state, u.owner, 'blessing') ? HEAL.blessing : 0) + (hasPerk(u, 'greatheal') ? 3 : 0);
 }
 export function needsHeal(state, healer, t) {
-  return t.hp < statsOf(state, t).hp || (t.shaken && hasTech(state, healer.owner, 'blessing'));
+  return t.hp < statsOf(state, t).hp;
 }
 export function getHealTargets(state, u, fromIdx = u.idx) {
   if (!UNITS[u.type].healer) return [];
@@ -923,14 +911,6 @@ export function applyAction(state, a) {
           u.walked = true;
         }
       } else {
-        // Erschüttert: erst wenn mindestens zwei verschiedene Gegner das Ziel in dieser Runde angegriffen haben
-        // (Katapult und Tribok schon nach einem Angriff, Titanen nie)
-        if (canShake(t)) {
-          const key = state.turn * 10 + state.current;
-          if (t.hitKey !== key) { t.hitKey = key; t.hitBy = []; }
-          if (!t.hitBy.includes(u.id)) t.hitBy.push(u.id);
-          if (canShake(t) && t.hitBy.length >= shakeNeed(t)) { t.shaken = true; e.shaken = true; }
-        }
         // Basilisk versteinert: das Ziel setzt seinen nächsten Zug aus (Titanen und Bauwerke sind immun)
         if (UNITS[u.type].petrify && canPetrify(t)) { t.stone = 1; e.stone = true; }
       }
@@ -959,7 +939,6 @@ export function applyAction(state, a) {
       if (!u || !t || u.owner !== pid || !canAttack(u) || !getHealTargets(state, u).includes(t)) return null;
       const h = Math.min(statsOf(state, t).hp - t.hp, healAmount(state, u));
       t.hp += h;
-      if (hasTech(state, pid, 'blessing')) t.shaken = false;
       u.attacked = true;
       u.moved = true;
       u.acted = true;
@@ -1000,9 +979,9 @@ export function applyAction(state, a) {
       break;
     }
     case 'boost': {
-      // Einzel-Verbesserung (Angriff, Verteidigung, Leben) für genau diese Einheit
+      // Einzel-Verbesserung (Angriff, Verteidigung, Leben, Durchschlag) für genau diese Einheit
       const u = unitById(state, a.unitId);
-      if (!u || u.owner !== pid || !canBoost(u) || !['atk', 'def', 'hp'].includes(a.stat)) return null;
+      if (!u || u.owner !== pid || !canBoost(u) || !['atk', 'def', 'hp', 'pen'].includes(a.stat)) return null;
       const lvl = u.boost?.[a.stat] || 0;
       if (lvl >= 3) return null;
       const cost = boostCost(u.type, lvl);
@@ -1312,6 +1291,7 @@ export function migrateState(s) {
   }
   // 0.73: nur noch 3 Stadtstufen, Dreifelderwirtschaft und Erzschmelze entfallen
   for (const c of s.cities) c.level = Math.min(c.level, CITY_MAX_LEVEL);
+  for (const u of s.units) { delete u.shaken; delete u.hitKey; delete u.hitBy; u.hp = Math.max(1, Math.min(u.hp, statsOf(s, u).hp)); }
   for (const p of s.players) p.tech = (p.tech || []).filter((t) => TECHS[t]);
   return s;
 }

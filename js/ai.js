@@ -2,12 +2,12 @@
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
 import {
   UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, BASE_RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY, structureLimit,
-  costTotal, UNIT_UPS, unitUpCost, boostCost, skillCost, PLANT_COST, slotsUsed, usesSlot,
+  costTotal, ATK_TYPE, DEF_TABLE, DEF_MAX, UNIT_UPS, unitUpCost, boostCost, skillCost, PLANT_COST, slotsUsed, usesSlot,
 } from './data.js';
 import {
-  geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
-  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, unitUpOptions, unitUpList, canBuild, canPetrify, wouldShake,
-  DMG_K, canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage, canTerraform, cityTiles, cityYield,
+  geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, terrainDefense, hitDamage, unitRange, unitCap, canRecruit,
+  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, unitUpOptions, unitUpList, canBuild, canPetrify,
+  canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage, canTerraform, cityTiles, cityYield,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -26,7 +26,7 @@ const memory = { key: '', done: new Set() };
 
 // Wert einer Einheit: Kosten, Rang und Gesundheit
 function baseValue(u) {
-  const b = u.boost ? (u.boost.atk || 0) + (u.boost.def || 0) + (u.boost.hp || 0) : 0;
+  const b = u.boost ? (u.boost.atk || 0) + (u.boost.def || 0) + (u.boost.hp || 0) + (u.boost.pen || 0) : 0;
   return UNITS[u.type].value * (1 + 0.25 * ((u.rank || 1) - 1) + 0.2 * b + 0.15 * (u.skills?.length || 0));
 }
 function unitValue(u, maxHp) {
@@ -119,13 +119,14 @@ function expectedDamage(state, ctx, u, idx, hp) {
   const list = ctx.threat[idx];
   if (!list) return 0;
   const D = ctx.st(u);
-  const dF = D.def * (hp / D.hp) * defenseMult(state, idx);
+  const terr = terrainDefense(state, idx);
   let sum = 0;
   for (const e of list) {
     if (!ctx.alive.has(e)) continue;
     const A = ctx.st(e);
-    const aF = A.atk * (e.hp / A.hp);
-    sum += (aF / (aF + dF)) * A.atk * DMG_K;
+    const kind = ATK_TYPE[e.type] || 'melee';
+    const pct = Math.max(0, Math.min(DEF_MAX, (DEF_TABLE[u.type]?.[kind] ?? 0) + D.def + (kind === 'siege' ? Math.round(terr / 2) : terr) - A.pen));
+    sum += hitDamage(A.atk, pct);
   }
   return sum;
 }
@@ -169,7 +170,7 @@ function positionScore(state, ctx, P, u, idx, hp, pid) {
   // Fernkämpfer bleiben gern auf Distanz
   if (T.range > 1 && de === 1) s -= 1.5 * (P.smart ? 1 : 0);
   // Gelände-Bonus
-  s += (defenseMult(state, idx) - 1) * 1.2;
+  s += terrainDefense(state, idx) * 0.03;
   return s;
 }
 
@@ -178,9 +179,6 @@ function attackScore(state, ctx, P, u, t, from) {
   const DT = ctx.st(t), UT = ctx.st(u);
   const dv = baseValue(t), uv = baseValue(u);
   let gain = (Math.min(r.dmg, t.hp) / DT.hp) * dv * 1.2;
-  // Fernkampf zuerst: erschütterte Ziele sind für Nahkämpfer leichte Beute
-  // Zweiter Angreifer erschüttert: danach greifen die Nahkämpfer ohne Gegenschlag an
-  if (!r.kill && wouldShake(state, u, t)) gain += 1.5;
   if (UNITS[u.type].petrify && !r.kill && canPetrify(t)) gain += Math.min(baseValue(t) * 0.3, 8);
   if (r.kill) gain += dv + 3;
   const tc = cityOn(state, t.idx);
@@ -246,7 +244,7 @@ function evaluateUnit(state, ctx, P, u, pid, rng) {
       for (const t of getHealTargets(state, u, f)) {
         const max = ctx.st(t).hp;
         const h = Math.min(max - t.hp, healAmount(state, u));
-        const gain = (h / max) * baseValue(t) * 1.4 + (t.shaken ? 1 : 0) + 0.3;
+        const gain = (h / max) * baseValue(t) * 1.4 + 0.3;
         const acts = f !== u.idx ? [{ type: 'move', unitId: u.id, to: f }] : [];
         acts.push({ type: 'heal', unitId: u.id, targetId: t.id });
         options.push({ score: gain + positionScore(state, ctx, P, u, f, u.hp, pid), actions: acts });
@@ -508,7 +506,7 @@ function economyAction(state, ctx, P, pid, rng) {
         for (const u of pick) {
           const sk = skillOptions(u).filter((k) => k !== 'bomb');
           if (sk.length && rng() < 0.4 && canAfford(res, skillCost(u.type))) return { type: 'skill', unitId: u.id, skill: sk[0] };
-          const stat = ['atk', 'hp', 'def'][Math.floor(rng() * 3)];
+          const stat = ['atk', 'hp', 'def', 'pen'][Math.floor(rng() * 4)];
           const lvl = u.boost?.[stat] || 0;
           if (lvl < 3 && canAfford(res, boostCost(u.type, lvl))) return { type: 'boost', unitId: u.id, stat };
         }

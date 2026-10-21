@@ -1,7 +1,7 @@
 // Canvas-Renderer: Gelände wird einmal in eine Offscreen-Leinwand gezeichnet,
 // pro Frame kommen nur Markierungen, Einheiten und Effekte dazu.
 import { hexCenter, pixelToIndex, boardSize, SQRT3, getGeo } from './hex.js';
-import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS, PERKS, BOOST_PCT, skillsFor } from './data.js';
+import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS, PERKS, BOOST_MAX, skillsFor } from './data.js';
 import { computeTerritory, statsOf, inAura } from './game.js';
 import {
   hash, hexPath, mix, drawGrapes, drawPit, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, drawWallLink, FIG_BOX, drawCastle, drawCourt, CASTLE_BOX,
@@ -22,8 +22,8 @@ const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 
 // Verbesserungs-Sterne einer Einheit: 0 keine, 1 irgendeine, 2 ein Wert auf höchster Stufe, 3 alles voll
 export function upgradeStars(u) {
-  const b = u.boost || {}, max = BOOST_PCT.length - 1;
-  const lv = ['atk', 'def', 'hp'].map((k) => b[k] || 0);
+  const b = u.boost || {}, max = BOOST_MAX;
+  const lv = ['atk', 'def', 'hp', 'pen'].map((k) => b[k] || 0);
   const sk = u.skills?.length || 0;
   if (!lv.some((v) => v > 0) && !sk) return 0;
   const all = skillsFor(u.type);
@@ -1120,7 +1120,7 @@ export class Renderer {
     ctx.drawImage(sp.cv, x - B.left * s * scale * big, y - B.top * s * scale * big, (B.left + B.right) * s * scale * big, (B.top + B.bottom) * s * scale * big);
     if (exhausted) ctx.globalAlpha /= 0.8;
     // Einzeln verbessert: schimmernde Sterne über dem Kopf (bewusst anders als die gelben Erschüttert-Sterne)
-    // 1 Stern: irgendeine Verbesserung · 2: Angriff, Verteidigung oder Leben auf Stufe 3 · 3: alles voll freigeschaltet
+    // 1 Stern: irgendeine Verbesserung · 2: ein Wert auf Stufe 3 · 3: alles voll freigeschaltet
     const stars = upgradeStars(u);
     if (stars > 0) {
       const hy = y - (u.shaken ? 56 : 47) * s * scale * Math.min(big, 1.3);
