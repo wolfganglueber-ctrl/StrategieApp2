@@ -1293,7 +1293,7 @@ export function migrateState(s) {
     s.v = STATE_VERSION;
     for (const u of s.units) u.hp = Math.max(1, Math.min(u.hp, statsOf(s, u).hp));
   }
-  // 0.73: nur noch 3 Stadtstufen, Dreifelderwirtschaft und Erzschmelze entfallen
+  // Höchstens CITY_MAX_LEVEL Stadtstufen; Dreifelderwirtschaft und Erzschmelze entfallen (0.73)
   for (const c of s.cities) c.level = Math.min(c.level, CITY_MAX_LEVEL);
   for (const u of s.units) { delete u.shaken; delete u.hitKey; delete u.hitBy; u.hp = Math.max(1, Math.min(u.hp, statsOf(s, u).hp)); }
   for (const p of s.players) p.tech = (p.tech || []).filter((t) => TECHS[t]);

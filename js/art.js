@@ -1027,8 +1027,8 @@ export function isFortress(city) {
   return city.level >= 5 && (city.buildings?.length || 0) >= 5;
 }
 
-// Bild der Stadt: die 3 Stadtstufen zeigen die Häuser der früheren Stufen 1, 3 und 5 (Sterne = echte Stufe)
-const CITY_LOOK = [0, 1, 3, 5];
+// Bild der Stadt: Stufe 1–5 (Sterne = Stufe)
+const CITY_LOOK = [0, 1, 2, 3, 4, 5];
 export function drawCity(ctx, city, x, y, H, col) {
   if (city.stars == null) city = { ...city, stars: city.level, level: CITY_LOOK[city.level] ?? city.level };
   const s = H / 40;

@@ -350,9 +350,9 @@ export function skillCost(type) {
   return pctCost(type, SKILL_COST);
 }
 
-// Drei Stadtstufen: Stufe 2 verdoppelt, Stufe 3 verdreifacht den Ertrag je Feld
-export const CITY_MAX_LEVEL = 3;
-export const CITY_NAMES = ['', 'Dorf', 'Stadt', 'Metropole'];
+// Fünf Stadtstufen: jede Stufe +1 Rohstoff je Feld (Stufe 5 = fünffach)
+export const CITY_MAX_LEVEL = 5;
+export const CITY_NAMES = ['', 'Dorf', 'Stadt', 'Metropole', 'Residenzstadt', 'Kaiserstadt'];
 // Wirtschaftsforschung: +50 % auf den gesamten Ertrag des Reichs (aufgerundet)
 export const ECO_TECH = { food: 'plough', wood: 'saw', ore: 'mining' };
 export const ECO_TECH_PCT = 0.5;
@@ -389,13 +389,13 @@ export function slotsUsed(city) {
 export const START_BUILDINGS = ['farm', 'lumber', 'mine'];
 // Versorgung: wie viele Einheiten eine Stadt unterhält (bewusst knapp: wenige, aber wertvolle Einheiten)
 export function citySupply(city) {
-  return [0, 3, 5, 7][city.level] ?? 7;
+  return [0, 3, 5, 7, 9, 11][city.level] ?? 11;
 }
 // Jede Stadt besitzt 2 Felder Gebiet um sich herum
 export function cityRadius() {
   return 2;
 }
-export const MAX_SLOTS = 6;
+export const MAX_SLOTS = 10;
 // Gelände umgestalten im Stadtgebiet: Wiese aufforsten (Wald), Grube graben (Erz) oder Traubenhain anlegen (Mana),
 // je fertig nach 3 Runden; Wald roden (sofort Holz, wird Wiese)
 export const PLANT_COST = { food: 10, wood: 5 }; // Erzgrube, Traubenhain
@@ -415,7 +415,7 @@ export function citySlots(city) {
   return Math.min(MAX_SLOTS, city.level * 2);
 }
 export function upgradeCost(city) {
-  return [null, { food: 45, wood: 12, ore: 12 }, { food: 65, wood: 22, ore: 22 }][city.level];
+  return [null, { food: 45, wood: 12, ore: 12 }, { food: 65, wood: 22, ore: 22 }, { food: 85, wood: 32, ore: 32 }, { food: 105, wood: 42, ore: 42 }][city.level];
 }
 export function cityDefense(city, stonework = false) {
   // Verteidigungszuschlag in Prozentpunkten: Stadt 20, mit Mauer 40 (Steinmetz 50)
