@@ -95,9 +95,10 @@ function startLevel(level) {
   if (level.id === 1 || !store.progress().seenIntro) showIntro();
 }
 
-// Regler „Städte auf der Karte“: Faktor auf die normale Anzahl Dörfer (Dorfdichte 18 = normal)
-const CITY_MULTS = [0.33, 0.5, 0.75, 1, 1.5, 2];
-const CITY_LABELS = ['sehr wenige', 'wenige', 'etwas weniger', 'normal', 'mehr', 'viele'];
+// Regler „Städte auf der Karte“: normal (zufällig verteilt), viele (dichtes Gitter), voll (Gitter + jede Lücke);
+// immer mit 4 freien Feldern zwischen zwei Städten, Gebiete überlappen nie
+const CITY_DENSITY = [18, -1, 0];
+const CITY_LABELS = ['normal', 'viele', 'voll'];
 function skirmishConfig(setup) {
   const size = MAP_SIZES[setup.size] || MAP_SIZES.XL;
   let biome = setup.biome;
@@ -108,7 +109,7 @@ function skirmishConfig(setup) {
   }
   return {
     seed: seedFromCode(code), cols: size.cols, rows: size.rows, biome, fog: !!settings.fog,
-    villageDensity: Math.round(18 / CITY_MULTS[setup.cities ?? 3]),
+    villageDensity: CITY_DENSITY[setup.cities] ?? CITY_DENSITY[1],
     players: [{ human: true }, ...Array.from({ length: setup.enemies }, () => ({ ai: setup.diff }))],
   };
 }
@@ -2282,6 +2283,7 @@ function renderLevels() {
 // ---------------------------------------------------------------- Freies Spiel
 const setup = Object.assign({ size: 'XL', biome: 'mixed', enemies: 1, diff: 3, fog: false, code: randomSeedCode() }, store.lastSetup() || {});
 if (!MAP_SIZES[setup.size]) setup.size = 'XL'; // alte Auswahl Klein/Mittel/Groß
+if (!(setup.cities >= 0 && setup.cities <= 2) || setup.citiesV !== 2) { setup.cities = 1; setup.citiesV = 2; } // neuer Regler: Standard „viele“
 
 function renderSetup() {
   const seg = (id, options, key) => {
@@ -2298,7 +2300,7 @@ function renderSetup() {
   const d = DIFFICULTIES[setup.diff - 1];
   $('diffDesc').textContent = `${d.name}: ${d.desc}`;
   $('seedInput').value = setup.code;
-  $('citiesRange').value = setup.cities ?? 3;
+  $('citiesRange').value = setup.cities;
   updateCitiesInfo();
 }
 // Vorschau: genaue Anzahl Städte dieser Karte (Dörfer halten Abstand, daher passen nicht beliebig viele).
@@ -2306,7 +2308,7 @@ function renderSetup() {
 const citiesCache = new Map();
 let citiesTimer = null;
 function updateCitiesInfo() {
-  const label = CITY_LABELS[setup.cities ?? 3];
+  const label = CITY_LABELS[setup.cities];
   const c = skirmishConfig({ ...setup, code: setup.code || 'A' });
   const key = [c.seed, c.cols, c.rows, c.biome, c.villageDensity, c.players.length].join('|');
   const show = (n) => { $('citiesInfo').textContent = `(${label}: ${n} Städte inkl. Hauptstädte)`; };

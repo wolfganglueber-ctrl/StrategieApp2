@@ -144,10 +144,23 @@ function placeCities(rng, geo, terrain, players, villageDensity) {
   const cities = caps.map((idx) => ({ idx, owner: -1, level: 1, capital: true }));
   const capDist = caps.map((c) => bfsDistances(geo, terrain, [c]));
 
-  const target = Math.max(players, Math.round(land.length / villageDensity));
+  const target = villageDensity <= 0 ? Infinity : Math.max(players, Math.round(land.length / villageDensity));
   // Städte haben 2 Felder Gebiet: zwischen zwei Städten liegen immer mindestens 4 freie Felder (Abstand 5), Gebiete überlappen nie.
   // Zufällige Reihenfolge wie bisher, aber mehrere Durchgänge: der mit den meisten Dörfern (bis zum Ziel) gewinnt
   let bestV = [];
+  // „Voll“: Dörfer zuerst auf ein dichtestes Gitter (Abstand genau 5, die Gebiete mit 2 Ringen kacheln die Ebene lückenlos),
+  // die passende Verschiebung des Gitters wird gesucht; danach Lücken zufällig auffüllen
+  // villageDensity 0 = voll (Gitter + Lücken füllen), −1 = nur Gitter
+  if (villageDensity <= 0) {
+    const lat = (i) => (((geo.cq[i] + 8 * geo.cr[i]) % 19) + 19) % 19;
+    const ok = (i, list) => !cities.some((c) => geo.dist(c.idx, i) < CITY_GAP) && !list.some((c) => geo.dist(c.idx, i) < CITY_GAP);
+    for (let o = 0; o < 19; o++) {
+      const vs = [];
+      for (const i of land) if (lat(i) === o && ok(i, vs)) vs.push({ idx: i, owner: -1, level: 1, capital: false });
+      if (villageDensity === 0) for (const i of rng.shuffle(land.slice())) if (ok(i, vs)) vs.push({ idx: i, owner: -1, level: 1, capital: false });
+      if (vs.length > bestV.length) bestV = vs;
+    }
+  }
   for (let pass = 0; pass < 24 && bestV.length < target; pass++) {
     const cand = rng.shuffle(land.slice());
     const vs = [];
@@ -175,7 +188,7 @@ function placeCities(rng, geo, terrain, players, villageDensity) {
     }
   }
   const imbalance = Math.max(...share) - Math.min(...share) + (Math.max(...near) - Math.min(...near)) * 1.5;
-  return { cities, imbalance, missing: Math.max(0, target - bestV.length) };
+  return { cities, imbalance, missing: Number.isFinite(target) ? Math.max(0, target - bestV.length) : -bestV.length }; // voll: mehr Dörfer = besser
 }
 
 export function generateMap({ seed, cols, rows, players, biome = 'mixed', villageDensity = 18 }) {
@@ -191,7 +204,7 @@ export function generateMap({ seed, cols, rows, players, biome = 'mixed', villag
     // Jedes Dorf unter dem Ziel zählt als Nachteil (sonst gewinnen Karten mit fast keinen Dörfern, weil sie „fair“ sind)
     const score = placed.imbalance + placed.missing * 0.8;
     if (!best || score < best.imbalance) best = { terrain, cities: placed.cities, imbalance: score };
-    if (score <= 1 || (best && attempt >= 11)) break; // 12 Versuche reichen (sonst dauert das Erzeugen am Handy spürbar)
+    if ((score <= 1 && villageDensity > 0) || (best && attempt >= 11)) break; // 12 Versuche reichen (sonst dauert das Erzeugen am Handy spürbar)
   }
   if (!best) throw new Error('Karte konnte nicht erzeugt werden');
   for (const c of best.cities) best.terrain[c.idx] = 'plain';
