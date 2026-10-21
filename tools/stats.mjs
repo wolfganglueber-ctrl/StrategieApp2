@@ -7,7 +7,7 @@ import { MAP_SIZES, UNITS } from '../js/data.js';
 
 const games = +(process.argv[2] || 10);
 const lvl = +(process.argv[3] || 4);
-const size = MAP_SIZES[process.argv[4] || 'L'];
+const size = MAP_SIZES[process.argv[4] || 'XL'];
 const count = {};
 const add = (k, n = 1) => (count[k] = (count[k] || 0) + n);
 let turns = 0;

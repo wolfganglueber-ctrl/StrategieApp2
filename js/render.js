@@ -4,7 +4,7 @@ import { hexCenter, pixelToIndex, boardSize, SQRT3, getGeo } from './hex.js';
 import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS, PERKS, BOOST_MAX, skillsFor } from './data.js';
 import { computeTerritory, statsOf, inAura } from './game.js';
 import {
-  hash, hexPath, mix, drawGrapes, drawPit, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, drawWallLink, FIG_BOX, drawCastle, drawCourt, CASTLE_BOX,
+  hash, hexPath, mix, TILE, drawGrapes, drawPit, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, drawWallLink, FIG_BOX, drawCastle, drawCourt, CASTLE_BOX,
 } from './art.js';
 
 export const HEX = 40;
@@ -814,12 +814,17 @@ export class Renderer {
     this.cacheDirty = false;
   }
 
-  getChunk(cx, cy) {
+  // allowNew = false: nur vorhandene Kachel (auch in altem Maßstab) liefern, nichts neu berechnen (null, wenn keine da ist)
+  getChunk(cx, cy, allowNew = true) {
     const key = cx + ',' + cy;
     let ch = this.chunks.get(key);
     if (ch && (ch.scale === this.chunkScale || this.gesturing)) {
       ch.used = this.frameNo;
       return ch;
+    }
+    if (!allowNew) {
+      if (ch) ch.used = this.frameNo;
+      return ch || null;
     }
     const scale = this.chunkScale;
     const pad = 2 / scale;
@@ -832,7 +837,7 @@ export class Renderer {
     ctx.setTransform(scale, 0, 0, scale, -x0 * scale, -y0 * scale);
     ctx.clearRect(x0, y0, size, size);
     this.drawTerrain(ctx, x0, y0, x0 + size, y0 + size);
-    ch = { cv, scale, size, used: this.frameNo };
+    ch = { cv, scale, size, used: this.frameNo, made: this.frameNo };
     this.chunks.set(key, ch);
     // Speicher begrenzen: älteste Kacheln verwerfen
     let px = 0;
@@ -846,6 +851,49 @@ export class Renderer {
       }
     }
     return ch;
+  }
+
+  // Platzhalter, solange eine Kachel noch nicht berechnet ist: Felder einfarbig
+  drawFlatChunk(ctx, cx, cy) {
+    const s = this.state;
+    const W = HEX * SQRT3;
+    const x0 = cx * CHUNK, y0 = cy * CHUNK;
+    const r0 = Math.max(0, Math.floor(y0 / (HEX * 1.5)) - 1), r1 = Math.min(s.rows - 1, Math.ceil((y0 + CHUNK) / (HEX * 1.5)) + 1);
+    const c0 = Math.max(0, Math.floor(x0 / W) - 1), c1 = Math.min(s.cols - 1, Math.ceil((x0 + CHUNK) / W) + 1);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x0, y0, CHUNK, CHUNK);
+    ctx.clip();
+    for (let r = r0; r <= r1; r++) {
+      for (let col = c0; col <= c1; col++) {
+        const i = r * s.cols + col;
+        const c = this.center(i);
+        ctx.fillStyle = (TILE[s.terrain[i]] || TILE.plain).top;
+        hexPath(ctx, c.x, c.y, HEX);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  // In Ruhe: eine fehlende Kachel rund um den sichtbaren Bereich vorab berechnen (dann ruckelt das Wischen nicht)
+  prefetchChunk() {
+    if (!this.chunks || !this.state) return false;
+    let px = 0;
+    for (const c of this.chunks.values()) px += c.cv.width * c.cv.height;
+    if (px > 14e6) return false;
+    const vr = this.visibleRange(CHUNK);
+    const b = this.board();
+    for (let cy = Math.floor(vr.y0 / CHUNK); cy <= Math.floor(vr.y1 / CHUNK); cy++) {
+      for (let cx = Math.floor(vr.x0 / CHUNK); cx <= Math.floor(vr.x1 / CHUNK); cx++) {
+        if (cx < -1 || cy < -1 || cx * CHUNK > b.w + MARGIN || cy * CHUNK > b.h + MARGIN) continue;
+        const ch = this.chunks.get(cx + ',' + cy);
+        if (ch && ch.scale === this.chunkScale) { ch.used = this.frameNo; continue; }
+        this.getChunk(cx, cy);
+        return true;
+      }
+    }
+    return false;
   }
 
   // Nach Eroberung/Ausbau nur die betroffene Gegend neu zeichnen
@@ -1317,7 +1365,10 @@ export class Renderer {
     }
     const pulsing = this.state?.burns?.length || this.overlay.targets?.size || this.overlay.ready?.size || this.overlay.upgrade?.size || this.state?.units.some((u) => u.shaken || upgradeStars(u));
     if (!this.dirty && pulsing && now - (this.lastDraw || 0) > 40) this.dirty = true; // Pulsieren mit ~25 fps
-    if (!this.dirty) return;
+    if (!this.dirty) {
+      if (!this.gesturing && !this.cacheDirty && this.chunkScale && now - (this.lastDraw || 0) > 60) this.prefetchChunk();
+      return;
+    }
     this.lastDraw = now;
     this.dirty = false;
     this.draw(now);
@@ -1345,11 +1396,22 @@ export class Renderer {
     ctx.setTransform(z, 0, 0, z, this.dpr * (this.w / 2 - this.cam.x * this.cam.z + qo.x), this.dpr * (this.h / 2 - this.cam.y * this.cam.z + qo.y));
     ctx.imageSmoothingEnabled = true;
     const vr = this.visibleRange(40);
+    // Neue Geländekacheln kosten Zeit (große Karten passen nicht ganz in den Speicher): pro Bild höchstens eine
+    // (beim Wischen) bzw. zwei neu berechnen; sonst alte Kachel oder schnelle einfarbige Hex-Fläche, Rest im nächsten Bild
+    let fresh = 0;
+    const maxFresh = this.gesturing ? 1 : 2;
     for (let cy = Math.floor(vr.y0 / CHUNK); cy <= Math.floor(vr.y1 / CHUNK); cy++) {
       for (let cx = Math.floor(vr.x0 / CHUNK); cx <= Math.floor(vr.x1 / CHUNK); cx++) {
         if (cx < -2 || cy < -2 || cx * CHUNK > this.board().w + MARGIN || cy * CHUNK > this.board().h + MARGIN) continue;
-        const ch = this.getChunk(cx, cy);
-        ctx.drawImage(ch.cv, cx * CHUNK, cy * CHUNK, ch.cv.width / ch.scale, ch.cv.height / ch.scale);
+        const ch = this.getChunk(cx, cy, fresh < maxFresh);
+        if (ch?.made === this.frameNo) fresh++;
+        if (ch) {
+          ctx.drawImage(ch.cv, cx * CHUNK, cy * CHUNK, ch.cv.width / ch.scale, ch.cv.height / ch.scale);
+          if (ch.scale !== this.chunkScale && !this.gesturing) this.dirty = true; // unscharfe Kachel später ersetzen
+        } else {
+          this.drawFlatChunk(ctx, cx, cy);
+          this.dirty = true;
+        }
       }
     }
     // Burgen über 7 Felder (vor dem Nebel, damit er sie verdeckt)

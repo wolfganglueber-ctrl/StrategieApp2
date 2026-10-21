@@ -99,7 +99,7 @@ function startLevel(level) {
 const CITY_MULTS = [0.33, 0.5, 0.75, 1, 1.5, 2];
 const CITY_LABELS = ['sehr wenige', 'wenige', 'etwas weniger', 'normal', 'mehr', 'viele'];
 function skirmishConfig(setup) {
-  const size = MAP_SIZES[setup.size];
+  const size = MAP_SIZES[setup.size] || MAP_SIZES.XL;
   let biome = setup.biome;
   const code = setup.code;
   if (biome === 'random') {
@@ -2187,7 +2187,7 @@ function gameMenu() {
     meta.mode === 'skirmish' ? el('button', {
       class: 'btn big',
       onclick: async () => {
-        const text = `KnightyKnight – spiel diese Karte: Code ${meta.code} (${MAP_SIZES[meta.setup.size].name}, ${meta.setup.enemies} Gegner, ${DIFFICULTIES[meta.setup.diff - 1].name})`;
+        const text = `KnightyKnight – spiel diese Karte: Code ${meta.code} (${MAP_SIZES[meta.setup.size]?.name || 'Riesig'}, ${meta.setup.enemies} Gegner, ${DIFFICULTIES[meta.setup.diff - 1].name})`;
         try {
           if (navigator.share) await navigator.share({ text, url: location.href.split('#')[0] });
           else { await navigator.clipboard.writeText(text); toast('Kopiert!'); }
@@ -2276,7 +2276,8 @@ function renderLevels() {
 }
 
 // ---------------------------------------------------------------- Freies Spiel
-const setup = Object.assign({ size: 'M', biome: 'mixed', enemies: 1, diff: 3, fog: false, code: randomSeedCode() }, store.lastSetup() || {});
+const setup = Object.assign({ size: 'XL', biome: 'mixed', enemies: 1, diff: 3, fog: false, code: randomSeedCode() }, store.lastSetup() || {});
+if (!MAP_SIZES[setup.size]) setup.size = 'XL'; // alte Auswahl Klein/Mittel/Groß
 
 function renderSetup() {
   const seg = (id, options, key) => {

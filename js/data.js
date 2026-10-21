@@ -452,10 +452,8 @@ export const DIFFICULTIES = [
   { level: 6, name: 'Kaiser', desc: 'Wie Meister, mit größerer Armee und +50 % Rohstoffen.' },
 ];
 
+// Kleinste Karte ist „Riesig“ (Klein, Mittel, Groß gibt es nicht mehr)
 export const MAP_SIZES = {
-  S: { name: 'Klein', cols: 8, rows: 10 },
-  M: { name: 'Mittel', cols: 10, rows: 13 },
-  L: { name: 'Groß', cols: 13, rows: 17 },
   XL: { name: 'Riesig', cols: 16, rows: 21 },
   XXL: { name: 'Gewaltig', cols: 19, rows: 25 },
   XXXL: { name: 'Kolossal', cols: 22, rows: 29 },
