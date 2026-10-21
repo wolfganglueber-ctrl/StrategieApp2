@@ -117,7 +117,9 @@ Startwerte und Kampfformel (Commit e094f32, 16.10.) stammen aus dem Vorbild *The
 
 # Offene Aufgaben
 - **Am Ende der Entwicklung erinnern (Wolfgang hat darum gebeten):** LICENSE „Alle Rechte vorbehalten“ anlegen, kurze Datenschutzerklärung/Impressum-Hinweis ins Spiel, Markenrecherche „KnightyKnight“ (Looney Tunes „Knighty Knight Bugs“), Repo ggf. privat, eigenes Hosting statt Artefakt für kommerzielle Nutzung. Emojis in Menüs (Darstellung = Geräteschrift von Apple/Google) für Werbematerial ggf. durch eigene Symbole ersetzen.
-- Wolfgang testet 0.86: Ring-Ertrag (innen immer, außen mit Gebäude), Städteregler, KI-Stufen (greifen leichte Gegner selten, aber entschlossen an?), Kampfsystem mit Verteidigung je Angriffsart und Durchschlag, Scrollen auf Episch am Handy.
+- **Burgverteidigung Schritt 2 (Wunsch aus dieser Sitzung):** „Kriegsrat“ – dauerhafte prozentuale Verbesserungen über Partien hinweg, bezahlt mit „Ruhm“ (je nach erreichter Welle/Schwierigkeit), gespeichert im localStorage; Wellenvorschau über den Toren (was kommt als Nächstes); Bestwerte-Anzeige; Feinschliff.
+- Burgverteidigung Balance: Test-Bot gewinnt nie (Ø Welle Normal ~26, Schwer ~18); Wolfgangs Rückmeldung nach eigenen Partien abwarten, dann Wellenbudget/Bosse/Beute anpassen (Simulation nur nach Rückfrage).
+- Wolfgang testet 0.86–0.89: Ring-Ertrag, Städteregler, Stadtstufen 4/5, neuer Start (36 Holz, Reiter + Wächter), KI-Stufen, Kampfsystem, Scrollen auf Episch am Handy, Burgverteidigung.
 - Balance-Simulation der KI-Stufen nach der Ring-Regel (0.85) und den dichteren Karten (0.86) – vorher fragen.
 - Bekanntes Problem: Wächter in Städten (bis 70 % Verteidigung gegen Nahkampf) sind für Krieger/Reiter fast unverwundbar; Stellschrauben: Leben des Wächters oder Stadtbonus.
 - Bekanntes Problem: Stufe 2 bleibt nach ihren 5 Städten neben gegnerischen Städten stehen, ohne anzugreifen (gewollt kein Erobern, sieht aber unschön aus).
@@ -128,4 +130,4 @@ Startwerte und Kampfformel (Commit e094f32, 16.10.) stammen aus dem Vorbild *The
 - Ideen von früher: Marschbefehl (automatisches Ziehen über mehrere Runden); Balancing Troll (in Städten mit Mauer sehr zäh) und KI-Heilen (selten genutzt).
 
 # Nächster Schritt
-Rückmeldung von Wolfgang zu 0.86 einholen und danach (vorher fragen) eine Stufen-Simulation laufen lassen, um die KI-Abstufung mit Ring-Ertrag und dichteren Karten zu prüfen.
+Wolfgangs Rückmeldung zur Burgverteidigung (0.89) einholen und danach – nach Rückfrage – Schritt 2 (Kriegsrat mit Ruhm, Wellenvorschau, Bestwerte) umsetzen.
