@@ -13,12 +13,19 @@ export const STATE_VERSION = 6;
 // Rohstoffbonus der Computergegner je Stufe: Schwer +15 %, Meister +30 %, Kaiser +50 %
 export const AI_INCOME_BONUS = { 4: 0.15, 5: 0.3, 6: 0.5 };
 
+// Spielmodus-Erweiterungen: die Burgverteidigung (defense.js) hängt sich hier ein, wenn state.defense gesetzt ist
+export const modeHooks = {};
+// Höchste Stufe der Einzel-Verbesserungen (Burgverteidigung: 5)
+export function boostMax(state) {
+  return state.defense ? 5 : 3;
+}
+
 /*
  config: { seed, cols, rows, biome, players: [{ human: bool, ai: 1..6, name? }], levelId?, villageDensity?, fog? }
 */
 export function createGame(config) {
   const n = config.players.length;
-  const map = generateMap({ seed: config.seed, cols: config.cols, rows: config.rows, players: n, biome: config.biome, villageDensity: config.villageDensity });
+  const map = generateMap({ seed: config.seed, cols: config.cols, rows: config.rows, players: config.mapPlayers ?? n, biome: config.biome, villageDensity: config.villageDensity });
   const geo = getGeo(map.cols, map.rows);
   const state = {
     v: STATE_VERSION,
@@ -78,7 +85,7 @@ export function geoOf(state) {
   return getGeo(state.cols, state.rows);
 }
 
-function spawnUnit(state, type, owner, idx, ready) {
+export function spawnUnit(state, type, owner, idx, ready) {
   const u = { id: state.nextUnitId++, type, owner, idx, hp: 1, moved: !ready, attacked: !ready, acted: false, rank: 1, xp: 0 };
   if (type === 'tower') u.level = 1;
   const ups = upPerks(state, owner, type);
@@ -130,6 +137,7 @@ export function statsOf(state, u) {
   if (hasPerk(u, 'tough')) st.hp = ceilMul(st.hp, 1.25);
   if (hasPerk(u, 'shieldwall')) st.def += 15;
   if (hasPerk(u, 'swift')) st.move++;
+  if (state.defense && modeHooks.mods) modeHooks.mods(state, u, st); // Karten der Burgverteidigung
   st.move = Math.min(st.move, moveCap(u.type));
   // Einzel-Verbesserungen dieser einen Einheit
   if (u.boost) for (const k of ['atk', 'def', 'hp', 'pen']) if (u.boost[k]) st[k] += BOOST_ADD[k][u.boost[k]];
@@ -264,7 +272,11 @@ export function splashOf(u) {
 export function gainXp(state, u, n, ev) {
   if (isStructure(u) || !state.units.includes(u)) return;
   u.xp = (u.xp || 0) + n;
-  while ((u.rank || 1) < MAX_RANK && u.xp >= RANK_XP[(u.rank || 1) + 1]) rankUp(state, u, ev);
+  while ((u.rank || 1) < MAX_RANK && u.xp >= rankXpNeed(state, (u.rank || 1) + 1)) rankUp(state, u, ev);
+}
+// Siege bis zur Rangstufe r (Burgverteidigung: schneller, 60 %)
+export function rankXpNeed(state, r) {
+  return state.defense ? Math.ceil(RANK_XP[r] * 0.6) : RANK_XP[r];
 }
 
 function rankUp(state, u, ev) {
@@ -519,6 +531,7 @@ export function boostedYield(state, pid, k, base) {
 
 // Ertrag des ganzen Reichs pro Runde vor Unterhalt: Summe aller Städte (inkl. Forschung), Kaiser-KI +50 %
 export function realmYield(state, pid, territory = computeTerritory(state)) {
+  if (state.defense && modeHooks.income) return modeHooks.income(state, pid);
   const inc = { food: 0, wood: 0, ore: 0, mana: 0 };
   state.cities.forEach((c, ci) => {
     if (c.owner !== pid) return;
@@ -543,6 +556,7 @@ export function incomeOf(state, pid, territory = computeTerritory(state)) {
 // (älteste Einheiten zuerst, Versorgungspunkte wie beim Truppenzähler)
 export function upkeepTotal(state, pid) {
   const up = { food: 0, wood: 0, ore: 0, mana: 0 };
+  if (state.defense) return up; // Burgverteidigung: kein Unterhalt
   const cap = unitCap(state, pid);
   let used = 0;
   for (const u of state.units) {
@@ -694,11 +708,13 @@ export function startTurn(state) {
   const ev = [];
   const pid = state.current;
   const geo = geoOf(state);
+  if (state.defense && modeHooks.turnStart) ev.push(...modeHooks.turnStart(state, pid));
   // Eroberung: Einheiten, die eine gegnerische Runde auf fremden Städten überstanden haben
   for (const u of state.units) {
     if (u.owner !== pid) continue;
     const c = cityOn(state, u.idx);
     if (c && c.owner !== pid) {
+      if (state.defense && modeHooks.capture && modeHooks.capture(state, c, pid, ev)) continue;
       const old = c.owner;
       c.owner = pid;
       ev.push({ k: 'capture', idx: c.idx, pid, from: old });
@@ -874,6 +890,12 @@ function applySplash(state, att, idx, dmg, from) {
 
 // Führt eine Aktion aus und gibt Ereignisse für Animationen zurück. Ungültige Aktionen → null.
 export function applyAction(state, a) {
+  const ev = applyActionCore(state, a);
+  if (ev && state.defense && modeHooks.afterAction) ev.push(...modeHooks.afterAction(state));
+  return ev;
+}
+
+function applyActionCore(state, a) {
   if (state.over) return null;
   const pid = state.current;
   const player = state.players[pid];
@@ -989,7 +1011,7 @@ export function applyAction(state, a) {
       const u = unitById(state, a.unitId);
       if (!u || u.owner !== pid || !canBoost(u) || !['atk', 'def', 'hp', 'pen'].includes(a.stat)) return null;
       const lvl = u.boost?.[a.stat] || 0;
-      if (lvl >= 3) return null;
+      if (lvl >= boostMax(state)) return null;
       const cost = boostCost(u.type, lvl);
       if (!canAfford(player.res, cost)) return null;
       for (const k of RES) player.res[k] -= cost[k] || 0;
@@ -1194,6 +1216,8 @@ export function applyAction(state, a) {
       for (const u of state.units) if (u.owner === pid) { u.stoneNow = false; u.ice = false; }
       return pre.concat(endTurn(state));
     }
+    case 'card':
+      return state.defense && modeHooks.card ? modeHooks.card(state, a) : null;
     default:
       return null;
   }

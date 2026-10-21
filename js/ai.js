@@ -48,13 +48,14 @@ function buildContext(state, pid, P) {
   const mine = state.units.filter((u) => u.owner === pid);
   const ownCities = state.cities.filter((c) => c.owner === pid);
   // Schonfrist auf niedrigen Stufen: Menschen werden anfangs nicht angegriffen (nur wer eigenen Städten zu nahe kommt)
-  const calm = state.turn <= (P.calm || 0);
+  const calm = !state.defense && state.turn <= (P.calm || 0);
   const spared = (owner) => calm && owner >= 0 && state.players[owner]?.human;
   const nearOwn = (idx) => ownCities.some((c) => geo.dist(c.idx, idx) <= 2);
   const enemies = state.units.filter((u) => u.owner !== pid && (!vis || vis[u.idx]) && (!spared(u.owner) || nearOwn(u.idx)));
   // Leichte Stufen erobern nur bis zu einer Obergrenze an Städten
   const full = ownCities.length >= (P.maxCities ?? 99);
-  const targetCities = full ? [] : state.cities.filter((c) => c.owner !== pid && !spared(c.owner));
+  // Burgverteidigung: die Angreifer wollen nur die Städte des Spielers (vor allem die Burg)
+  const targetCities = full ? [] : state.defense && pid === 1 ? state.cities.filter((c) => c.owner === 0) : state.cities.filter((c) => c.owner !== pid && !spared(c.owner));
 
   // Teure Felder nur einmal pro Zug berechnen
   if (memory.ctxKey !== memory.key + (calm ? 'c' : '') + (full ? 'f' : '')) {

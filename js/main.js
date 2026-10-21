@@ -6,9 +6,10 @@ import {
   incomeOf, realmYield, boostedYield, cityBaseYield, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, flankers, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, terrainDefense,
-  canBoost, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, canStorm, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
+  canBoost, boostMax, rankXpNeed, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, canStorm, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
 } from './game.js';
 import { planAction } from './ai.js';
+import { createDefenseGame, DEFENSE, DEFENSE_DIFFS, wavesInfo } from './defense.js';
 import { getGeo } from './hex.js';
 import { generateMap } from './mapgen.js';
 import {
@@ -122,10 +123,27 @@ function startSkirmish(setup) {
   if (!store.progress().seenIntro) showIntro();
 }
 
+// Burgverteidigung: Wellen aus Toren am Kartenrand abwehren
+function startDefense(diff) {
+  S = createDefenseGame({ seed: (Math.random() * 2 ** 31) >>> 0, diff });
+  S.meta = { mode: 'defense', diff };
+  enterGame();
+  toast('🏰 Halte die Burg! Alle 2 Runden kommt eine Welle aus den roten Toren.', 4000);
+}
+
+function openDefenseMenu() {
+  const best = store.defenseBest();
+  openClosable(el('h2', {}, '🏰 Burgverteidigung'),
+    el('p', {}, `Halte deine Burg gegen ${DEFENSE.waves} Wellen. Besiegte Angreifer bringen Beute, dazu gibt es einen festen Ertrag. Nach jeder Welle wählst du eine von 3 Karten.`),
+    ...DEFENSE_DIFFS.map((d, i) => el('button', { class: 'btn big' + (i === 1 ? ' primary' : ''), onclick: () => { closeModal(); startDefense(i); } },
+      el('b', {}, d.name), el('small', { style: 'display:block' }, `${d.desc}${best[i] ? ` · Bestwert: Welle ${best[i]}` : ''}`))));
+}
+
 function restartGame() {
   if (!S) return;
   const meta = S.meta;
-  if (meta.mode === 'level') startLevel(getLevels().find((l) => l.id === meta.levelId));
+  if (meta.mode === 'defense') startDefense(meta.diff);
+  else if (meta.mode === 'level') startLevel(getLevels().find((l) => l.id === meta.levelId));
   else startSkirmish(meta.setup);
 }
 
@@ -470,9 +488,23 @@ function refresh() {
   }
   if (sel.infoIdx != null) o.selected = sel.infoIdx;
   R.overlay = o;
+  R.gates = S.defense?.gates || null;
   R.invalidate();
   renderPanel();
   updateHud();
+  if (humanTurn() && !busy && S.defense?.choices && $('modal').classList.contains('hidden')) openCardChoice();
+}
+
+// Burgverteidigung: nach jeder Welle eine von 3 Karten wählen (gilt nur für diese Partie)
+function openCardChoice() {
+  const d = S.defense;
+  openModal(el('h2', {}, `🃏 Welle ${d.wave} – wähle eine Karte`),
+    el('p', { class: 'muted' }, 'Die Karte gilt bis zum Ende dieser Partie.'),
+    ...d.choices.map((c, idx) => el('button', {
+      class: 'btn big' + (c.rare ? ' primary' : ''),
+      onclick: () => { closeModal(); undoStack = []; quickAct({ type: 'card', idx }, false); },
+    }, c.title)),
+    ...(d.picked.length ? [el('p', { class: 'muted' }, `Bisher: ${d.picked.join(' · ')}`)] : []));
 }
 
 function onTap(sx, sy) {
@@ -622,7 +654,7 @@ function unitNotes(u) {
   if (UNITS[u.type].healer) notes.push(`Heilt ${healAmount(S, u)} Leben bis 3 Felder weit.`);
   if (!UNITS[u.type].structure) {
     const r = u.rank || 1;
-    notes.push(r < MAX_RANK ? `${UNITS[u.type].healer ? 'Heilungen' : 'Besiegte Gegner'}: ${u.xp || 0}/${RANK_XP[r + 1]} bis ${RANK_NAMES[r + 1]}.` : 'Höchste Stufe erreicht.');
+    notes.push(r < MAX_RANK ? `${UNITS[u.type].healer ? 'Heilungen' : 'Besiegte Gegner'}: ${u.xp || 0}/${rankXpNeed(S, r + 1)} bis ${RANK_NAMES[r + 1]}.` : 'Höchste Stufe erreicht.');
   }
   for (const p of u.perks || []) notes.push(`${PERKS[p].icon} ${PERKS[p].name}: ${PERKS[p].desc}.`);
   const b = BOOST_STATS.filter(([k]) => u.boost?.[k]).map(([k, name, ic]) => `${ic} ${name} ${boostText(k, u.boost[k])}`);
@@ -793,14 +825,15 @@ function openBoost(u0) {
     for (const [k, name, ic] of BOOST_STATS) {
       const lvl = u.boost?.[k] || 0;
       const next = { ...u, boost: { ...(u.boost || {}), [k]: lvl + 1 } };
-      const now = st[k], then = lvl < 3 ? statsOf(S, next)[k] : null;
-      const cost = lvl < 3 ? boostCost(u.type, lvl) : null;
-      list.append(el('div', { class: 'tech-card' + (lvl >= 3 ? ' done' : '') },
+      const max = boostMax(S);
+      const now = st[k], then = lvl < max ? statsOf(S, next)[k] : null;
+      const cost = lvl < max ? boostCost(u.type, lvl) : null;
+      list.append(el('div', { class: 'tech-card' + (lvl >= max ? ' done' : '') },
         el('span', { class: 'ticon' }, ic),
         el('div', { class: 'binfo' },
-          el('b', {}, `${name} ${'●'.repeat(lvl)}${'○'.repeat(3 - lvl)}`),
-          el('span', {}, k === 'def' ? (lvl < 3 ? `${boostText(k, lvl + 1)} (Zuschlag ${now} % → ${then} %)` : `${boostText(k, 3)}`) : lvl < 3 ? `${boostText(k, lvl + 1)}: ${now} → ${then}` : `${boostText(k, 3)}: ${now}`)),
-        lvl >= 3 ? el('span', { class: 'done' }, '✓')
+          el('b', {}, `${name} ${'●'.repeat(lvl)}${'○'.repeat(max - lvl)}`),
+          el('span', {}, k === 'def' ? (lvl < max ? `${boostText(k, lvl + 1)} (Zuschlag ${now} % → ${then} %)` : `${boostText(k, max)}`) : lvl < max ? `${boostText(k, lvl + 1)}: ${now} → ${then}` : `${boostText(k, max)}: ${now}`)),
+        lvl >= max ? el('span', { class: 'done' }, '✓')
           : el('button', { class: 'btn small', disabled: !my || !canAfford(p.res, cost), onclick: () => buy({ type: 'boost', unitId: u.id, stat: k }) }, costEl(cost, p.res))));
     }
     const skills = skillsFor(u.type);
@@ -1333,15 +1366,18 @@ async function playEvent(ev, f, isAI, pan = true) {
       break;
     case 'capture': {
       R.invalidate(true, ev.idx);
+      // pid −1: Burgverteidigung, die Angreifer plündern die Stadt (sie wird neutral)
+      const col = ev.pid >= 0 ? PLAYER_COLORS[ev.pid] : NEUTRAL_COLOR;
+      const mine = ev.pid >= 0 && S.players[ev.pid].human;
       if (f > 0) {
         if (isAI === true) await sleep(R.ensureVisible(ev.idx, 220 * f));
-        R.ring(ev.idx, PLAYER_COLORS[ev.pid].main, 700 * f);
-        sound.play('horn', { pan: panOf(ev.idx), vol: S.players[ev.pid].human || (ev.from >= 0 && S.players[ev.from].human) ? 1 : 0.5 });
-        R.floatText(ev.idx, 'Erobert!', PLAYER_COLORS[ev.pid].light, 1100 * f);
+        R.ring(ev.idx, col.main, 700 * f);
+        sound.play('horn', { pan: panOf(ev.idx), vol: mine || (ev.from >= 0 && S.players[ev.from].human) ? 1 : 0.5 });
+        R.floatText(ev.idx, ev.pid >= 0 ? 'Erobert!' : 'Geplündert!', col.light, 1100 * f);
       }
       const c = cityOn(S, ev.idx);
-      if (S.players[ev.pid].human) vibrate(50);
-      if (ev.from >= 0 && S.players[ev.from].human) toast(`${S.players[ev.pid].name} hat ${c?.capital ? 'deine Hauptstadt' : 'eine deiner Städte'} erobert!`);
+      if (mine) vibrate(50);
+      if (ev.from >= 0 && S.players[ev.from].human) toast(ev.pid >= 0 ? `${S.players[ev.pid].name} hat ${c?.capital ? 'deine Hauptstadt' : 'eine deiner Städte'} erobert!` : 'Die Angreifer haben eine deiner Städte geplündert!');
       await pause(450);
       break;
     }
@@ -1459,6 +1495,24 @@ async function playEvent(ev, f, isAI, pan = true) {
       updateHud();
       break;
     }
+    case 'wave':
+      sound.play(ev.wave % 10 ? 'horn' : 'lowhorn');
+      showBanner(`⚔️ Welle ${ev.wave}${ev.wave % 10 ? '' : ' – Boss!'} · ${ev.count} Angreifer`, PLAYER_COLORS[1].main);
+      await sleep(900 * Math.max(f, 0.6));
+      break;
+    case 'spawn':
+      if (f > 0) { R.pop(ev.id, 260 * f); R.ring(ev.idx, '#ef4444', 400 * f); }
+      break;
+    case 'loot': {
+      const txt = RES.filter((k) => ev.got[k]).map((k) => `+${ev.got[k]} ${RES_INFO[k].name}`).join(' ');
+      if (txt) R.floatText(ev.idx, `💰 ${txt}`, '#fde68a', 1300 * Math.max(f, 0.6));
+      break;
+    }
+    case 'card':
+      sound.play('fanfare', { vol: 0.7 });
+      toast(`🃏 ${ev.title}`);
+      R.sprites = new Map();
+      break;
   }
 }
 
@@ -1496,7 +1550,10 @@ function updateHud() {
   const human = S.players.find((p) => p.human) || S.players[0];
   const cur = S.players[S.current];
   $('turnDot').style.background = PLAYER_COLORS[cur.id].main;
-  $('turnText').textContent = `Runde ${S.turn} · ${cur.human ? 'Dein Zug' : cur.name}`;
+  const wi = S.defense ? wavesInfo(S) : null;
+  $('turnText').textContent = wi
+    ? `Runde ${S.turn} · Welle ${wi.wave}/${wi.waves}${wi.next == null ? '' : wi.next === 0 ? ' · nächste kommt!' : ` · nächste in ${wi.next}`}`
+    : `Runde ${S.turn} · ${cur.human ? 'Dein Zug' : cur.name}`;
   // Ertrag jeder Stadt für die Anzeige über den Städten
   const terrY = computeTerritory(S);
   R.cityYields = S.cities.map((c, ci) => (c.owner >= 0 ? cityYield(S, ci, terrY) : null));
@@ -1518,7 +1575,7 @@ function updateHud() {
   // Testmodus: Vorrat und Reichsertrag der Gegner, dazu Armee und Städte (Stufen)
   const eb = $('enemyBar');
   eb.innerHTML = '';
-  const showEnemy = settings.enemyRes !== false;
+  const showEnemy = settings.enemyRes !== false && !S.defense;
   eb.classList.toggle('hidden', !showEnemy);
   if (showEnemy) {
     for (const p of S.players.filter((x) => x.id !== human.id && x.alive)) {
@@ -2100,7 +2157,13 @@ function gameOver() {
   sound.play(won ? 'victory' : 'defeat');
   const meta = S.meta || {};
   const children = [el('h2', {}, won ? '🏆 Sieg!' : 'Niederlage')];
-  if (meta.mode === 'level') {
+  if (meta.mode === 'defense') {
+    const w = S.over.wave ?? S.defense.wave;
+    store.setDefenseBest(meta.diff, won ? DEFENSE.waves : Math.max(0, w - 1));
+    const lt = S.defense.loot;
+    children.push(el('p', {}, won ? `Alle ${DEFENSE.waves} Wellen abgewehrt (${DEFENSE_DIFFS[meta.diff].name})!` : `Die Burg ist gefallen – Welle ${w} von ${DEFENSE.waves}.`));
+    children.push(el('p', { class: 'muted' }, `Beute: ${lt.food || 0} Nahrung, ${lt.wood || 0} Holz, ${lt.ore || 0} Erz · Karten: ${S.defense.picked.length}`));
+  } else if (meta.mode === 'level') {
     const level = getLevels().find((l) => l.id === meta.levelId);
     const stars = won ? starsFor(level, S.turn) : 0;
     if (won) store.setStars(level.id, stars);
@@ -2120,6 +2183,7 @@ function gameOver() {
 // Speicherplätze: Spielstand speichern oder laden (10 Plätze im Browser)
 function gameLabel(st) {
   const meta = st.meta || {};
+  if (meta.mode === 'defense') return `Burgverteidigung · ${DEFENSE_DIFFS[meta.diff]?.name} · Welle ${st.defense?.wave || 0}`;
   if (meta.mode === 'level') {
     const l = getLevels().find((x) => x.id === meta.levelId);
     if (l) return `Level ${l.world + 1}-${l.num}`;
@@ -2182,7 +2246,7 @@ function openSlots(mode, back) {
 function gameMenu() {
   if (busy && humanTurn()) return;
   const meta = S.meta || {};
-  const info = meta.mode === 'level'
+  const info = meta.mode === 'defense' ? gameLabel(S) : meta.mode === 'level'
     ? (() => { const l = getLevels().find((x) => x.id === meta.levelId); return `Level ${l.world + 1}-${l.num} · ${l.worldName}`; })()
     : `Freies Spiel · Code ${meta.code}`;
   openModal(
@@ -2342,6 +2406,8 @@ function renderHelp() {
   $('helpContent').innerHTML = `
     <h3>Ziel</h3>
     <p>Erobere alle Städte deiner Gegner. Wer keine Stadt mehr hat, scheidet aus.</p>
+    <h3>🏰 Burgverteidigung</h3>
+    <p>Eigener Spielmodus im Hauptmenü: Alle ${DEFENSE.every} Runden kommt eine Gegnerwelle aus 2–3 roten Toren am Kartenrand und will deine Burg. Hältst du ${DEFENSE.waves} Wellen durch, gewinnst du; fällt die Burg, ist die Partie vorbei. Auf Welle 10, 20 und 30 kommen Bosse. Du bekommst einen festen Ertrag pro Runde und für jeden besiegten Angreifer Beute (ein Drittel seines Preises). Nach jeder Welle wählst du eine von 3 Karten, die bis zum Ende der Partie gilt. Einzel-Verbesserungen gehen hier bis Stufe 5, Ränge kommen schneller, Unterhalt fällt weg und die Burg darf mehr Türme und Wälle tragen. Andere Städte plündern die Angreifer nur (sie werden neutral).</p>
     <h3>Rohstoffe</h3>
     <p>Jede Stadt besitzt das Gebiet um sich herum (farbig umrandet). Jedes Feld darin liefert dir jede Runde einen Rohstoff:
     <b>Wiese</b> und <b>See</b> → Nahrung, <b>Wald</b> → Holz, <b>Hügel</b> und <b>Gebirge</b> → Erz.
@@ -2415,7 +2481,7 @@ function renderHelp() {
     <p>Im Forschungsfenster gibt es neben Militär, Wirtschaft und Verteidigung die Reiter <b>Nahkämpfer</b>, <b>Fernkämpfer</b>, <b>Zauberer</b>, <b>Katapulte</b> und <b>Titanen</b>. Dort wählst du eine Einheit und entwickelst sie in 5 Stufen weiter – das gilt sofort für alle Einheiten dieses Typs, auch für die schon aufgestellten. Auf Stufe 3 entscheidest du dich für eine von zwei Richtungen (z. B. Ritter → Chevalier mit extralanger Lanze oder Schwerer Ritter; Tribok → explosive Geschosse oder Riesenkugeln). So spezialisierst du dein Heer auf wenige starke Einheiten.</p>
     <p>Jede Stufe sieht man: goldene Steine am Sockel zählen die Stufen, neue Ausrüstung (Helm, Lanze, größerer Schild, zweites Schwert, Brandpfeile, Sprengbomben …), ab Stufe 4 schwarze Rüstung und auf Stufe 5 eine goldene Aura.</p>
     <h3>Einzel-Verbesserungen ⬆</h3>
-    <p>Wähle eine eigene Einheit und tippe „⬆ Verbessern“: Diese Verbesserungen gelten nur für genau diese eine Einheit – verbesserte Einheiten erkennst du an schimmernden Sternen über dem Kopf: 1 Stern = verbessert, 2 Sterne = Angriff, Verteidigung, Leben oder Durchschlag auf Stufe 3, 3 violette Sterne = alles voll freigeschaltet. <b>Angriff</b> (+1 / +2 / +3), <b>Verteidigung</b> (+5 / +10 / +15 %), <b>Leben</b> (+3 / +6 / +10) und <b>Durchschlag</b> (10 / 20 / 30) haben je 3 Stufen; jede Stufe kostet ${BOOST_COST.join(' / ')} % des Kaufpreises der Einheit – also etwas weniger als eine neue. Dazu kommen <b>Fähigkeiten</b> (je ${SKILL_COST} % des Kaufpreises):<br>
+    <p>Wähle eine eigene Einheit und tippe „⬆ Verbessern“: Diese Verbesserungen gelten nur für genau diese eine Einheit – verbesserte Einheiten erkennst du an schimmernden Sternen über dem Kopf: 1 Stern = verbessert, 2 Sterne = Angriff, Verteidigung, Leben oder Durchschlag auf Stufe 3, 3 violette Sterne = alles voll freigeschaltet. <b>Angriff</b> (+1 / +2 / +3), <b>Verteidigung</b> (+5 / +10 / +15 %), <b>Leben</b> (+3 / +6 / +10) und <b>Durchschlag</b> (10 / 20 / 30) haben je 3 Stufen; in der Burgverteidigung sogar 5 Stufen; jede Stufe kostet ${BOOST_COST.slice(0, 3).join(' / ')} % des Kaufpreises der Einheit – also etwas weniger als eine neue. Dazu kommen <b>Fähigkeiten</b> (je ${SKILL_COST} % des Kaufpreises):<br>
     Nahkämpfer: 💚 Selbstheilung (10 % des Lebens pro Runde), 🪨 Stellung halten (+20 % Verteidigung, wenn sie in ihrem Zug nicht gezogen ist).<br>
     Fernkämpfer (Schütze, Basilisk): 🏹 Weitschuss (+1 Reichweite), 🎯 Fernschuss (+2), 🔥 Brandpfeile (Nachbarn des Ziels bekommen 25 % des Schadens), 💚 Selbstheilung.<br>
     Zauberer: ❄️ Vereisen (ein Gegner bis 3 Felder weit setzt eine Runde aus, Titanen sind immun), ✨ Flächenheilung (beim Heilen bekommen die eigenen Nachbarn des Ziels 25 % ihres Lebens zurück), 💣 Bergsprengung (ein Gebirge bis 3 Felder weit wird zu begehbarem Lehm).<br>
@@ -2446,6 +2512,7 @@ $('btnCampaign').addEventListener('click', () => {
   renderLevels();
   showScreen('scrLevels');
 });
+$('btnDefense').addEventListener('click', openDefenseMenu);
 $('btnSkirmish').addEventListener('click', () => { renderSetup(); showScreen('scrSetup'); });
 $('btnHelp').addEventListener('click', () => { renderHelp(); showScreen('scrHelp'); });
 $('btnSettings').addEventListener('click', () => openSettings(() => { if (!$('scrLevels').classList.contains('hidden')) renderLevels(); }));

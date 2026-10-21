@@ -5,6 +5,7 @@ import { planAction } from '../js/ai.js';
 import { getLevels } from '../js/levels.js';
 import { MAP_SIZES, BIOMES, UNITS, buildingYield } from '../js/data.js';
 import { mulberry32 } from '../js/rng.js';
+import { createDefenseGame, waveUnits } from '../js/defense.js';
 
 let fails = 0;
 function check(cond, msg) {
@@ -169,6 +170,36 @@ for (const l of getLevels()) {
   check(c.units.length === s.units.length, `Level ${l.id}: Klonen`);
 }
 console.log(`50 Level erzeugt (${Date.now() - t0} ms)`);
+
+// Burgverteidigung: Wellen, Beute, Karten, Stufe 5; der Verteidiger wird hier von der KI gespielt
+for (const diff of [0, 1, 2]) {
+  const s = createDefenseGame({ seed: 900 + diff * 31, diff });
+  check(s.defense.gates.length >= 2, `Burgverteidigung ${diff}: zu wenige Tore (${s.defense.gates.length})`);
+  s.players[0].ai = 3;
+  const rng = mulberry32(diff + 5);
+  let n = 0, loot = 0, cards = 0;
+  while (!s.over && s.turn <= 30) {
+    const a = s.current === 0 && s.defense.choices ? { type: 'card', idx: Math.floor(rng() * 3) } : planAction(s, rng);
+    const ev = applyAction(s, a);
+    if (!ev) throw new Error('Burgverteidigung: ungültige Aktion ' + JSON.stringify(a));
+    for (const e of ev) { if (e.k === 'loot') loot++; if (e.k === 'card') cards++; }
+    if (++n > 40000) throw new Error('Burgverteidigung: zu viele Aktionen');
+  }
+  check(s.defense.wave >= Math.min(10, s.over?.wave ?? 10), `Burgverteidigung ${diff}: zu wenige Wellen (${s.defense.wave})`);
+  check(loot > 0 && cards > 0, `Burgverteidigung ${diff}: keine Beute oder Karten (${loot}/${cards})`);
+  check(s.units.every((u) => Number.isInteger(u.hp)), `Burgverteidigung ${diff}: Leben nicht ganzzahlig`);
+  check(cloneState(s).defense.wave === s.defense.wave, `Burgverteidigung ${diff}: Klonen`);
+  console.log(`Burgverteidigung ${diff}: Runde ${s.turn}, Welle ${s.defense.wave}, ${loot}× Beute, ${cards} Karten${s.over ? (s.over.winner === 0 ? ', gewonnen' : ', verloren') : ''}`);
+}
+check(waveUnits(30, 1, mulberry32(1)).filter((t) => t === 'dragon').length >= 1, 'Welle 30 ohne Drachen');
+{
+  const s = createDefenseGame({ seed: 77, diff: 1 });
+  const u = s.units.find((x) => x.owner === 0 && x.type === 'rider');
+  s.players[0].res = { food: 999, wood: 999, ore: 999, mana: 999 };
+  let ok = 0;
+  for (let k = 0; k < 6; k++) if (applyAction(s, { type: 'boost', unitId: u.id, stat: 'atk' })) ok++;
+  check(ok === 5, `Burgverteidigung: Verbesserung bis Stufe 5 (${ok})`);
+}
 
 let games = 0;
 for (const size of Object.keys(MAP_SIZES)) {

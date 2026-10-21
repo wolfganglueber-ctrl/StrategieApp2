@@ -1363,7 +1363,7 @@ export class Renderer {
       }
       this.dirty = true;
     }
-    const pulsing = this.state?.burns?.length || this.overlay.targets?.size || this.overlay.ready?.size || this.overlay.upgrade?.size || this.state?.units.some((u) => u.shaken || upgradeStars(u));
+    const pulsing = this.gates?.length || this.state?.burns?.length || this.overlay.targets?.size || this.overlay.ready?.size || this.overlay.upgrade?.size || this.state?.units.some((u) => u.shaken || upgradeStars(u));
     if (!this.dirty && pulsing && now - (this.lastDraw || 0) > 40) this.dirty = true; // Pulsieren mit ~25 fps
     if (!this.dirty) {
       if (!this.gesturing && !this.cacheDirty && this.chunkScale && now - (this.lastDraw || 0) > 60) this.prefetchChunk();
@@ -1516,6 +1516,7 @@ export class Renderer {
     this.drawWallLinks(ctx, fog);
     // Fliegende (z. B. Drache im Feuersturm) zuletzt, damit sie über allem schweben
     const flying = (u) => (this.unitPos.get(u.id)?.fly ? 1 : 0);
+    if (this.gates) for (const g of this.gates) this.drawGate(ctx, g, now);
     const sorted = s.units.slice().sort((a, b) => flying(a) - flying(b) || a.idx - b.idx);
     for (const u of sorted) {
       if (this.hidden.has(u.id)) continue;
@@ -1543,6 +1544,47 @@ export class Renderer {
     if (o.targets) for (const t of o.targets.values()) this.forecastBubble(ctx, t);
 
     for (const a of this.anims) if (a.draw && a.p >= 0) a.draw(ctx, a.p);
+  }
+
+  // Burgverteidigung: Tor am Kartenrand, aus dem die Wellen kommen (rotes Glühen, Torbogen mit Fallgitter)
+  drawGate(ctx, idx, now) {
+    const c = this.center(idx);
+    const k = HEX / 40;
+    const pulse = 0.55 + 0.25 * Math.sin(now / 420);
+    ctx.save();
+    const g = ctx.createRadialGradient(c.x, c.y, 2, c.x, c.y, HEX * 0.95);
+    g.addColorStop(0, `rgba(239,68,68,${pulse})`);
+    g.addColorStop(1, 'rgba(239,68,68,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, HEX * 0.95, 0, Math.PI * 2);
+    ctx.fill();
+    const w = 22 * k, h = 26 * k, x = c.x - w / 2, y = c.y - h * 0.75;
+    ctx.fillStyle = '#57534e';
+    ctx.strokeStyle = '#1c1917';
+    ctx.lineWidth = 1.5 * k;
+    ctx.beginPath();
+    ctx.rect(x - 4 * k, y - 4 * k, w + 8 * k, h + 4 * k);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#1c1917';
+    ctx.beginPath();
+    ctx.moveTo(x + 3 * k, y + h);
+    ctx.lineTo(x + 3 * k, y + w / 2);
+    ctx.arc(c.x, y + w / 2, w / 2 - 3 * k, Math.PI, 0);
+    ctx.lineTo(x + w - 3 * k, y + h);
+    ctx.fill();
+    ctx.strokeStyle = '#a8a29e';
+    ctx.lineWidth = 1.2 * k;
+    for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(x + 3 * k + i * (w - 6 * k) / 4, y + 4 * k); ctx.lineTo(x + 3 * k + i * (w - 6 * k) / 4, y + h); ctx.stroke(); }
+    ctx.fillStyle = '#dc2626';
+    ctx.beginPath();
+    ctx.moveTo(c.x, y - 4 * k);
+    ctx.lineTo(c.x, y - 16 * k);
+    ctx.lineTo(c.x + 10 * k, y - 12 * k);
+    ctx.lineTo(c.x, y - 9 * k);
+    ctx.fill();
+    ctx.restore();
   }
 
   // Ertrag jeder Stadt über ihr: alle vier Rohstoffe als kleines 2×2-Raster (Nahrung, Holz / Erz, Mana), Werte aus main.js

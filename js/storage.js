@@ -27,6 +27,12 @@ function del(key) {
 
 export const store = {
   progress: () => get('progress', { stars: {} }),
+  // Burgverteidigung: beste erreichte Welle je Schwierigkeit
+  defenseBest: () => get('defenseBest', {}),
+  setDefenseBest(diff, wave) {
+    const b = get('defenseBest', {});
+    if ((b[diff] || 0) < wave) { b[diff] = wave; set('defenseBest', b); }
+  },
   setStars(levelId, stars) {
     const p = store.progress();
     p.stars[levelId] = Math.max(p.stars[levelId] || 0, stars);

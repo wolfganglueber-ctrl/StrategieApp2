@@ -165,6 +165,8 @@ export const STRUCTURE_LIMIT = { tower: TOWERS_PER_CITY, barrier: 6 };
 // Die Burg (Hauptstadt, 7 Felder) trägt mehr Türme und einen ganzen Wallring
 export const CASTLE_LIMIT = { tower: 6, barrier: 12 };
 export function structureLimit(city, type) {
+  // Burgverteidigung: die Burg trägt deutlich mehr Türme und Wälle
+  if (city?.bigCastle) return { tower: 10, barrier: 18 }[type];
   return (city?.castle ? CASTLE_LIMIT : STRUCTURE_LIMIT)[type];
 }
 // Verteidigungsbonus auf allen 7 Burgfeldern (mindestens)
@@ -310,9 +312,10 @@ export function unitUpCost(type, tier) {
 // Einzel-Verbesserungen: gelten nur für die eine ausgewählte Einheit (Kauf im Einheiten-Fenster).
 // Angriff, Verteidigung, Leben und Durchschlag je 3 Stufen mit festen Zuschlägen; jede Stufe kostet etwas
 // weniger als eine neue Einheit dieses Typs. Dazu Fähigkeiten je Einheitenklasse.
-export const BOOST_ADD = { atk: [0, 1, 2, 3], def: [0, 5, 10, 15], hp: [0, 3, 6, 10], pen: [0, 10, 20, 30] };
+// Stufen 4 und 5 gibt es nur in der Burgverteidigung
+export const BOOST_ADD = { atk: [0, 1, 2, 3, 4, 5], def: [0, 5, 10, 15, 20, 25], hp: [0, 3, 6, 10, 15, 20], pen: [0, 10, 20, 30, 40, 50] };
 export const BOOST_MAX = 3;
-export const BOOST_COST = [60, 75, 90]; // Prozent des Kaufpreises
+export const BOOST_COST = [60, 75, 90, 105, 120]; // Prozent des Kaufpreises
 export const BOOST_STATS = [['atk', 'Angriff', '⚔'], ['def', 'Verteidigung', '🛡'], ['hp', 'Leben', '❤'], ['pen', 'Durchschlag', '🗡']];
 export const SKILLS = {
   regen: { name: 'Selbstheilung', icon: '💚', desc: 'Heilt jede Runde 10 % des maximalen Lebens' },
