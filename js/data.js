@@ -356,7 +356,7 @@ export const CITY_NAMES = ['', 'Dorf', 'Stadt', 'Metropole', 'Residenzstadt', 'K
 // Wirtschaftsforschung: +50 % auf den gesamten Ertrag des Reichs (aufgerundet)
 export const ECO_TECH = { food: 'plough', wood: 'saw', ore: 'mining' };
 export const ECO_TECH_PCT = 0.5;
-export const START_RES = { food: 6, wood: 6, ore: 4, mana: 0 };
+export const START_RES = { food: 6, wood: 36, ore: 4, mana: 0 };
 export const TRADE_RATE = 3;
 export const TRADE_RATE_GUILD = 2;
 

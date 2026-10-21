@@ -58,11 +58,13 @@ export function createGame(config) {
   state.cities.forEach((c, i) => (state.cityAt[c.idx] = i));
   state.grapes = []; // Traubenhaine (angelegt von den Spielern)
   state.pits = []; // Erzgruben (gegraben von den Spielern)
-  // Startkrieger neben der Hauptstadt
+  // Starteinheiten neben der Hauptstadt: ein Reiter (zum Erkunden und Dörfer besetzen) und ein Wächter
   for (const c of caps) {
     const free = geo.nb[c.idx].filter((j) => TERRAIN[state.terrain[j]].pass && state.cityAt[j] === -1);
-    const spot = free.find((j) => state.terrain[j] === 'plain') ?? free[0] ?? c.idx;
-    spawnUnit(state, 'warrior', c.owner, spot, true);
+    const plain = free.filter((j) => state.terrain[j] === 'plain');
+    const spots = [...plain, ...free.filter((j) => !plain.includes(j))];
+    spawnUnit(state, 'rider', c.owner, spots[0] ?? c.idx, true);
+    if (spots[1] != null) spawnUnit(state, 'defender', c.owner, spots[1], true);
   }
   startTurn(state);
   return state;
