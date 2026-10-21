@@ -1,7 +1,7 @@
 // Canvas-Renderer: Gelände wird einmal in eine Offscreen-Leinwand gezeichnet,
 // pro Frame kommen nur Markierungen, Einheiten und Effekte dazu.
 import { hexCenter, pixelToIndex, boardSize, SQRT3, getGeo } from './hex.js';
-import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS, PERKS } from './data.js';
+import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS, PERKS, BOOST_PCT, skillsFor } from './data.js';
 import { computeTerritory, statsOf, inAura } from './game.js';
 import {
   hash, hexPath, mix, drawGrapes, drawPit, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, drawWallLink, FIG_BOX, drawCastle, drawCourt, CASTLE_BOX,
@@ -19,6 +19,17 @@ const CHUNK = 512; // Kachelgröße für den Geländepuffer (Weltpixel)
 
 const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+
+// Verbesserungs-Sterne einer Einheit: 0 keine, 1 irgendeine, 2 ein Wert auf höchster Stufe, 3 alles voll
+export function upgradeStars(u) {
+  const b = u.boost || {}, max = BOOST_PCT.length - 1;
+  const lv = ['atk', 'def', 'hp'].map((k) => b[k] || 0);
+  const sk = u.skills?.length || 0;
+  if (!lv.some((v) => v > 0) && !sk) return 0;
+  const all = skillsFor(u.type);
+  if (lv.every((v) => v >= max) && all.every((k) => u.skills?.includes(k))) return 3;
+  return lv.some((v) => v >= max) ? 2 : 1;
+}
 
 export function colorOf(owner) {
   return owner >= 0 ? PLAYER_COLORS[owner] : NEUTRAL_COLOR;
@@ -1108,36 +1119,42 @@ export class Renderer {
     if (exhausted) ctx.globalAlpha *= 0.8;
     ctx.drawImage(sp.cv, x - B.left * s * scale * big, y - B.top * s * scale * big, (B.left + B.right) * s * scale * big, (B.top + B.bottom) * s * scale * big);
     if (exhausted) ctx.globalAlpha /= 0.8;
-    // Einzeln verbessert (Verbesserungen, Fähigkeiten): bläulicher Schein mit funkelnden Lichtern über dem Kopf,
-    // je mehr Verbesserungen, desto mehr Funken (bewusst anders als die gelben Erschüttert-Sterne)
-    const ups = (u.boost ? (u.boost.atk || 0) + (u.boost.def || 0) + (u.boost.hp || 0) : 0) + (u.skills?.length || 0);
-    if (ups > 0) {
+    // Einzeln verbessert: schimmernde Sterne über dem Kopf (bewusst anders als die gelben Erschüttert-Sterne)
+    // 1 Stern: irgendeine Verbesserung · 2: Angriff, Verteidigung oder Leben auf Stufe 3 · 3: alles voll freigeschaltet
+    const stars = upgradeStars(u);
+    if (stars > 0) {
       const hy = y - (u.shaken ? 56 : 47) * s * scale * Math.min(big, 1.3);
       const pulse = 0.5 + 0.5 * Math.sin(now / 420 + u.id);
-      const g = ctx.createRadialGradient(x, hy, 1, x, hy, 19 * s);
-      g.addColorStop(0, `rgba(191,219,254,${0.55 + 0.25 * pulse})`);
+      const g = ctx.createRadialGradient(x, hy, 1, x, hy, 16 * s);
+      g.addColorStop(0, `rgba(191,219,254,${0.45 + 0.25 * pulse})`);
       g.addColorStop(1, 'rgba(129,140,248,0)');
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.ellipse(x, hy, 20 * s, 10 * s, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, hy, (10 + stars * 5) * s, 9 * s, 0, 0, Math.PI * 2);
       ctx.fill();
-      const n = Math.min(5, 1 + Math.ceil(ups / 2));
-      for (let k = 0; k < n; k++) {
-        const ph = now / 650 + k * 1.7 + u.id * 0.37;
-        const tw = 0.55 + 0.45 * Math.sin(ph * 2.3);
-        const px = x + ((k - (n - 1) / 2) * 8 + Math.sin(ph) * 1.5) * s, py = hy - (k % 2 ? 3.5 : -0.5) * s;
-        const r = (3.4 + 1.8 * tw) * s;
-        ctx.fillStyle = `rgba(255,255,255,${0.75 + 0.25 * tw})`;
-        ctx.strokeStyle = 'rgba(99,102,241,0.9)';
+      for (let k = 0; k < stars; k++) {
+        const tw = 0.5 + 0.5 * Math.sin(now / 380 + k * 2.1 + u.id * 0.37);
+        const px = x + (k - (stars - 1) / 2) * 9 * s, py = hy - (stars === 3 && k === 1 ? 2.5 : 0) * s;
+        const r = (4 + 0.8 * tw) * s;
+        const sg = ctx.createLinearGradient(px, py - r, px, py + r);
+        sg.addColorStop(0, '#ffffff');
+        sg.addColorStop(1, stars === 3 ? '#c4b5fd' : '#bfdbfe');
+        ctx.fillStyle = sg;
+        ctx.strokeStyle = stars === 3 ? 'rgba(109,40,217,0.95)' : 'rgba(37,99,235,0.95)';
         ctx.lineWidth = 1.1;
         ctx.beginPath();
-        for (let i = 0; i < 8; i++) {
-          const ang = (i * Math.PI) / 4, rr = i % 2 ? r * 0.28 : r;
+        for (let i = 0; i < 10; i++) {
+          const ang = -Math.PI / 2 + (i * Math.PI) / 5, rr = i % 2 ? r * 0.45 : r;
           ctx.lineTo(px + rr * Math.cos(ang), py + rr * Math.sin(ang));
         }
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
+        // Glanzpunkt, der über die Sterne wandert
+        ctx.fillStyle = `rgba(255,255,255,${0.35 + 0.65 * tw})`;
+        ctx.beginPath();
+        ctx.arc(px + r * 0.35, py - r * 0.35, 0.9 * s * (0.6 + tw), 0, Math.PI * 2);
+        ctx.fill();
       }
     }
     if (u.shaken) {
@@ -1298,7 +1315,7 @@ export class Renderer {
       }
       this.dirty = true;
     }
-    const pulsing = this.state?.burns?.length || this.overlay.targets?.size || this.overlay.ready?.size || this.overlay.upgrade?.size || this.state?.units.some((u) => u.shaken || u.boost || u.skills?.length);
+    const pulsing = this.state?.burns?.length || this.overlay.targets?.size || this.overlay.ready?.size || this.overlay.upgrade?.size || this.state?.units.some((u) => u.shaken || upgradeStars(u));
     if (!this.dirty && pulsing && now - (this.lastDraw || 0) > 40) this.dirty = true; // Pulsieren mit ~25 fps
     if (!this.dirty) return;
     this.lastDraw = now;

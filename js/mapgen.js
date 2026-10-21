@@ -141,18 +141,21 @@ function placeCities(rng, geo, terrain, players, villageDensity) {
   const cities = caps.map((idx) => ({ idx, owner: -1, level: 1, capital: true }));
   const capDist = caps.map((c) => bfsDistances(geo, terrain, [c]));
 
-  const target = Math.max(players * 2, Math.round(land.length / villageDensity));
-  const cand = rng.shuffle(land.slice());
-  // Städte haben 2 Felder Gebiet: mit Abstand 4 stoßen die Gebiete aneinander, ohne sich stark zu überlappen
-  for (const minD of [4, 3]) {
+  const target = Math.max(players, Math.round(land.length / villageDensity));
+  // Städte haben 2 Felder Gebiet: immer mindestens 4 Felder Abstand zu jeder anderen Stadt (auch zu Hauptstädten).
+  // Zufällige Reihenfolge wie bisher, aber mehrere Durchgänge: der mit den meisten Dörfern (bis zum Ziel) gewinnt
+  let bestV = [];
+  for (let pass = 0; pass < 24 && bestV.length < target; pass++) {
+    const cand = rng.shuffle(land.slice());
+    const vs = [];
     for (const i of cand) {
-      if (cities.length >= target + players) break;
-      if (cities.some((c) => geo.dist(c.idx, i) < minD)) continue;
-      // nicht direkt neben eine Hauptstadt quetschen
-      if (caps.some((c) => geo.dist(c, i) < 3)) continue;
-      cities.push({ idx: i, owner: -1, level: 1, capital: false });
+      if (vs.length >= target) break;
+      if (cities.some((c) => geo.dist(c.idx, i) < 4) || vs.some((c) => geo.dist(c.idx, i) < 4)) continue;
+      vs.push({ idx: i, owner: -1, level: 1, capital: false });
     }
+    if (vs.length > bestV.length) bestV = vs;
   }
+  cities.push(...bestV);
 
   // Fairness: Dörfer pro Spieler nach Wegdistanz zur Hauptstadt
   const share = new Array(players).fill(0);
@@ -169,7 +172,7 @@ function placeCities(rng, geo, terrain, players, villageDensity) {
     }
   }
   const imbalance = Math.max(...share) - Math.min(...share) + (Math.max(...near) - Math.min(...near)) * 1.5;
-  return { cities, imbalance };
+  return { cities, imbalance, missing: Math.max(0, target - bestV.length) };
 }
 
 export function generateMap({ seed, cols, rows, players, biome = 'mixed', villageDensity = 18 }) {
@@ -182,8 +185,8 @@ export function generateMap({ seed, cols, rows, players, biome = 'mixed', villag
     if (landCount < geo.n * 0.45) continue;
     const placed = placeCities(rng, geo, terrain, players, villageDensity);
     if (!placed) continue;
-    // Zu wenige Städte (weniger als 3 je Spieler) gelten als schlechter Versuch
-    const score = placed.imbalance + (placed.cities.length < players * 3 ? 10 : 0);
+    // Jedes Dorf unter dem Ziel zählt als Nachteil (sonst gewinnen Karten mit fast keinen Dörfern, weil sie „fair“ sind)
+    const score = placed.imbalance + placed.missing * 0.8;
     if (!best || score < best.imbalance) best = { terrain, cities: placed.cities, imbalance: score };
     if (score <= 1) break;
   }

@@ -430,3 +430,4 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .enemy-row b { display: none; }
   .enemy-row .ico { width: 12px; height: 12px; }
 }
+.range { width: 100%; accent-color: #fbbf24; margin: 4px 0 2px; }

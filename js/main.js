@@ -10,6 +10,7 @@ import {
 } from './game.js';
 import { planAction } from './ai.js';
 import { getGeo } from './hex.js';
+import { generateMap } from './mapgen.js';
 import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, BASE_RES, RES_INFO, MANA, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
@@ -94,7 +95,10 @@ function startLevel(level) {
   if (level.id === 1 || !store.progress().seenIntro) showIntro();
 }
 
-function startSkirmish(setup) {
+// Regler „Städte auf der Karte“: Faktor auf die normale Anzahl Dörfer (Dorfdichte 18 = normal)
+const CITY_MULTS = [0.33, 0.5, 0.75, 1, 1.5, 2];
+const CITY_LABELS = ['sehr wenige', 'wenige', 'etwas weniger', 'normal', 'mehr', 'viele'];
+function skirmishConfig(setup) {
   const size = MAP_SIZES[setup.size];
   let biome = setup.biome;
   const code = setup.code;
@@ -102,10 +106,16 @@ function startSkirmish(setup) {
     const keys = Object.keys(BIOMES);
     biome = keys[seedFromCode(code) % keys.length];
   }
-  S = createGame({
+  return {
     seed: seedFromCode(code), cols: size.cols, rows: size.rows, biome, fog: !!settings.fog,
+    villageDensity: Math.round(18 / CITY_MULTS[setup.cities ?? 3]),
     players: [{ human: true }, ...Array.from({ length: setup.enemies }, () => ({ ai: setup.diff }))],
-  });
+  };
+}
+
+function startSkirmish(setup) {
+  const code = setup.code;
+  S = createGame(skirmishConfig(setup));
   S.meta = { mode: 'skirmish', code, setup };
   enterGame();
   if (!store.progress().seenIntro) showIntro();
@@ -1534,7 +1544,7 @@ function updateHud() {
   $('btnNext').disabled = !my || busy;
   $('btnUndo').disabled = !my || busy || undoStack.length === 0;
   $('btnTip').disabled = !my || busy;
-  $('btnEnd').classList.toggle('pulse', my && !busy && !playerHasActions(S, S.current));
+  $('btnEnd').classList.remove('pulse'); // Zug beenden blinkt nie
 }
 
 function iconCanvas(type, owner, px = 44, level, ups = S && owner >= 0 ? unitUpList(S, owner, type) : []) {
@@ -2289,8 +2299,20 @@ function renderSetup() {
   const d = DIFFICULTIES[setup.diff - 1];
   $('diffDesc').textContent = `${d.name}: ${d.desc}`;
   $('seedInput').value = setup.code;
+  $('citiesRange').value = setup.cities ?? 3;
+  updateCitiesInfo();
 }
-$('seedInput').addEventListener('input', (e) => { setup.code = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
+// Vorschau: genaue Anzahl Städte dieser Karte (Dörfer halten immer 4 Felder Abstand, daher passen nicht beliebig viele)
+function updateCitiesInfo() {
+  let n = '?';
+  try {
+    const c = skirmishConfig({ ...setup, code: setup.code || 'A' });
+    n = generateMap({ ...c, players: c.players.length }).cities.length;
+  } catch { /* Karte nicht erzeugbar */ }
+  $('citiesInfo').textContent = `(${CITY_LABELS[setup.cities ?? 3]}: ${n} Städte inkl. Hauptstädte)`;
+}
+$('citiesRange').addEventListener('input', (e) => { setup.cities = +e.target.value; updateCitiesInfo(); });
+$('seedInput').addEventListener('input', (e) => { setup.code = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); updateCitiesInfo(); });
 $('btnDice').addEventListener('click', () => { setup.code = randomSeedCode(); renderSetup(); });
 $('btnStartSkirmish').addEventListener('click', () => {
   if (!setup.code) setup.code = randomSeedCode();
@@ -2379,7 +2401,7 @@ function renderHelp() {
     <p>Im Forschungsfenster gibt es neben Militär, Wirtschaft und Verteidigung die Reiter <b>Nahkämpfer</b>, <b>Fernkämpfer</b>, <b>Zauberer</b>, <b>Katapulte</b> und <b>Titanen</b>. Dort wählst du eine Einheit und entwickelst sie in 5 Stufen weiter – das gilt sofort für alle Einheiten dieses Typs, auch für die schon aufgestellten. Auf Stufe 3 entscheidest du dich für eine von zwei Richtungen (z. B. Ritter → Chevalier mit extralanger Lanze oder Schwerer Ritter; Tribok → explosive Geschosse oder Riesenkugeln). So spezialisierst du dein Heer auf wenige starke Einheiten.</p>
     <p>Jede Stufe sieht man: goldene Steine am Sockel zählen die Stufen, neue Ausrüstung (Helm, Lanze, größerer Schild, zweites Schwert, Brandpfeile, Sprengbomben …), ab Stufe 4 schwarze Rüstung und auf Stufe 5 eine goldene Aura.</p>
     <h3>Einzel-Verbesserungen ⬆</h3>
-    <p>Wähle eine eigene Einheit und tippe „⬆ Verbessern“: Diese Verbesserungen gelten nur für genau diese eine Einheit – verbesserte Einheiten erkennst du an funkelnden bläulichen Lichtern über dem Kopf (je mehr Verbesserungen, desto mehr Funken). <b>Angriff</b>, <b>Verteidigung</b> und <b>Leben</b> haben je 3 Stufen (+25 %, +75 %, +150 %, immer aufgerundet); jede Stufe kostet ${BOOST_COST.join(' / ')} % des Kaufpreises der Einheit – also etwas weniger als eine neue. Dazu kommen <b>Fähigkeiten</b> (je ${SKILL_COST} % des Kaufpreises):<br>
+    <p>Wähle eine eigene Einheit und tippe „⬆ Verbessern“: Diese Verbesserungen gelten nur für genau diese eine Einheit – verbesserte Einheiten erkennst du an schimmernden Sternen über dem Kopf: 1 Stern = verbessert, 2 Sterne = Angriff, Verteidigung oder Leben auf Stufe 3, 3 violette Sterne = alles voll freigeschaltet. <b>Angriff</b>, <b>Verteidigung</b> und <b>Leben</b> haben je 3 Stufen (+25 %, +75 %, +150 %, immer aufgerundet); jede Stufe kostet ${BOOST_COST.join(' / ')} % des Kaufpreises der Einheit – also etwas weniger als eine neue. Dazu kommen <b>Fähigkeiten</b> (je ${SKILL_COST} % des Kaufpreises):<br>
     Nahkämpfer: 💚 Selbstheilung (10 % des Lebens pro Runde), 🪨 Stellung halten (+20 % Verteidigung, wenn sie in ihrem Zug nicht gezogen ist).<br>
     Fernkämpfer (Schütze, Basilisk): 🏹 Weitschuss (+1 Reichweite), 🎯 Fernschuss (+2), 🔥 Brandpfeile (Nachbarn des Ziels bekommen 25 % des Schadens), 💚 Selbstheilung.<br>
     Zauberer: ❄️ Vereisen (ein Gegner bis 3 Felder weit setzt eine Runde aus, Titanen sind immun), ✨ Flächenheilung (beim Heilen bekommen die eigenen Nachbarn des Ziels 25 % ihres Lebens zurück), 💣 Bergsprengung (ein Gebirge bis 3 Felder weit wird zu begehbarem Lehm).<br>

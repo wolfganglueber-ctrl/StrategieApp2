@@ -138,7 +138,9 @@ const t0 = Date.now();
 for (const l of getLevels()) {
   const s = createGame({ seed: l.seed, cols: l.cols, rows: l.rows, biome: l.biome, players: [{ human: true }, ...l.ais.map((ai) => ({ ai }))] });
   check(s.cities.filter((c) => c.capital).length === l.ais.length + 1, `Level ${l.id}: Hauptstädte`);
-  check(s.cities.length >= (l.ais.length + 1) * 3, `Level ${l.id}: zu wenige Städte (${s.cities.length})`);
+  check(s.cities.length >= (l.ais.length + 1) * 2, `Level ${l.id}: zu wenige Städte (${s.cities.length})`);
+  const lg = getGeo(s.cols, s.rows);
+  check(s.cities.every((a) => s.cities.every((b) => a === b || lg.dist(a.idx, b.idx) >= 4)), `Level ${l.id}: Städte näher als 4 Felder`);
   // gespeicherter Zustand muss JSON-fähig sein
   const c = cloneState(s);
   check(c.units.length === s.units.length, `Level ${l.id}: Klonen`);
