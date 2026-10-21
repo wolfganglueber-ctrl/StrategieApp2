@@ -398,7 +398,11 @@ export function cityRadius() {
 export const MAX_SLOTS = 6;
 // Gelände umgestalten im Stadtgebiet: Wiese aufforsten (Wald), Grube graben (Erz) oder Traubenhain anlegen (Mana),
 // je fertig nach 3 Runden; Wald roden (sofort Holz, wird Wiese)
-export const PLANT_COST = { food: 10, wood: 5 };
+export const PLANT_COST = { food: 10, wood: 5 }; // Erzgrube, Traubenhain
+// Kosten je Umwandlung: Aufforsten ist billig (5 Nahrung), damit genug Wald entsteht
+export function plantCost(to = 'forest') {
+  return to === 'forest' ? { food: 5 } : PLANT_COST;
+}
 export const PLANT_KINDS = { forest: { name: 'Aufforsten', icon: '🌱', what: 'Wald' }, pit: { name: 'Grube graben', icon: '⛏️', what: 'Erzgrube' }, vine: { name: 'Traubenhain', icon: '🍇', what: 'Traubenhain' } };
 export const PLANT_ROUNDS = 3;
 export const CLEAR_WOOD = 15;

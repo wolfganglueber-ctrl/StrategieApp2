@@ -2,7 +2,7 @@
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
 import {
   UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, BASE_RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY, structureLimit,
-  costTotal, ATK_TYPE, DEF_TABLE, DEF_MAX, UNIT_UPS, unitUpCost, boostCost, skillCost, PLANT_COST, slotsUsed, usesSlot,
+  costTotal, ATK_TYPE, DEF_TABLE, DEF_MAX, UNIT_UPS, unitUpCost, boostCost, skillCost, plantCost, slotsUsed, usesSlot,
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, terrainDefense, hitDamage, unitRange, unitCap, canRecruit,
@@ -406,13 +406,13 @@ function economyAction(state, ctx, P, pid, rng) {
     }
   }
   // Wiesen bearbeiten (abseits der Gegner): Wald bei Holzmangel, Grube bei Erzmangel, Traubenhain für Zauberer
-  if (P.smart && rng() < 0.3 && canAfford(res, PLANT_COST) && (state.plants || []).filter((p) => p.pid === pid).length < ctx.ownCities.length) {
+  if (P.smart && rng() < 0.3 && canAfford(res, plantCost('forest')) && (state.plants || []).filter((p) => p.pid === pid).length < ctx.ownCities.length) {
     const inc = incNow;
     const sanctum = ctx.ownCities.some((x) => hasBuilding(x, 'sanctum'));
     // Wiesen nur umwandeln, wenn genug Nahrung übrig bleibt; das knappere von Holz und Erz zuerst
     const to = inc.food < 6 ? null : sanctum && inc.mana < 3 ? 'vine' : Math.min(inc.wood, inc.ore) < 4 + ctx.ownCities.length * 2 ? (inc.wood <= inc.ore ? 'forest' : 'pit') : null;
     const need = { forest: 'lumber', pit: 'mine', vine: 'press' }[to];
-    if (to) {
+    if (to && canAfford(res, plantCost(to))) {
       for (let i = 0; i < ctx.territory.length; i++) {
         const c = state.cities[ctx.territory[i]];
         if (!c || (to !== 'vine' && !hasBuilding(c, need))) continue;

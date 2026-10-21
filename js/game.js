@@ -4,7 +4,7 @@ import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
-  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, buildingYield, PLANT_COST, START_BUILDINGS, slotsUsed, usesSlot, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_ADD, ATK_TYPE, DEF_TABLE, DEF_MAX, SKILLS, skillsFor, boostCost, skillCost,
+  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, buildingYield, plantCost, START_BUILDINGS, slotsUsed, usesSlot, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_ADD, ATK_TYPE, DEF_TABLE, DEF_MAX, SKILLS, skillsFor, boostCost, skillCost,
   BASE_RES, MANA, ECO_TECH, ECO_TECH_PCT,
 } from './data.js';
 import { generateMap } from './mapgen.js';
@@ -1132,8 +1132,8 @@ export function applyAction(state, a) {
     case 'plant': {
       // Wiese im eigenen Stadtgebiet bearbeiten: aufforsten (Wald), Grube graben (Erz) oder Traubenhain anlegen (Mana)
       const to = a.to || 'forest';
-      if (!PLANT_KINDS[to] || canTerraform(state, pid, a.idx) !== 'plant' || !canAfford(player.res, PLANT_COST)) return null;
-      for (const k of RES) player.res[k] -= PLANT_COST[k] || 0;
+      if (!PLANT_KINDS[to] || canTerraform(state, pid, a.idx) !== 'plant' || !canAfford(player.res, plantCost(to))) return null;
+      for (const k of RES) player.res[k] -= plantCost(to)[k] || 0;
       state.plants = [...(state.plants || []), { idx: a.idx, pid, ci: computeTerritory(state)[a.idx], done: state.turn + PLANT_ROUNDS, to }];
       ev.push({ k: 'plant', idx: a.idx, to });
       break;

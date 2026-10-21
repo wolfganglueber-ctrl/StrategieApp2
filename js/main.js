@@ -15,7 +15,7 @@ import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, BASE_RES, RES_INFO, MANA, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
-  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, MAX_SLOTS, buildingYield, ECO_TECH, ECO_TECH_PCT, PLANT_COST, PLANT_KINDS, ECO_BUILDINGS, slotsUsed, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
+  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, MAX_SLOTS, buildingYield, ECO_TECH, ECO_TECH_PCT, PLANT_COST, plantCost, PLANT_KINDS, ECO_BUILDINGS, slotsUsed, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
   BOOST_ADD, AURA, defenseWords, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
@@ -486,7 +486,7 @@ function onTap(sx, sy) {
     const terr = computeTerritory(S);
     const want = sel.tfKind === 'clear' ? 'clear' : 'plant';
     const kind = terr[i] === ci && canTerraform(S, S.current, i, terr) === want ? want : null;
-    if (kind === 'plant' && !canAfford(S.players[S.current].res, PLANT_COST)) { toast('Zu wenig Rohstoffe.'); return; }
+    if (kind === 'plant' && !canAfford(S.players[S.current].res, plantCost(sel.tfKind))) { toast('Zu wenig Rohstoffe.'); return; }
     if (kind) { quickAct(kind === 'plant' ? { type: 'plant', idx: i, to: sel.tfKind } : { type: 'clear', idx: i }); return; } // Modus bleibt offen für weitere Felder
     clearSel();
     sel.cityIdx = S.cities[ci].idx;
@@ -1795,9 +1795,9 @@ function renderCityPanel(panel, ci, occ) {
       list.append(el('div', { class: 'build-row tower-row terra-row' },
         el('span', { class: 'bicon' }, '🌱'),
         el('div', { class: 'binfo' }, el('b', {}, 'Felder bearbeiten'),
-          el('span', { class: 'muted' }, `Wiese: ${costText(PLANT_COST)}, fertig in ${PLANT_ROUNDS} Runden · Wald roden: +${CLEAR_WOOD} Holz${growing ? ` · ${growing} in Arbeit` : ''}`),
+          el('span', { class: 'muted' }, `Wiese → Wald ${costText(plantCost('forest'))}, Grube/Hain ${costText(PLANT_COST)}, fertig in ${PLANT_ROUNDS} Runden · Wald roden: +${CLEAR_WOOD} Holz${growing ? ` · ${growing} in Arbeit` : ''}`),
           el('span', { class: 'terra-btns' },
-            ...Object.entries(PLANT_KINDS).map(([k, K]) => el('button', { class: 'btn small', disabled: !canAfford(p.res, PLANT_COST), onclick: pick(k) }, `${K.icon} ${K.what}`)),
+            ...Object.entries(PLANT_KINDS).map(([k, K]) => el('button', { class: 'btn small', disabled: !canAfford(p.res, plantCost(k)), onclick: pick(k) }, `${K.icon} ${K.what}`)),
             el('button', { class: 'btn small', onclick: pick('clear') }, '🪓 Roden')))));
     };
     const groups = {
@@ -1870,7 +1870,7 @@ function renderPanelContent(panel) {
       el('span', { class: 'title' }, sel.tfKind === 'clear' ? '🪓 Wald roden' : `${PLANT_KINDS[sel.tfKind].icon} ${PLANT_KINDS[sel.tfKind].name}`),
       el('button', { class: 'btn small', onclick: () => { const idx = S.cities[ci].idx; clearSel(); sel.cityIdx = idx; cityTab = 'build'; refresh(); } }, 'Fertig')));
     panel.append(el('div', { class: 'note' }, sel.tfKind === 'clear' ? `Tippe helle Wälder an, um sie zu roden (je +${CLEAR_WOOD} Holz sofort, danach Wiese). Beliebig viele Felder.`
-      : `Tippe helle Wiesen an (je ${costText(PLANT_COST)}, nach ${PLANT_ROUNDS} Runden ${PLANT_KINDS[sel.tfKind].what}). Beliebig viele Felder.`));
+      : `Tippe helle Wiesen an (je ${costText(plantCost(sel.tfKind))}, nach ${PLANT_ROUNDS} Runden ${PLANT_KINDS[sel.tfKind].what}). Beliebig viele Felder.`));
     return;
   }
   if (sel.placeTower != null) {
@@ -2354,7 +2354,7 @@ function renderHelp() {
     <h3>Versorgung</h3>
     <p><b>Versorgung:</b> Oben neben ⚔ steht „Truppen/Versorgung“. Jede Stadt versorgt Truppen (${[1, 2, 3, 4, 5, 6, 7, 8].map((l) => citySupply({ level: l })).join(' / ')} je nach Stufe; Basilisk zählt 2, Troll und Drache 3). Jede Einheit isst 2 Nahrung pro Runde. Einheiten über der Versorgung kosten doppelten Unterhalt, über dem 1,5-Fachen dreifachen. Eine riesige Armee frisst also schnell den ganzen Ertrag – lieber wenige, gut verbesserte Einheiten.</p>
     <h3>Felder bearbeiten 🌱⛏️🍇🪓</h3>
-    <p>Im Reiter „Gebäude“ → Wirtschaft wählst du bei „Felder bearbeiten“, was entstehen soll, und tippst helle Felder im Stadtgebiet an. Eine <b>Wiese</b> wird für je ${costText(PLANT_COST)} nach ${PLANT_ROUNDS} Runden zu <b>Wald</b> (Holz mit Holzfäller), zur <b>Erzgrube</b> (1 Erz mit Mine) oder zum <b>Traubenhain</b> (1 Mana mit Kelterei); solange liefert das Feld nichts. Einen <b>Wald</b> rodest du sofort zur Wiese (Nahrung mit Bauernhof) und bekommst ${CLEAR_WOOD} Holz. Beliebig viele Felder. Wald bremst Angreifer, weil er 2 Bewegung kostet.</p>
+    <p>Im Reiter „Gebäude“ → Wirtschaft wählst du bei „Felder bearbeiten“, was entstehen soll, und tippst helle Felder im Stadtgebiet an. Eine <b>Wiese</b> wird nach ${PLANT_ROUNDS} Runden zu <b>Wald</b> (${costText(plantCost('forest'))}, Holz mit Holzfäller), zur <b>Erzgrube</b> (${costText(PLANT_COST)}, 1 Erz mit Mine) oder zum <b>Traubenhain</b> (${costText(PLANT_COST)}, 1 Mana mit Kelterei); solange liefert das Feld nichts. Einen <b>Wald</b> rodest du sofort zur Wiese (Nahrung mit Bauernhof) und bekommst ${CLEAR_WOOD} Holz. Beliebig viele Felder. Wald bremst Angreifer, weil er 2 Bewegung kostet.</p>
     <h3>Mana 🍇</h3>
     <p>Mana ist der Rohstoff für alles Magische. Es kommt aus selbst angelegten <b>Traubenhainen</b> mit einer <b>Kelterei</b> in der Stadt und vom Turm der Weisen (+${MANA.sanctum}). Mana lässt sich nicht handeln.<br>
     Wofür: Zauberer kosten Mana und 1 Mana Unterhalt pro Runde; Vereisen ${MANA.freeze}, Bergsprengung ${MANA.bomb}, Flächenheilung ${MANA.areaheal} (sonst heilt der Zauberer nur das Ziel), Feuersturm des Drachen ${MANA.storm}; die Forschungen Erleuchtung und Segen kosten ebenfalls Mana.</p>
