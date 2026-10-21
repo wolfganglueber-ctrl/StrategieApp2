@@ -362,14 +362,14 @@ export const TRADE_RATE_GUILD = 2;
 
 // Gebäude: jede Stadt hat so viele Bauplätze wie ihre Stufe (höchstens 6)
 export const BUILDINGS = {
-  farm: { art: 'einen', name: 'Bauernhof', icon: '🌾', eco: 'food', cost: { wood: 10, ore: 10 }, desc: '1 Nahrung je Wiese/See im Stadtkreis, mit jeder weiteren Stadtstufe +½ je Feld' },
-  lumber: { art: 'einen', name: 'Holzfäller', icon: '🌲', eco: 'wood', cost: { food: 10, ore: 10 }, desc: '1 Holz je Wald im Stadtkreis, mit jeder weiteren Stadtstufe +½ je Feld' },
-  mine: { art: 'eine', name: 'Mine', icon: '⛏️', eco: 'ore', cost: { food: 10, wood: 10 }, desc: '1 Erz je Hügel, Lehm oder Grube im Stadtkreis, 2 je Gebirge, mit jeder weiteren Stadtstufe +½ je Feld' },
+  farm: { art: 'einen', name: 'Bauernhof', icon: '🌾', eco: 'food', cost: { wood: 10, ore: 10 }, desc: 'Erschließt die Nahrung des äußeren Rings (Wiese/See)' },
+  lumber: { art: 'einen', name: 'Holzfäller', icon: '🌲', eco: 'wood', cost: { food: 10, ore: 10 }, desc: 'Erschließt das Holz des äußeren Rings (Wald)' },
+  mine: { art: 'eine', name: 'Mine', icon: '⛏️', eco: 'ore', cost: { food: 10, wood: 10 }, desc: 'Erschließt das Erz des äußeren Rings (Hügel, Lehm, Grube; Gebirge doppelt)' },
   barracks: { art: 'eine', name: 'Kaserne', icon: '🛡️', cost: { wood: 6, ore: 4 }, desc: 'Ritter möglich, neue Einheiten können sofort ziehen' },
   workshop: { art: 'eine', name: 'Werkstatt', icon: '⚙️', cost: { wood: 8, ore: 4 }, desc: 'Katapulte möglich' },
   wall: { art: 'eine', name: 'Mauer', icon: '🧱', noSlot: true, cost: { wood: 4, ore: 6 }, desc: 'Verteidigung in der Stadt +40 % statt +20 %, belegt keinen Bauplatz' },
   sanctum: { art: 'einen', name: 'Turm der Weisen', icon: '🔮', cost: { wood: 6, ore: 6 }, desc: 'Zauberer möglich, +1 Mana' },
-  press: { art: 'eine', name: 'Kelterei', icon: '🍇', eco: 'mana', cost: { food: 10, wood: 10 }, desc: '1 Mana je Traubenhain im Stadtkreis, mit jeder weiteren Stadtstufe +½ je Feld' },
+  press: { art: 'eine', name: 'Kelterei', icon: '🍇', eco: 'mana', cost: { food: 10, wood: 10 }, desc: 'Erschließt das Mana des äußeren Rings (Traubenhain)' },
   nest: { art: 'ein', name: 'Basiliskennest', icon: '🦎', cost: { food: 10, wood: 8, ore: 12 }, minLevel: 2, desc: 'Basilisk möglich (Stadt ab Stufe 2)' },
   lair: { art: 'eine', name: 'Trollhöhle', icon: '🦴', cost: { food: 10, wood: 12, ore: 16 }, minLevel: 3, desc: 'Schwarzer Troll möglich (Stadt ab Stufe 3)' },
   market: { art: 'einen', name: 'Markt', icon: '⚖️', cost: { food: 16, wood: 16, ore: 8 }, perRealm: 1, desc: 'Erlaubt Handel (3:1, mit Handelsgilde 2:1), einer pro Reich' },

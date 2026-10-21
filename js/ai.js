@@ -338,8 +338,8 @@ function cityYieldSum(state, ci, territory) {
 function chooseBuilding(state, ctx, pid, ci, inc) {
   const c = state.cities[ci];
   const full = slotsUsed(c) >= citySlots(c);
-  const t = cityTiles(state, ci, ctx.territory);
-  // Wirtschaftsgebäude nur mit passenden Feldern (sie belegen keinen Bauplatz)
+  const t = cityTiles(state, ci, ctx.territory, 'outer');
+  // Wirtschaftsgebäude nur mit passenden Feldern im äußeren Ring (sie belegen keinen Bauplatz)
   const score = {
     farm: t.food ? 2 + t.food * 0.6 + (inc.food < 6 ? 2 : 0) : 0,
     lumber: t.wood ? 1.5 + t.wood * 1.2 - (inc.wood > inc.ore + 4 ? 1 : 0) : 0,
@@ -450,7 +450,7 @@ function economyAction(state, ctx, P, pid, rng) {
   // Wirtschaft zuerst: Bauernhof, Holzfäller, Mine, Kelterei überall, wo passende Felder liegen (belegen keinen Bauplatz)
   if (P.upgrade > 0) {
     for (const c of ctx.ownCities) {
-      const t = cityTiles(state, cityIdx(c), ctx.territory);
+      const t = cityTiles(state, cityIdx(c), ctx.territory, 'outer');
       for (const b of ['farm', 'lumber', 'mine', 'press']) {
         if (t[BUILDINGS[b].eco] && !canBuild(state, pid, c, b)) return { type: 'build', idx: c.idx, building: b };
       }

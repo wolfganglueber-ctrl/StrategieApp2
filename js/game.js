@@ -554,18 +554,25 @@ export function upkeepTotal(state, pid) {
   return up;
 }
 
-// Ertrag einer Stadt: Gebiet + Zentrum + Gebäude
-export function cityYield(state, ci, territory = computeTerritory(state)) {
-  const inc = { food: 0, wood: 0, ore: 0, mana: 0 };
+// Gebäude, das den äußeren Ring für einen Rohstoff erschließt
+export const ECO_FOR = { food: 'farm', wood: 'lumber', ore: 'mine', mana: 'press' };
+
+// Grundertrag einer Stadt ohne Forschung: der innere Ring (1 Feld um die Stadt) liefert immer,
+// der äußere Ring (2. Feld) je Rohstoff nur mit Bauernhof/Holzfäller/Mine/Kelterei; alles × Stadtstufe
+export function cityBaseYield(state, ci, territory = computeTerritory(state), level = state.cities[ci].level) {
   const c = state.cities[ci];
-  // Felder liefern nur mit passendem Gebäude: Bauernhof (Wiese/See), Holzfäller (Wald), Mine (Hügel, Lehm, Grube, Gebirge ×2), Kelterei (Traubenhain)
-  const tiles = cityTiles(state, ci, territory);
-  // Gebäude: je passendem Feld so viel wie die Stadtstufe; ohne passendes Feld nichts; Pflug/Sägewerk/Bergbau +50 %
-  const per = (k, n) => boostedYield(state, c.owner, k, buildingYield(n, c.level));
-  if (hasBuilding(c, 'farm')) inc.food += per('food', tiles.food);
-  if (hasBuilding(c, 'lumber')) inc.wood += per('wood', tiles.wood);
-  if (hasBuilding(c, 'mine')) inc.ore += per('ore', tiles.ore);
-  if (hasBuilding(c, 'press')) inc.mana += per('mana', tiles.mana);
+  const inner = cityTiles(state, ci, territory, 'inner'), outer = cityTiles(state, ci, territory, 'outer');
+  const inc = { food: 0, wood: 0, ore: 0, mana: 0 };
+  for (const k of Object.keys(inc)) inc[k] = buildingYield(inner[k] + (hasBuilding(c, ECO_FOR[k]) ? outer[k] : 0), level);
+  return inc;
+}
+
+// Ertrag einer Stadt: Grundertrag + Pflug/Sägewerk/Bergbau (+50 %) + Turm der Weisen (+1 Mana)
+export function cityYield(state, ci, territory = computeTerritory(state), level) {
+  const c = state.cities[ci];
+  const base = cityBaseYield(state, ci, territory, level);
+  const inc = { food: 0, wood: 0, ore: 0, mana: 0 };
+  for (const k of Object.keys(inc)) inc[k] = boostedYield(state, c.owner, k, base[k]);
   if (hasBuilding(c, 'sanctum')) inc.mana += MANA.sanctum;
   return inc;
 }
@@ -579,12 +586,15 @@ export function tileRes(state, i) {
   return { res: T.res, n: T.n || 1 };
 }
 
-// Felder im Stadtkreis je Rohstoff (ohne das Stadtzentrum, Gebirge zählt doppelt)
-export function cityTiles(state, ci, territory = computeTerritory(state)) {
+// Felder im Stadtkreis je Rohstoff (ohne das Stadtzentrum, Gebirge zählt doppelt);
+// ring: 'inner' = direkt um die Stadt, 'outer' = zweiter Ring, sonst beide
+export function cityTiles(state, ci, territory = computeTerritory(state), ring) {
   const c = state.cities[ci];
+  const geo = geoOf(state);
   const n = { food: 0, wood: 0, ore: 0, mana: 0 };
   for (let i = 0; i < territory.length; i++) {
     if (territory[i] !== ci || i === c.idx) continue;
+    if (ring && (geo.dist(i, c.idx) <= 1) !== (ring === 'inner')) continue;
     const t = tileRes(state, i);
     if (t) n[t.res] += t.n;
   }

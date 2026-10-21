@@ -191,7 +191,7 @@ export function generateMap({ seed, cols, rows, players, biome = 'mixed', villag
     // Jedes Dorf unter dem Ziel zählt als Nachteil (sonst gewinnen Karten mit fast keinen Dörfern, weil sie „fair“ sind)
     const score = placed.imbalance + placed.missing * 0.8;
     if (!best || score < best.imbalance) best = { terrain, cities: placed.cities, imbalance: score };
-    if (score <= 1) break;
+    if (score <= 1 || (best && attempt >= 11)) break; // 12 Versuche reichen (sonst dauert das Erzeugen am Handy spürbar)
   }
   if (!best) throw new Error('Karte konnte nicht erzeugt werden');
   for (const c of best.cities) best.terrain[c.idx] = 'plain';

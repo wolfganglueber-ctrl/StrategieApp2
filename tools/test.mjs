@@ -105,8 +105,8 @@ const t0 = Date.now();
   check(s.grapes.length === 0, 'Keine Traubenhaine zu Beginn');
   const cap = s.cities.find((c) => c.capital && c.owner === 0);
   check(['farm', 'lumber', 'mine'].every((b) => cap.buildings.includes(b)), 'Startgebäude');
-  const ci = s.cities.indexOf(cap), t = cityTiles(s, ci), y = cityYield(s, ci);
-  check(y.food === buildingYield(t.food, cap.level) && y.ore === buildingYield(t.ore, cap.level), 'Ertrag nur über Gebäude');
+  const ci = s.cities.indexOf(cap), t = cityTiles(s, ci), ti = cityTiles(s, ci, undefined, 'inner'), y = cityYield(s, ci);
+  check(y.food === buildingYield(t.food, cap.level) && y.ore === buildingYield(t.ore, cap.level), 'Mit Gebäuden liefern beide Ringe');
   cap.level = 3;
   check(cityYield(s, ci).food === 3 * t.food, 'Stufe 3 verdreifacht den Ertrag');
   const cityFood = () => s.cities.reduce((a, c, k) => a + (c.owner === 0 ? cityYield(s, k).food : 0), 0);
@@ -118,7 +118,8 @@ const t0 = Date.now();
   s.grapes.push(g); cap.buildings.push('press');
   check(Number.isFinite(realmYield(s, 0).mana) && cityYield(s, ci).mana >= 3, 'Mana aus Traubenhain mit Kelterei');
   cap.buildings = [];
-  check(Object.values(cityYield(s, ci)).every((v) => v === 0), 'Ohne Gebäude kein Ertrag');
+  const yi = cityYield(s, ci);
+  check(yi.wood === 3 * ti.wood && yi.ore === 3 * ti.ore && yi.mana === 3 * ti.mana && ti.food > 0, 'Ohne Gebäude liefert nur der innere Ring');
 }
 // Felder bearbeiten: Aufforsten, Grube, Traubenhain, Roden
 {

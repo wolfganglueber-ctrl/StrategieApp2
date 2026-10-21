@@ -3,7 +3,7 @@ import { Renderer } from './render.js';
 import { attachInput } from './input.js';
 import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
-  incomeOf, realmYield, boostedYield, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
+  incomeOf, realmYield, boostedYield, cityBaseYield, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, flankers, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, terrainDefense,
   canBoost, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, canStorm, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
@@ -1617,10 +1617,13 @@ function ecoTechPreview(t, pid) {
   const k = Object.keys(ECO_TECH).find((r) => ECO_TECH[r] === t);
   if (!k) return null;
   const terr = computeTerritory(S);
-  let base = 0;
-  const B = { food: 'farm', wood: 'lumber', ore: 'mine' }[k];
-  S.cities.forEach((c, ci) => { if (c.owner === pid && hasBuilding(c, B)) base += buildingYield(cityTiles(S, ci, terr)[k], c.level); });
-  const gain = S.cities.reduce((a, c, ci) => a + (c.owner === pid && hasBuilding(c, B) ? Math.ceil(buildingYield(cityTiles(S, ci, terr)[k], c.level) * ECO_TECH_PCT) : 0), 0);
+  let base = 0, gain = 0;
+  S.cities.forEach((c, ci) => {
+    if (c.owner !== pid) return;
+    const b = cityBaseYield(S, ci, terr)[k];
+    base += b;
+    gain += Math.ceil(b * ECO_TECH_PCT);
+  });
   return el('span', { class: 'muted' }, `${hasTech(S, pid, t) ? 'Bringt dir' : 'Würde dir bringen'}: +${gain} ${RES_INFO[k].name} pro Runde (Reich ohne Forschung +${base})`);
 }
 
@@ -1672,7 +1675,7 @@ function advice(occ) {
   const inc = incomeOf(S, pid, territory);
   for (const c of S.cities.filter((c) => c.owner === pid)) {
     const ci = S.cityAt[c.idx];
-    const t = cityTiles(S, ci, territory);
+    const t = cityTiles(S, ci, territory, 'outer');
     const free = slotsUsed(c) < citySlots(c);
     const pick = !hasBuilding(c, 'mine') && t.ore && inc.ore <= inc.wood ? 'mine'
       : !hasBuilding(c, 'lumber') && t.wood > 1 ? 'lumber'
@@ -1727,8 +1730,10 @@ function renderCityPanel(panel, ci, occ) {
   }
   panel.append(tabs);
   if (cityTab === 'build') {
-    const t = cityTiles(S, ci);
-    panel.append(el('div', { class: 'note tiles-note' }, 'Felder-Wert im Stadtkreis: ', icon('food'), ` ${t.food} `, icon('wood'), ` ${t.wood} `, icon('ore'), ` ${t.ore} `, icon('mana'), ` ${t.mana}`));
+    const ti = cityTiles(S, ci, undefined, 'inner'), to = cityTiles(S, ci, undefined, 'outer');
+    const row = (t) => [icon('food'), ` ${t.food} `, icon('wood'), ` ${t.wood} `, icon('ore'), ` ${t.ore} `, icon('mana'), ` ${t.mana}`];
+    panel.append(el('div', { class: 'note tiles-note' }, 'Innerer Ring (liefert immer): ', ...row(ti)));
+    panel.append(el('div', { class: 'note tiles-note' }, 'Äußerer Ring (mit Gebäude): ', ...row(to)));
   }
   if (cityTab === 'units') {
     const grid = el('div', { class: 'recruit-grid' });
@@ -1753,13 +1758,14 @@ function renderCityPanel(panel, ci, occ) {
     panel.append(el('div', { class: 'note', id: 'recruitNote' }, note ? `Rekrutieren nicht möglich: ${note}.` : `Neue Einheiten erscheinen im Stadtgebiet.${ready}`));
   } else {
     // Gebäude in zwei Gruppen: Wirtschaft und Einheiten (breiter Bildschirm: nebeneinander, Handy: erst Gruppe wählen)
-    const tiles = cityTiles(S, ci);
-    // Vorschau je Wirtschaftsgebäude: Feldwert × Stufe, plus freigeschaltete Forschung
+    const tilesIn = cityTiles(S, ci, undefined, 'inner'), tiles = cityTiles(S, ci, undefined, 'outer');
+    // Vorschau je Wirtschaftsgebäude: erschließt den äußeren Ring (Feldwert × Stufe, mit Forschung)
     const eco = (k, what) => {
       const n = tiles[k];
-      if (!n) return `Kein ${what} im Stadtkreis – liefert nichts`;
-      const base = buildingYield(n, c.level), v = boostedYield(S, p.id, k, base);
-      return `+${v} ${RES_INFO[k].name} (Feldwert ${n} ${what} × Stufe ${c.level}${v > base ? `, +${v - base} ${TECHS[ECO_TECH[k]].name}` : ''})`;
+      if (!n) return `Kein ${what} im äußeren Ring – bringt nichts`;
+      const inner = buildingYield(tilesIn[k], c.level), outer = buildingYield(n, c.level);
+      const v = boostedYield(S, p.id, k, inner + outer) - boostedYield(S, p.id, k, inner);
+      return `+${v} ${RES_INFO[k].name} aus dem äußeren Ring (Feldwert ${n} ${what} × Stufe ${c.level}${v > outer ? `, inkl. ${TECHS[ECO_TECH[k]]?.name}` : ''})`;
     };
     const ecoDesc = { farm: eco('food', 'Wiese/See'), lumber: eco('wood', 'Wald'), mine: eco('ore', 'Hügel/Lehm/Grube/Gebirge'), press: eco('mana', 'Traubenhain') };
     const buildingRow = (list, b) => {
@@ -1820,11 +1826,9 @@ function renderCityPanel(panel, ci, occ) {
       const cost = upgradeCostOf(S, c);
       panel.append(el('div', { class: 'upgrade-row' },
         el('span', { class: 'muted' }, (() => {
-          // Zuwachs: je Feld mit passendem Gebäude (Bauernhof/Holzfäller/Mine/Kelterei) +½
-          const t = cityTiles(S, ci);
-          const B = { food: 'farm', wood: 'lumber', ore: 'mine', mana: 'press' };
-          const gain = (k) => boostedYield(S, p.id, k, buildingYield(t[k], c.level + 1)) - boostedYield(S, p.id, k, buildingYield(t[k], c.level));
-          const parts = RES.filter((k) => hasBuilding(c, B[k]) && t[k]).map((k) => `+${gain(k)} ${RES_INFO[k].name}`).join(', ') || 'kein Mehrertrag ohne Wirtschaftsgebäude';
+          // Zuwachs: alle liefernden Felder (innerer Ring, äußerer mit Gebäude) bringen je Stufe einmal mehr
+          const now = cityYield(S, ci), next = cityYield(S, ci, undefined, c.level + 1);
+          const parts = RES.filter((k) => next[k] > now[k]).map((k) => `+${next[k] - now[k]} ${RES_INFO[k].name}`).join(', ') || 'kein Mehrertrag';
           return `Ausbau zur ${CITY_NAMES[c.level + 1]}: +${citySlots({ level: c.level + 1 }) - citySlots(c)} Bauplätze, +${citySupply({ level: c.level + 1 }) - citySupply(c)} Versorgung, ${parts}`;
         })()),
         el('button', { class: 'btn small primary', disabled: !canAfford(p.res, cost), onclick: () => doUpgrade(c.idx) }, costEl(cost, p.res))));
@@ -2297,14 +2301,25 @@ function renderSetup() {
   $('citiesRange').value = setup.cities ?? 3;
   updateCitiesInfo();
 }
-// Vorschau: genaue Anzahl Städte dieser Karte (Dörfer halten immer 4 Felder Abstand, daher passen nicht beliebig viele)
+// Vorschau: genaue Anzahl Städte dieser Karte (Dörfer halten Abstand, daher passen nicht beliebig viele).
+// Die Karte zu erzeugen dauert am Handy spürbar: erst nach dem Neuzeichnen rechnen (Knöpfe reagieren sofort), Ergebnis merken
+const citiesCache = new Map();
+let citiesTimer = null;
 function updateCitiesInfo() {
-  let n = '?';
-  try {
-    const c = skirmishConfig({ ...setup, code: setup.code || 'A' });
-    n = generateMap({ ...c, players: c.players.length }).cities.length;
-  } catch { /* Karte nicht erzeugbar */ }
-  $('citiesInfo').textContent = `(${CITY_LABELS[setup.cities ?? 3]}: ${n} Städte inkl. Hauptstädte)`;
+  const label = CITY_LABELS[setup.cities ?? 3];
+  const c = skirmishConfig({ ...setup, code: setup.code || 'A' });
+  const key = [c.seed, c.cols, c.rows, c.biome, c.villageDensity, c.players.length].join('|');
+  const show = (n) => { $('citiesInfo').textContent = `(${label}: ${n} Städte inkl. Hauptstädte)`; };
+  if (citiesCache.has(key)) { show(citiesCache.get(key)); return; }
+  show('…');
+  clearTimeout(citiesTimer);
+  citiesTimer = setTimeout(() => requestAnimationFrame(() => setTimeout(() => {
+    let n = '?';
+    try { n = generateMap({ ...c, players: c.players.length }).cities.length; } catch { /* Karte nicht erzeugbar */ }
+    citiesCache.set(key, n);
+    const cur = skirmishConfig({ ...setup, code: setup.code || 'A' });
+    if (key === [cur.seed, cur.cols, cur.rows, cur.biome, cur.villageDensity, cur.players.length].join('|')) show(n);
+  }, 0)), 300);
 }
 $('citiesRange').addEventListener('input', (e) => { setup.cities = +e.target.value; updateCitiesInfo(); });
 $('seedInput').addEventListener('input', (e) => { setup.code = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); updateCitiesInfo(); });
@@ -2351,7 +2366,7 @@ function renderHelp() {
     <h3>Städte</h3>
     <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden; Türme und Steinwälle in ihrem Gebiet wechseln mit auf deine Seite.
     Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Bauplätze: 2 / 4 / 6.<br>
-    <b>Ertrag:</b> Felder im Stadtkreis liefern nur mit dem passenden Wirtschaftsgebäude: Bauernhof 1 Nahrung je Wiese/See, Holzfäller 1 Holz je Wald, Mine 1 Erz je Hügel, Lehm oder Erzgrube und 2 je Gebirge, Kelterei 1 Mana je Traubenhain – auf Stufe 2 das Doppelte, auf Stufe 3 das Dreifache (ein Gebirge also bis zu 6 Erz). Pflug, Sägewerk und Bergbau geben je +50 % auf die gesamte Nahrung, das Holz bzw. das Erz des Reichs. Ohne passendes Feld liefert ein Gebäude nichts, das Stadtzentrum selbst liefert nichts. Jede Hauptstadt startet mit Bauernhof, Holzfäller und Mine. Wirtschaftsgebäude und die Mauer belegen keinen Bauplatz, die Plätze sind für Einheiten-Gebäude und den Markt. Ob du zuerst baust oder ausbaust, ist egal. Jede Stufe bringt außerdem 2 Bauplätze und 2 Versorgung. Erobern lohnt sich früh, Ausbauen macht jede eroberte Stadt doppelt bzw. dreifach wertvoll.</p>
+    <b>Ertrag:</b> Jedes Feld liefert seinen Rohstoff: Wiese/See 1 Nahrung, Wald 1 Holz, Hügel, Lehm oder Erzgrube 1 Erz, Gebirge 2 Erz, Traubenhain 1 Mana – auf Stufe 2 das Doppelte, auf Stufe 3 das Dreifache. Der <b>innere Ring</b> (die 6 Felder direkt um die Stadt) liefert immer, auch direkt nach der Eroberung. Den <b>äußeren Ring</b> (2. Feld) erschließt du je Rohstoff mit einem Gebäude: Bauernhof (Nahrung), Holzfäller (Holz), Mine (Erz), Kelterei (Mana). Pflug, Sägewerk und Bergbau geben je +50 % auf Nahrung, Holz bzw. Erz. Das Stadtzentrum selbst liefert nichts. Jede Hauptstadt startet mit Bauernhof, Holzfäller und Mine. Wirtschaftsgebäude und die Mauer belegen keinen Bauplatz, die Plätze sind für Einheiten-Gebäude und den Markt. Ob du zuerst baust oder ausbaust, ist egal. Jede Stufe bringt außerdem 2 Bauplätze und 2 Versorgung. Erobern lohnt sich früh, Ausbauen macht jede eroberte Stadt doppelt bzw. dreifach wertvoll.</p>
     <h3>Versorgung</h3>
     <p><b>Versorgung:</b> Oben neben ⚔ steht „Truppen/Versorgung“. Jede Stadt versorgt Truppen (${[1, 2, 3, 4, 5, 6, 7, 8].map((l) => citySupply({ level: l })).join(' / ')} je nach Stufe; Basilisk zählt 2, Troll und Drache 3). Jede Einheit isst 2 Nahrung pro Runde. Einheiten über der Versorgung kosten doppelten Unterhalt, über dem 1,5-Fachen dreifachen. Eine riesige Armee frisst also schnell den ganzen Ertrag – lieber wenige, gut verbesserte Einheiten.</p>
     <h3>Felder bearbeiten 🌱⛏️🍇🪓</h3>
