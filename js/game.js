@@ -5,7 +5,7 @@ import {
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
   PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, buildingYield, plantCost, START_BUILDINGS, slotsUsed, usesSlot, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_ADD, ATK_TYPE, DEF_TABLE, DEF_MAX, SKILLS, skillsFor, boostCost, skillCost,
-  BASE_RES, MANA, ECO_TECH, ECO_TECH_PCT,
+  BASE_RES, MANA, ECO_TECH, ECO_TECH_PCT, counterMax, FUSE,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -160,7 +160,7 @@ export function hasSkill(u, k) {
 }
 
 export function canPetrify(t) {
-  return !isStructure(t) && t.type !== 'troll' && t.type !== 'dragon' && !t.stone;
+  return !isStructure(t) && t.type !== 'troll' && t.type !== 'giant' && t.type !== 'dragon' && !t.stone;
 }
 
 export function hasPerk(u, p) {
@@ -169,6 +169,7 @@ export function hasPerk(u, p) {
 
 // Einheiten-Entwicklung: gewählte Stufen eines Spielers für einen Einheitentyp
 export function unitUpList(state, pid, type) {
+  if (type === 'giant') type = 'troll'; // der Riesentroll trägt die Entwicklung der Trolle
   return state.players[pid]?.unitUps?.[type] || [];
 }
 // Mögliche nächste Stufe (eine oder zwei Optionen)
@@ -211,7 +212,7 @@ export function terrainDefense(state, idx) {
 export function penetration(state, att, def, defIdx = def.idx) {
   let p = statsOf(state, att).pen;
   if (hasPerk(att, 'siege') && (cityOn(state, defIdx) || castleOf(state, defIdx) || isStructure(def))) p += 20;
-  if (hasPerk(att, 'hunter') && (CAVALRY.includes(def.type) || def.type === 'troll' || def.type === 'dragon')) p += 20;
+  if (hasPerk(att, 'hunter') && (CAVALRY.includes(def.type) || def.type === 'troll' || def.type === 'giant' || def.type === 'dragon')) p += 20;
   return p;
 }
 // Verteidigung des Ziels gegen diesen Angreifer, aufgeschlüsselt
@@ -244,8 +245,18 @@ export function combatInfo(state, att, def, fromIdx = att.idx) {
   if (dv.terrain) defNotes.push(`${castleOf(state, def.idx) && !cityOn(state, def.idx) ? 'Burgfeld' : 'Stadt/Burg'} +${dv.terrain} %${dv.kind === 'siege' ? ' (Wucht: halb)' : ''}`);
   if (dv.aura) defNotes.push(`Schutzaura +${dv.aura} %`);
   if (dv.pen) defNotes.push(`Durchschlag −${dv.pen}`);
-  const extra = (splashOf(att) || UNITS[att.type].line) ? splashDamage(state, att, def.idx, r.dmg, fromIdx) : [];
-  return { ...r, atk: A.atk, atkValue: attackValue(state, att, def, fromIdx), atkNotes, defPct: dv.pct, defNotes, extra, lance: hasPerk(att, 'lance') && unitRange(state, def) <= 1 };
+  let extra = (splashOf(att) || UNITS[att.type].line) ? splashDamage(state, att, def.idx, r.dmg, fromIdx) : [];
+  // Rundumschlag: alle Gegner daneben mit eigenem Schaden und Gegenschlag
+  let sweepCounter = 0;
+  if (UNITS[att.type].sweep) {
+    extra = sweepTargets(state, att, def, fromIdx).map((o) => {
+      const ro = computeCombat(state, att, o, fromIdx);
+      sweepCounter += ro.counter;
+      return { unit: o, dmg: ro.dmg };
+    });
+  }
+  const noCounter = !r.kill && (def.cnt || 0) >= counterMax(def.type);
+  return { ...r, atk: A.atk, atkValue: attackValue(state, att, def, fromIdx), atkNotes, defPct: dv.pct, defNotes, extra, sweepCounter, noCounter, lance: hasPerk(att, 'lance') && unitRange(state, def) <= 1 };
 }
 const ATK_LABEL = { melee: 'Nahkampf', ranged: 'Fernkampf', siege: 'Wucht', magic: 'Feuer/Magie' };
 
@@ -503,7 +514,8 @@ export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp
   const geo = geoOf(state);
   // Chevalier mit langer Lanze: Nahkämpfer kommen nicht zum Gegenschlag
   const lance = hasPerk(att, 'lance') && unitRange(state, def) <= 1;
-  if (!kill && !lance && !def.stone && !def.stoneNow && geo.dist(fromIdx, def.idx) <= unitRange(state, def)) {
+  // Jede Einheit schlägt bis zu ihrem nächsten Zug nur 2-mal zurück (Trolle 3-mal)
+  if (!kill && !lance && !def.stone && !def.stoneNow && (def.cnt || 0) < counterMax(def.type) && geo.dist(fromIdx, def.idx) <= unitRange(state, def)) {
     counter = hitDamage(statsOf(state, def).atk, defenseVs(state, def, att, fromIdx).pct);
   }
   return { dmg, counter, kill, die: counter >= attHp };
@@ -654,13 +666,18 @@ export function tradeRate(state, pid) {
   return hasTech(state, pid, 'guild') ? TRADE_RATE_GUILD : TRADE_RATE;
 }
 
+// Trolle und Riesentrolle zählen zusammen für die Höchstzahl
+function realmCount(state, pid, type) {
+  return state.units.filter((u) => u.owner === pid && (u.type === type || (type === 'troll' && u.type === 'giant'))).length;
+}
+
 export function canRecruit(state, pid, ci, type) {
   const c = state.cities[ci];
   const T = UNITS[type];
   if (!T || !c || c.owner !== pid) return 'invalid';
   if (T.tech && !hasTech(state, pid, T.tech)) return 'tech';
   if (T.needs && !hasBuilding(c, T.needs)) return 'needs';
-  if (T.perRealm && state.units.filter((u) => u.owner === pid && u.type === type).length >= T.perRealm) return 'unique';
+  if (T.perRealm && realmCount(state, pid, type) >= T.perRealm) return 'unique';
   if (T.healer && state.units.filter((u) => u.owner === pid && u.type === type).length >= cityCount(state, pid)) return 'limit';
   if (!canAfford(state.players[pid].res, T.cost)) return 'cost';
   if (!spawnSpots(state, ci).length) return 'space';
@@ -782,6 +799,7 @@ export function startTurn(state) {
     u.attacked = false;
     u.acted = false;
     u.ice = false;
+    u.cnt = 0; // Gegenschläge wieder voll
     // Versteinert: diesen Zug aussetzen, danach wieder frei
     if (u.stone) {
       u.stone = 0;
@@ -872,6 +890,44 @@ export function splashDamage(state, att, idx, dmg, from = att.idx) {
   return res;
 }
 
+// Rundumschlag: alle Gegner neben dem Angreifer außer dem Hauptziel; gibt Treffer und Summe der Gegenschläge zurück
+export function sweepTargets(state, u, main, fromIdx = u.idx) {
+  const geo = geoOf(state);
+  return state.units.filter((o) => o !== main && o.owner !== u.owner && geo.dist(o.idx, fromIdx) === 1);
+}
+function sweepHits(state, u, main) {
+  const hits = [];
+  let counter = 0;
+  for (const o of sweepTargets(state, u, main)) {
+    const r = computeCombat(state, u, o);
+    const hit = { id: o.id, idx: o.idx, dmg: r.dmg, killed: false, snap: snapshotUnit(o) };
+    o.hp -= r.dmg;
+    if (o.hp <= 0) {
+      hit.killed = true;
+      state.units = state.units.filter((x) => x !== o);
+      state.stats.kills[u.owner]++;
+      state.stats.losses[o.owner]++;
+    } else if (r.counter > 0) {
+      o.cnt = (o.cnt || 0) + 1;
+      counter += r.counter;
+    }
+    hits.push(hit);
+  }
+  return { hits, counter };
+}
+
+// Riesentroll: ein Troll verschmilzt mit 4 weiteren eigenen Trollen in der Nähe (höchstens 2 Felder entfernt)
+export function fuseGroup(state, u) {
+  if (!u || u.type !== 'troll') return null;
+  const geo = geoOf(state);
+  const others = state.units.filter((o) => o !== u && o.owner === u.owner && o.type === 'troll' && geo.dist(o.idx, u.idx) <= FUSE.dist)
+    .sort((a, b) => geo.dist(a.idx, u.idx) - geo.dist(b.idx, u.idx) || a.id - b.id);
+  return others.length >= FUSE.count - 1 ? others.slice(0, FUSE.count - 1) : null;
+}
+export function canFuse(state, u) {
+  return !!u && u.type === 'troll' && canMove(u) && canAttack(u) && !!fuseGroup(state, u) && hasMana(state, u.owner, MANA.fuse);
+}
+
 function applySplash(state, att, idx, dmg, from) {
   const out = [];
   for (const { unit, dmg: d } of splashDamage(state, att, idx, dmg, from)) {
@@ -922,6 +978,8 @@ function applyActionCore(state, a) {
       if (geoOf(state).dist(u.idx, t.idx) > unitRange(state, u)) return null;
       const r = computeCombat(state, u, t);
       const attSnap = snapshotUnit(u), defSnap = snapshotUnit(t);
+      // Rundumschlag (Riesentroll): alle anderen Gegner daneben werden gleichzeitig getroffen und schlagen einzeln zurück
+      const sweep = UNITS[u.type].sweep ? sweepHits(state, u, t) : null;
       t.hp -= r.dmg;
       u.attacked = true;
       u.moved = true;
@@ -933,7 +991,7 @@ function applyActionCore(state, a) {
         state.stats.kills[pid]++;
         state.stats.losses[t.owner]++;
         // Nahkämpfer rücken nach – außer sie stehen in einer Stadt (dann halten sie sie)
-        if (UNITS[u.type].range === 1 && !isStructure(u) && !cityOn(state, u.idx) && !castleBlocked(state, t.idx, pid)) {
+        if (UNITS[u.type].range === 1 && !sweep && !isStructure(u) && !cityOn(state, u.idx) && !castleBlocked(state, t.idx, pid)) {
           e.advance = t.idx;
           u.idx = t.idx;
           u.walked = true;
@@ -942,9 +1000,15 @@ function applyActionCore(state, a) {
         // Basilisk versteinert: das Ziel setzt seinen nächsten Zug aus (Titanen und Bauwerke sind immun)
         if (UNITS[u.type].petrify && canPetrify(t)) { t.stone = 1; e.stone = true; }
       }
-      if (!e.killed && r.counter > 0) {
-        u.hp -= r.counter;
-        e.counter = r.counter;
+      if (!e.killed && r.counter > 0) t.cnt = (t.cnt || 0) + 1;
+      let counter = e.killed ? 0 : r.counter;
+      if (sweep) {
+        e.splash = sweep.hits;
+        counter += sweep.counter;
+      }
+      if (counter > 0) {
+        u.hp -= counter;
+        e.counter = counter;
         if (u.hp <= 0) {
           e.died = true;
           state.units = state.units.filter((x) => x !== u);
@@ -952,7 +1016,7 @@ function applyActionCore(state, a) {
           state.stats.losses[pid]++;
         }
       }
-      if (splashOf(u) || UNITS[u.type].line) e.splash = applySplash(state, u, defSnap.idx, r.dmg, attSnap.idx);
+      if (!sweep && (splashOf(u) || UNITS[u.type].line)) e.splash = applySplash(state, u, defSnap.idx, r.dmg, attSnap.idx);
       ev.push(e);
       // Erfahrung: Angreifer +1 (+1 für einen Sieg), überlebender Verteidiger +1
       // Erfahrung = besiegte Gegner (auch durch Flächenschaden oder Gegenschlag)
@@ -1180,6 +1244,27 @@ function applyActionCore(state, a) {
       state.terrain[a.idx] = 'plain';
       player.res.wood += CLEAR_WOOD;
       ev.push({ k: 'clear', idx: a.idx, wood: CLEAR_WOOD });
+      break;
+    }
+    case 'fuse': {
+      const u = unitById(state, a.unitId);
+      if (!u || u.owner !== pid || !canFuse(state, u)) return null;
+      const group = fuseGroup(state, u);
+      const all = [u, ...group];
+      const hp = all.reduce((t, x) => t + x.hp, 0);
+      state.units = state.units.filter((x) => !group.includes(x));
+      player.res.mana -= MANA.fuse;
+      u.type = 'giant';
+      u.rank = Math.max(...all.map((x) => x.rank || 1));
+      u.xp = Math.max(...all.map((x) => x.xp || 0));
+      delete u.boost;
+      delete u.skills;
+      const ups = upPerks(state, pid, 'giant');
+      if (ups.length) u.ups = ups; else delete u.ups;
+      u.hp = Math.min(hp, statsOf(state, u).hp);
+      u.moved = u.attacked = u.acted = true;
+      u.sentry = false;
+      ev.push({ k: 'fuse', id: u.id, idx: u.idx, from: group.map((x) => x.idx), ids: group.map((x) => x.id) });
       break;
     }
     case 'storm': {

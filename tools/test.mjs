@@ -1,5 +1,5 @@
 // Schnelltests: alle Kampagnenlevel erzeugen, Zufallsspiele in allen Größen ohne Fehler durchspielen.
-import { createGame, applyAction, cloneState, computeCombat, statsOf, getBombTargets, migrateState, stormArea, canTerraform, incomeOf, realmYield, cityTiles, cityYield } from '../js/game.js';
+import { createGame, applyAction, cloneState, computeCombat, statsOf, spawnUnit, getBombTargets, migrateState, stormArea, canTerraform, incomeOf, realmYield, cityTiles, cityYield } from '../js/game.js';
 import { getGeo } from '../js/hex.js';
 import { planAction } from '../js/ai.js';
 import { getLevels } from '../js/levels.js';
@@ -158,6 +158,38 @@ const t0 = Date.now();
   check(r.dmg === 2, `Schütze gegen Katapult halber Schaden (${r.dmg})`);
   ar.boost = { pen: 2 };
   check(computeCombat(s, ar, ca).dmg === 3, 'Durchschlag 20 senkt die Verteidigung');
+  // Gegenschläge: höchstens 2 (Trolle 3) bis zum nächsten eigenen Zug
+  const tgt = mk(5, 'defender', 1, b0);
+  tgt.hp = 999;
+  const atks = geo.nb[b0].slice(0, 3).map((j, k) => mk(10 + k, 'warrior', 0, j));
+  s.units = [tgt, ...atks];
+  s.current = 0;
+  const cs = atks.map((w) => applyAction(s, { type: 'attack', unitId: w.id, targetId: tgt.id })[0].counter);
+  check(cs[0] > 0 && cs[1] > 0 && cs[2] === 0, `Gegenschlag nur 2-mal (${cs})`);
+  check(computeCombat(s, mk(20, 'warrior', 0, a0), { ...tgt, type: 'troll', cnt: 2 }).counter > 0, 'Troll schlägt 3-mal zurück');
+}
+// Riesentroll: 5 Trolle verschmelzen, Rundumschlag trifft alle Nachbarn
+{
+  const s = createGame({ seed: 6, cols: 14, rows: 16, biome: 'plains', players: [{ ai: 3 }, { ai: 3 }] });
+  const geo = getGeo(s.cols, s.rows);
+  const c0 = [...s.terrain.keys()].find((i) => geo.within(i, 2).length === 19 && geo.within(i, 2).every((j) => s.terrain[j] === 'plain' && s.cityAt[j] < 0));
+  s.units = s.units.filter((u) => geo.dist(u.idx, c0) > 3);
+  s.current = 0;
+  const ring = geo.within(c0, 2).filter((j) => j !== c0);
+  const trolls = [c0, ...ring.slice(0, 4)].map((j) => spawnUnit(s, 'troll', 0, j, true));
+  trolls[1].hp = 30;
+  s.players[0].res.mana = 49;
+  check(!applyAction(s, { type: 'fuse', unitId: trolls[0].id }), 'Riesentroll braucht 50 Mana');
+  s.players[0].res.mana = 50;
+  const fe = applyAction(s, { type: 'fuse', unitId: trolls[0].id });
+  const g = trolls[0];
+  check(fe && g.type === 'giant' && g.hp === 310 && s.units.filter((u) => u.type === 'troll' && u.owner === 0).length === 0 && s.players[0].res.mana === 0, `Verschmelzen (${g.type}, ${g.hp})`);
+  check(statsOf(s, g).move === 3, 'Riesentroll zieht 3');
+  s.units = s.units.filter((u) => u === g || geo.dist(u.idx, c0) > 3);
+  const foes = geo.nb[c0].slice(0, 3).map((j) => spawnUnit(s, 'warrior', 1, j, true));
+  g.attacked = g.moved = false;
+  const ae = applyAction(s, { type: 'attack', unitId: g.id, targetId: foes[0].id })[0];
+  check(ae.splash?.length === 2 && foes.every((f) => !s.units.includes(f) || f.hp < UNITS.warrior.hp), `Rundumschlag trifft alle (${ae.splash?.length})`);
 }
 for (const l of getLevels()) {
   const s = createGame({ seed: l.seed, cols: l.cols, rows: l.rows, biome: l.biome, players: [{ human: true }, ...l.ais.map((ai) => ({ ai }))] });

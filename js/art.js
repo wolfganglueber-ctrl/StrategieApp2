@@ -2329,8 +2329,8 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
   ctx.lineJoin = 'round';
   if (!noPedestal) {
     stageAura(ctx);
-    pedestal(ctx, col, type === 'troll' || type === 'dragon' ? 18 : 15);
-    stageMarks(ctx, type === 'troll' || type === 'dragon' ? 18 : 15);
+    pedestal(ctx, col, type === 'troll' || type === 'giant' || type === 'dragon' ? 18 : 15);
+    stageMarks(ctx, type === 'troll' || type === 'giant' || type === 'dragon' ? 18 : 15);
   }
   switch (type) {
     case 'warrior': {
@@ -2892,6 +2892,9 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
     case 'troll':
       drawTroll(ctx, col);
       break;
+    case 'giant':
+      drawGiant(ctx, col);
+      break;
     case 'dragon':
       drawDragon(ctx, col);
       break;
@@ -3387,6 +3390,198 @@ export function drawCastle(ctx, city, x, y, H, col) {
 }
 
 // Schwarzer Troll: gebeugter Koloss mit Steinhammer, Stachel-Schulterpanzer, Kette und Kriegsbemalung
+// Riesentroll: aus 5 Trollen verschmolzen – moosgrüne Steinhaut, zwei Köpfe, Hauer, riesige Steinkeule, Knochenkette
+function drawGiant(ctx, col) {
+  const skin = '#4d5a3a', skinD = '#1e2416', skinL = '#8b9a6a';
+  const skinGrad = (x0, y0, r) => {
+    const g = ctx.createRadialGradient(x0 - r * 0.35, y0 - r * 0.35, r * 0.1, x0, y0, r);
+    g.addColorStop(0, skinL);
+    g.addColorStop(0.55, skin);
+    g.addColorStop(1, skinD);
+    return g;
+  };
+  const limb = (pts, w, fill) => {
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(10,8,6,0.9)';
+    ctx.lineWidth = w + 1.6;
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k][0], pts[k][1]);
+    ctx.stroke();
+    ctx.strokeStyle = fill;
+    ctx.lineWidth = w;
+    ctx.stroke();
+  };
+  // Steinkeule hinter dem Körper, über die Schulter gelegt
+  ctx.save();
+  ctx.translate(-14, -38);
+  ctx.rotate(-0.55);
+  ctx.fillStyle = grad(ctx, -3, 3, '#7a5a3a', '#3a2614');
+  ctx.fillRect(-2.2, -4, 4.4, 26);
+  outline(ctx, 0.7);
+  ctx.fillStyle = grad(ctx, -9, 9, '#a7a39a', '#4b4842');
+  ctx.beginPath();
+  ctx.moveTo(-6, -4);
+  ctx.quadraticCurveTo(-10, -14, -6, -22);
+  ctx.quadraticCurveTo(0, -27, 7, -21);
+  ctx.quadraticCurveTo(10, -12, 6, -4);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.9);
+  ctx.fillStyle = '#d6d2c6';
+  for (const [x, y] of [[-6, -12], [6, -10], [0, -24], [-3, -18], [4, -17]]) {
+    ctx.beginPath();
+    ctx.moveTo(x - 1.4, y);
+    ctx.lineTo(x, y - 3);
+    ctx.lineTo(x + 1.4, y);
+    ctx.fill();
+  }
+  ctx.restore();
+  // Säulenbeine mit Steinschienen
+  for (const [hx, fx] of [[-9, -10], [7, 8]]) {
+    limb([[hx, -16], [fx, 3]], 9.5, grad(ctx, fx - 6, fx + 6, skinL, skinD));
+    ctx.fillStyle = grad(ctx, fx - 6, fx + 6, '#9a968c', '#4a4740');
+    ctx.beginPath();
+    ctx.roundRect(fx - 5.5, -8, 11, 6, 2);
+    ctx.fill();
+    outline(ctx, 0.6);
+    ctx.fillStyle = skinD;
+    ctx.beginPath();
+    ctx.ellipse(fx + 1, 5, 6.5, 2.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Breiter Rumpf mit Steinplatten auf den Schultern
+  ctx.fillStyle = skinGrad(0, -34, 28);
+  ctx.beginPath();
+  ctx.moveTo(-13, -13);
+  ctx.quadraticCurveTo(-24, -28, -20, -46);
+  ctx.quadraticCurveTo(-10, -56, 2, -54);
+  ctx.quadraticCurveTo(16, -55, 21, -44);
+  ctx.quadraticCurveTo(24, -26, 12, -13);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 1.3);
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(-8, -42);
+  ctx.quadraticCurveTo(0, -36, 12, -42);
+  ctx.moveTo(1, -37);
+  ctx.quadraticCurveTo(2, -26, 1, -16);
+  ctx.moveTo(-8, -28);
+  ctx.quadraticCurveTo(1, -24, 11, -28);
+  ctx.stroke();
+  // Moosflecken
+  ctx.fillStyle = 'rgba(132,170,70,0.55)';
+  for (const [x, y, r] of [[-15, -38, 3], [14, -30, 2.4], [-6, -20, 2], [9, -48, 2.2]]) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (const sx of [-17, 17]) {
+    ctx.fillStyle = grad(ctx, sx - 7, sx + 7, '#b2ada2', '#55524b');
+    ctx.beginPath();
+    ctx.ellipse(sx, -47, 7.5, 4.5, sx < 0 ? -0.3 : 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    outline(ctx, 0.8);
+  }
+  // Arme: vorne eine geballte Faust
+  limb([[17, -44], [23, -30], [19, -18]], 8.5, grad(ctx, 14, 26, skinL, skinD));
+  ctx.fillStyle = skinGrad(19, -16, 5.5);
+  ctx.beginPath();
+  ctx.arc(19, -16, 5, 0, Math.PI * 2);
+  ctx.fill();
+  outline(ctx, 0.8);
+  limb([[-17, -44], [-21, -40], [-17, -36]], 7.5, grad(ctx, -24, -12, skinL, skinD));
+  // Knochenkette mit Anhänger in Spielerfarbe
+  ctx.strokeStyle = '#3a2a1a';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-11, -48);
+  ctx.quadraticCurveTo(0, -36, 11, -48);
+  ctx.stroke();
+  for (let k = 0; k <= 6; k++) {
+    const t = k / 6;
+    const x = -11 + 22 * t, y = -48 + Math.sin(t * Math.PI) * 9;
+    ctx.fillStyle = '#ece4cf';
+    ctx.beginPath();
+    ctx.ellipse(x, y, 1.1, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = cloth(ctx, -3, 3, col);
+  ctx.beginPath();
+  ctx.moveTo(0, -42);
+  ctx.lineTo(3.2, -37);
+  ctx.lineTo(0, -32);
+  ctx.lineTo(-3.2, -37);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.6);
+  // Lendenschurz in Spielerfarbe mit Steingürtel
+  ctx.fillStyle = grad(ctx, -14, 13, '#8e8a80', '#3f3c36');
+  ctx.fillRect(-14, -17, 27, 4);
+  outline(ctx, 0.6);
+  ctx.fillStyle = cloth(ctx, -13, 12, col);
+  ctx.beginPath();
+  ctx.moveTo(-13, -13);
+  ctx.lineTo(12, -13);
+  ctx.lineTo(9, -2);
+  ctx.lineTo(4, -5);
+  ctx.lineTo(0, 0);
+  ctx.lineTo(-4, -5);
+  ctx.lineTo(-9, -1);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.7);
+  // Zwei Köpfe mit Hauern und glühenden Augen
+  for (const [hx, hy, tilt] of [[-7, -58, -0.25], [8, -59, 0.2]]) {
+    ctx.save();
+    ctx.translate(hx, hy);
+    ctx.rotate(tilt);
+    ctx.fillStyle = skinGrad(0, 0, 8);
+    ctx.beginPath();
+    ctx.moveTo(-6, 4);
+    ctx.quadraticCurveTo(-8, -6, 0, -8);
+    ctx.quadraticCurveTo(8, -6, 6, 4);
+    ctx.quadraticCurveTo(0, 8, -6, 4);
+    ctx.fill();
+    outline(ctx, 0.9);
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-4.5, -2.5);
+    ctx.lineTo(-1, -1.2);
+    ctx.moveTo(4.5, -2.5);
+    ctx.lineTo(1, -1.2);
+    ctx.stroke();
+    ctx.fillStyle = '#ffb020';
+    for (const ex of [-2.6, 2.6]) {
+      ctx.beginPath();
+      ctx.arc(ex, 0, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#f3ecd8';
+    for (const tx of [-3, 3]) {
+      ctx.beginPath();
+      ctx.moveTo(tx - 1, 4);
+      ctx.lineTo(tx + (tx < 0 ? -0.8 : 0.8), 0.2);
+      ctx.lineTo(tx + 1, 4);
+      ctx.fill();
+    }
+    // Horn
+    ctx.fillStyle = grad(ctx, -2, 2, '#e8dcc0', '#7a6a50');
+    ctx.beginPath();
+    ctx.moveTo(-2, -7);
+    ctx.quadraticCurveTo(tilt < 0 ? -6 : 6, -12, tilt < 0 ? -4 : 4, -15);
+    ctx.quadraticCurveTo(0, -11, 2, -7);
+    ctx.fill();
+    outline(ctx, 0.5);
+    ctx.restore();
+  }
+  shine(ctx, -12, -46, 3, 6, 0.18);
+}
+
 function drawTroll(ctx, col) {
   const skin = '#363d48', skinD = '#14171c', skinL = '#6c7787';
   const skinGrad = (x0, y0, r) => {

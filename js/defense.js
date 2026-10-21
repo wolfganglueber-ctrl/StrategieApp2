@@ -9,8 +9,8 @@ export const DEFENSE = {
   waves: 30,
   every: 2, // Runden zwischen zwei Wellen
   firstWave: 2,
-  income: { food: 10, wood: 8, ore: 8, mana: 0 },
-  start: { food: 60, wood: 80, ore: 60, mana: 0 },
+  income: { food: 10, wood: 8, ore: 8, mana: 2 },
+  start: { food: 60, wood: 80, ore: 60, mana: 10 },
   loot: 1 / 3, // Anteil vom Kaufpreis eines besiegten Gegners
 };
 export const DEFENSE_DIFFS = [
@@ -34,7 +34,7 @@ export function createDefenseGame({ seed, diff = 1 }) {
   state.players[1].res = { food: 0, wood: 0, ore: 0, mana: 0 };
   state.defense = {
     diff, wave: 0, nextWave: DEFENSE.firstWave, gates: findGates(state, seed),
-    known: {}, mods: {}, lootMult: 1, income: { ...DEFENSE.income }, choices: null, picked: [], queue: [], loot: { food: 0, wood: 0, ore: 0 },
+    known: {}, mods: {}, lootMult: 1, income: { ...DEFENSE.income }, choices: null, picked: [], queue: [], loot: { food: 0, wood: 0, ore: 0, mana: 0 },
   };
   return state;
 }
@@ -140,6 +140,7 @@ function cardPool(state) {
     if (['rider', 'knight', 'griffin', 'warrior'].includes(t) && !m(t).move) cards.push({ kind: 'mod', type: t, stat: 'move', val: 1, title: `${name} +1 Bewegung`, w: 1 });
   }
   for (const k of ['food', 'wood', 'ore']) cards.push({ kind: 'income', res: k, val: 3, title: `+3 ${{ food: 'Nahrung', wood: 'Holz', ore: 'Erz' }[k]} pro Runde`, w: 2 });
+  cards.push({ kind: 'income', res: 'mana', val: 2, title: '+2 Mana pro Runde', w: 1.5 });
   cards.push({ kind: 'loot', val: 0.25, title: 'Beute +25 %', w: 1.5 });
   cards.push({ kind: 'res', val: { wood: 40, ore: 40 }, title: 'Sofort +40 Holz und +40 Erz', w: 1.5 });
   cards.push({ kind: 'res', val: { food: 60 }, title: 'Sofort +60 Nahrung', w: 1.2 });
@@ -235,7 +236,7 @@ modeHooks.afterAction = (state) => {
     const type = k.type;
     const got = {};
     for (const [k, v] of Object.entries(UNITS[type].cost)) {
-      if (!RES.includes(k) || k === 'mana') continue;
+      if (!RES.includes(k)) continue;
       got[k] = Math.ceil(v * DEFENSE.loot * d.lootMult);
       state.players[0].res[k] += got[k];
       d.loot[k] = (d.loot[k] || 0) + got[k];

@@ -6,7 +6,7 @@ import {
   incomeOf, realmYield, boostedYield, cityBaseYield, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, flankers, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, terrainDefense,
-  canBoost, boostMax, rankXpNeed, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, canStorm, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
+  canBoost, boostMax, rankXpNeed, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, canStorm, canFuse, fuseGroup, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
 } from './game.js';
 import { planAction } from './ai.js';
 import { createDefenseGame, DEFENSE, DEFENSE_DIFFS, wavesInfo } from './defense.js';
@@ -17,7 +17,7 @@ import {
   upgradeCost, cityDefense, citySupply, canAfford, RES, BASE_RES, RES_INFO, MANA, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
   RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, MAX_SLOTS, buildingYield, ECO_TECH, ECO_TECH_PCT, PLANT_COST, plantCost, PLANT_KINDS, ECO_BUILDINGS, slotsUsed, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
-  BOOST_ADD, AURA, defenseWords, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
+  BOOST_ADD, AURA, defenseWords, counterMax, FUSE, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
 import { store } from './storage.js';
@@ -661,6 +661,10 @@ function unitNotes(u) {
   if (b.length) notes.push(`⬆ Verbessert: ${b.join(', ')}.`);
   for (const k of u.skills || []) notes.push(`${SKILLS[k].icon} ${SKILLS[k].name}: ${SKILLS[k].desc}.`);
   if (u.iced || u.ice) notes.push('❄️ Vereist.');
+  if (statsOf(S, u).atk > 0) {
+    const cm = counterMax(u.type), left = Math.max(0, cm - (u.cnt || 0));
+    notes.push(`↩ Gegenschläge: ${left} von ${cm} übrig (wieder voll im nächsten eigenen Zug).`);
+  }
   if (u.type === 'dragon') notes.push(stormWait(S, u) ? `🔥 Feuersturm wieder in ${stormWait(S, u)} Runden.` : '🔥 Feuersturm bereit.');
   if (u.sentry) notes.push('💤 Hält Wache.');
   return notes.join(' ');
@@ -713,7 +717,8 @@ function showCombatTip(x, y) {
     el('div', { class: 'tip-title' }, `⚔ ${UNITS[ct.a.type].name} → ${UNITS[ct.t.type].name}`),
     el('div', { class: 'tip-grid' },
       el('div', {}, el('span', {}, 'Schaden'), el('b', { class: c.kill ? 'ok' : 'bad' }, c.kill ? `−${c.dmg} ✖ besiegt` : `−${c.dmg} (bleibt ${ct.t.hp - c.dmg})`)),
-      el('div', {}, el('span', {}, 'Gegenschlag'), el('b', {}, c.kill ? '–' : c.lance ? '– (lange Lanze)' : c.counter ? `−${c.counter}${c.die ? ' ✖ fällt' : ''}` : '–')),
+      el('div', {}, el('span', {}, 'Gegenschlag'), el('b', {}, c.kill ? '–' : c.lance ? '– (lange Lanze)' : c.counter ? `−${c.counter}${c.die ? ' ✖ fällt' : ''}` : c.noCounter ? '– (keine Gegenschläge mehr)' : '–')),
+      c.sweepCounter ? el('div', {}, el('span', {}, 'Gegenschläge daneben'), el('b', {}, `−${c.sweepCounter}`)) : null,
       el('div', {}, el('span', {}, 'Rechnung'), el('b', {}, `${c.atkValue} Angriff × (100 % − ${c.defPct} %) = ${c.dmg}`)),
       c.extra.length ? el('div', {}, el('span', {}, 'Mitgetroffen'), el('b', {}, c.extra.map((h) => `${UNITS[h.unit.type].name} −${h.dmg}`).join(', '))) : null),
     c.atkNotes.length ? el('div', { class: 'tip-desc' }, '⬆ ' + c.atkNotes.join(' · ')) : null,
@@ -1189,10 +1194,10 @@ function attackFx(ev, L, hit, ranged, f) {
     else if (kind === 'gaze' || kind === 'bolt') R.sparks(def.idx, hit, { n: 12, colors: kind === 'gaze' ? ['#d9f99d', '#a3e635'] : ['#f5d0fe', '#c084fc'] });
     else R.sparks(def.idx, hit, { n: 6, colors: ['#e7e5e4', '#a8a29e'], speed: 0.6 });
   } else {
-    const big = t === 'troll' || t === 'griffin';
+    const big = t === 'troll' || t === 'giant' || t === 'griffin';
     R.slash(def.idx, att.idx, hit - 40 * f, t === 'mage' ? '#e9d5ff' : '#fff7d6', big);
     R.sparks(def.idx, hit, { n: big ? 18 : 12 });
-    if (t === 'troll') { R.dust(def.idx, hit, { size: 1.2 }); R.quake(5, 260 * f, hit); }
+    if (t === 'troll' || t === 'giant') { R.dust(def.idx, hit, { size: t === 'giant' ? 1.8 : 1.2 }); R.quake(t === 'giant' ? 8 : 5, 260 * f, hit); }
   }
   if (ev.counter > 0 && !ranged) R.sparks(att.idx, hit + 200 * f, { n: 8 });
   if (ev.killed) R.dust(def.idx, hit + 250 * f, { n: 8 });
@@ -1204,7 +1209,7 @@ function attackFx(ev, L, hit, ranged, f) {
 }
 
 // ---------------------------------------------------------------- Klänge
-const MOVE_SOUND = { rider: 'hooves', knight: 'hooves', catapult: 'wheels', trebuchet: 'wheels', troll: 'stomp', mage: 'glide', dragon: 'wings', basilisk: 'steps' };
+const MOVE_SOUND = { rider: 'hooves', knight: 'hooves', catapult: 'wheels', trebuchet: 'wheels', troll: 'stomp', giant: 'stomp', mage: 'glide', dragon: 'wings', basilisk: 'steps' };
 
 // Stereo-Position eines Feldes: links/rechts am Bildschirm
 function panOf(idx) {
@@ -1218,9 +1223,9 @@ function attackSounds(ev, hitSec, ranged, vol) {
   const pa = panOf(att.idx), pd = panOf(def.idx);
   if (att.type === 'catapult' || att.type === 'trebuchet') sound.play('catapult', { pan: pa, vol });
   else if (ranged) sound.play('bow', { pan: pa, vol });
-  else if (att.type === 'troll' && Math.random() < 0.6) sound.play('roar', { pan: pa, vol });
+  else if ((att.type === 'troll' || att.type === 'giant') && Math.random() < 0.6) sound.play('roar', { pan: pa, vol });
   else if (att.type === 'dragon') sound.play('breath', { pan: pa, vol });
-  const hitSound = att.type === 'catapult' || att.type === 'trebuchet' ? 'boom' : ranged ? 'thunk' : att.type === 'troll' ? 'smash' : att.type === 'mage' || att.type === 'dragon' ? 'hit' : 'clash';
+  const hitSound = att.type === 'catapult' || att.type === 'trebuchet' ? 'boom' : ranged ? 'thunk' : att.type === 'troll' || att.type === 'giant' ? 'smash' : att.type === 'mage' || att.type === 'dragon' ? 'hit' : 'clash';
   sound.play(hitSound, { pan: pd, vol, delay: hitSec });
   if (ev.counter > 0 && !ranged) sound.play('clash', { pan: pa, vol: vol * 0.6, delay: hitSec + 0.2 });
   if (ev.killed || ev.splash?.some((h) => h.killed)) sound.play('fall', { pan: pd, vol, delay: hitSec + 0.15 });
@@ -1495,6 +1500,18 @@ async function playEvent(ev, f, isAI, pan = true) {
       updateHud();
       break;
     }
+    case 'fuse':
+      R.invalidate(true, ev.idx);
+      if (f > 0) {
+        if (isAI === true) await sleep(R.ensureVisible(ev.idx, 220 * f));
+        for (const j of ev.from) { R.ring(j, '#a3e635', 500 * f); if (R.fx) R.projectile(j, ev.idx, 300 * f, 0, 'gaze'); }
+        R.ring(ev.idx, '#84cc16', 900 * f);
+        R.quake(6, 400 * f, 300 * f);
+      }
+      sound.play('roar', { pan: panOf(ev.idx), vol: isAI ? 0.6 : 1 });
+      R.floatText(ev.idx, '🗿 Riesentroll!', '#d9f99d', 1300 * Math.max(f, 0.6));
+      await pause(isAI ? 400 : 250);
+      break;
     case 'wave':
       sound.play(ev.wave % 10 ? 'horn' : 'lowhorn');
       showBanner(`⚔️ Welle ${ev.wave}${ev.wave % 10 ? '' : ' – Boss!'} · ${ev.count} Angreifer`, PLAYER_COLORS[1].main);
@@ -2000,6 +2017,14 @@ function renderPanelContent(panel) {
         el('button', { class: 'btn small' + (u.sentry ? ' active' : ''), onclick: () => act({ type: 'sentry', unitId: u.id }, { after: () => { if (unitById(S, u.id)?.sentry) clearSel(); } }) }, u.sentry ? '💤 Wache beenden' : '💤 Wache halten'));
       actions.append(el('button', { class: 'btn small raze', title: 'Einheit auflösen', onclick: () => doDisband(u) }, '🗑 Entlassen'));
       actions.append(el('button', { class: 'btn small primary', title: 'Angriff, Verteidigung, Leben und Fähigkeiten nur dieser Einheit verbessern', onclick: () => openBoost(u) }, '⬆ Verbessern'));
+      if (u.type === 'troll') {
+        const n = S.units.filter((o) => o !== u && o.owner === u.owner && o.type === 'troll' && getGeoOf().dist(o.idx, u.idx) <= FUSE.dist).length;
+        actions.append(el('button', {
+          class: 'btn small merge', disabled: !canFuse(S, u),
+          title: `5 Trolle verschmelzen zum Riesentroll (die anderen 4 höchstens ${FUSE.dist} Felder entfernt, ${MANA.fuse} Mana). Der Riesentroll hat das Leben aller fünf und trifft mit dem Rundumschlag alle Gegner daneben.`,
+          onclick: () => act({ type: 'fuse', unitId: u.id }),
+        }, `🗿 Riesentroll (${Math.min(n + 1, FUSE.count)}/${FUSE.count}) · ${MANA.fuse}`, icon('mana')));
+      }
       if (u.type === 'dragon') {
         const w = stormWait(S, u);
         actions.append(el('button', { class: 'btn small merge', disabled: !canStorm(S, u), title: `Großangriff: überfliegt 4 Felder samt Nachbarn und setzt alles in Brand (alle 3 Runden, ${MANA.storm} Mana)`, onclick: () => { sel.magic = 'storm'; sel.stormTo = null; refresh(); } }, w ? `🔥 Feuersturm (in ${w} R.)` : `🔥 Feuersturm · ${MANA.storm}`, icon('mana')));
@@ -2162,7 +2187,7 @@ function gameOver() {
     store.setDefenseBest(meta.diff, won ? DEFENSE.waves : Math.max(0, w - 1));
     const lt = S.defense.loot;
     children.push(el('p', {}, won ? `Alle ${DEFENSE.waves} Wellen abgewehrt (${DEFENSE_DIFFS[meta.diff].name})!` : `Die Burg ist gefallen – Welle ${w} von ${DEFENSE.waves}.`));
-    children.push(el('p', { class: 'muted' }, `Beute: ${lt.food || 0} Nahrung, ${lt.wood || 0} Holz, ${lt.ore || 0} Erz · Karten: ${S.defense.picked.length}`));
+    children.push(el('p', { class: 'muted' }, `Beute: ${lt.food || 0} Nahrung, ${lt.wood || 0} Holz, ${lt.ore || 0} Erz, ${lt.mana || 0} Mana · Karten: ${S.defense.picked.length}`));
   } else if (meta.mode === 'level') {
     const level = getLevels().find((l) => l.id === meta.levelId);
     const stars = won ? starsFor(level, S.turn) : 0;
@@ -2428,7 +2453,7 @@ function renderHelp() {
     <h3>Angreifen</h3>
     <p>Wählst du eine Einheit, zeigen rote Felder alle Ziele – auch solche, die sie erst nach dem Ziehen erreicht. Die Blase über dem Ziel nennt den Schaden (↩ = Gegenschlag, ✖ = Ziel wird besiegt). Ein Tipp auf das Ziel greift an; ist es noch zu weit weg, zieht die Einheit vorher auf das beste Feld (Fernkämpfer halten Abstand).
     Nahkämpfer rücken nach einem Sieg auf das Feld vor – außer sie stehen in einer Stadt, dann bleiben sie dort.<br>
-    <b>Schaden:</b> Angriff × (100 % − Verteidigung des Ziels), gerundet, mindestens 1 – unabhängig vom aktuellen Leben. Beispiel: Ritter (Angriff 7) gegen Krieger (20 % gegen Nahkampf) = 7 × 0,8 = 6. Der Gegenschlag rechnet genauso mit dem Angriff des Verteidigers. Die Blase über dem Ziel zeigt das Ergebnis, langes Drücken (PC: Maus darüber) die Rechnung.<br>
+    <b>Schaden:</b> Angriff × (100 % − Verteidigung des Ziels), gerundet, mindestens 1 – unabhängig vom aktuellen Leben. Beispiel: Ritter (Angriff 7) gegen Krieger (20 % gegen Nahkampf) = 7 × 0,8 = 6. Der Gegenschlag rechnet genauso mit dem Angriff des Verteidigers. Jede Einheit schlägt bis zu ihrem nächsten eigenen Zug höchstens 2-mal zurück (Trolle und Riesentrolle 3-mal) – danach kann man sie ohne Gegenschlag angreifen. Die Blase über dem Ziel zeigt das Ergebnis, langes Drücken (PC: Maus darüber) die Rechnung.<br>
     <b>Verteidigung</b> hängt von der Angriffsart ab (Nahkampf, Fernkampf, Wucht, Feuer/Magie) – in der Einheitenbeschreibung steht, wogegen eine Einheit robust oder anfällig ist (z. B. halten Katapulte und Trolle Pfeilen stand). Dazu kommen Zuschläge: Stadt +20 %, mit Mauer +40 % (Steinmetz +50 %), Burgfelder +30 % (Burgausbau +40 %) – gegen Wucht nur halb –, Schutzaura +15 %, Rang, Entwicklung und Verbesserungen. Höchstens 80 %.<br>
     <b>Durchschlag 🗡</b> senkt die Verteidigung des Ziels um so viele Prozentpunkte. Ihn gibt es nicht von Anfang an, sondern als Einzel-Verbesserung (10 / 20 / 30) und durch die Spezialisierungen Belagerer (gegen Städte und Bauwerke) und Jäger (gegen Reiterei und Titanen).</p>
     <h3>Städte</h3>
@@ -2477,6 +2502,8 @@ function renderHelp() {
     <p>Katapulte sind Belagerungswaffen (Wucht): Türme und Wälle haben dagegen keine Verteidigung, und Stadt- und Burgboni zählen nur halb. Sie treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Gegenmittel: Reiter und Ritter, denn Katapulte haben keine Verteidigung und können nach einer Bewegung nicht schießen. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +1 Angriff (Schlachtordnung +2, höchstens 3 Nachbarn): Einkesseln lohnt sich.</p>
     <h3>Schwarzer Troll</h3>
     <p>Ein Titan für das späte Spiel: viel Leben und harte Schläge, kann ebenfalls Ränge sammeln. Er kostet viel und braucht eine Trollhöhle (Stadt ab Stufe 3). Höchstens 5 pro Reich.</p>
+    <h3>🗿 Riesentroll</h3>
+    <p>Stehen 5 eigene Trolle beisammen (die anderen 4 höchstens ${FUSE.dist} Felder vom gewählten Troll entfernt), verschmelzen sie für ${MANA.fuse} Mana zu einem Riesentroll: Wähle einen Troll und tippe „🗿 Riesentroll“. Er hat das Leben aller fünf zusammen (bis ${UNITS.giant.hp}), Angriff ${UNITS.giant.atk} und zieht ${UNITS.giant.move} Felder (1 weniger als ein Troll). Sein Rundumschlag trifft bei jedem Angriff alle Gegner auf den 6 Nachbarfeldern gleichzeitig – jeder davon darf zurückschlagen. Er behält den höchsten Rang der fünf, Einzel-Verbesserungen gehen verloren. Er zählt als ein Troll für die Höchstzahl.</p>
     <h3>Einheiten-Entwicklung ⬆</h3>
     <p>Im Forschungsfenster gibt es neben Militär, Wirtschaft und Verteidigung die Reiter <b>Nahkämpfer</b>, <b>Fernkämpfer</b>, <b>Zauberer</b>, <b>Katapulte</b> und <b>Titanen</b>. Dort wählst du eine Einheit und entwickelst sie in 5 Stufen weiter – das gilt sofort für alle Einheiten dieses Typs, auch für die schon aufgestellten. Auf Stufe 3 entscheidest du dich für eine von zwei Richtungen (z. B. Ritter → Chevalier mit extralanger Lanze oder Schwerer Ritter; Tribok → explosive Geschosse oder Riesenkugeln). So spezialisierst du dein Heer auf wenige starke Einheiten.</p>
     <p>Jede Stufe sieht man: goldene Steine am Sockel zählen die Stufen, neue Ausrüstung (Helm, Lanze, größerer Schild, zweites Schwert, Brandpfeile, Sprengbomben …), ab Stufe 4 schwarze Rüstung und auf Stufe 5 eine goldene Aura.</p>

@@ -7,7 +7,7 @@ import {
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, terrainDefense, hitDamage, unitRange, unitCap, canRecruit,
   spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, unitUpOptions, unitUpList, canBuild, canPetrify,
-  canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage, canTerraform, cityTiles, cityYield,
+  canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage, canTerraform, cityTiles, cityYield, canFuse, sweepTargets,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -199,8 +199,18 @@ function attackScore(state, ctx, P, u, t, from) {
       gain += (Math.min(h.dmg, h.unit.hp) / ctx.st(h.unit).hp) * hv * 1.2 + (h.dmg >= h.unit.hp ? hv + 3 : 0);
     }
   }
-  let loss = (Math.min(r.counter, u.hp) / UT.hp) * uv;
-  if (r.die) loss += uv + 2;
+  // Rundumschlag: alle Gegner daneben zählen mit, ihre Gegenschläge auch
+  let counter = r.counter;
+  if (UNITS[u.type].sweep) {
+    for (const o of sweepTargets(state, u, t, from)) {
+      const ro = computeCombat(state, u, o, from);
+      const ov = baseValue(o);
+      gain += (Math.min(ro.dmg, o.hp) / ctx.st(o).hp) * ov * 1.2 + (ro.kill ? ov + 3 : 0);
+      counter += ro.counter;
+    }
+  }
+  let loss = (Math.min(counter, u.hp) / UT.hp) * uv;
+  if (r.die || counter >= u.hp) loss += uv + 2;
   return { score: gain - loss * P.lossW, r };
 }
 
@@ -558,6 +568,9 @@ export function planAction(state, rng = Math.random) {
     memory.econ = 0;
   }
   const ctx = buildContext(state, pid, P);
+
+  // 5 Trolle beisammen und 50 Mana: zum Riesentroll verschmelzen
+  for (const u of ctx.mine) if (u.type === 'troll' && canFuse(state, u)) return { type: 'fuse', unitId: u.id };
 
   let best = null;
   for (const u of ctx.mine) {

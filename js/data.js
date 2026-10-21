@@ -10,7 +10,7 @@ export const RES_INFO = {
   mana: { name: 'Mana', short: 'Mana' },
 };
 // Mana: Traubenhaine mit Kelterei und Turm der Weisen (+1); Zauberkosten je Einsatz
-export const MANA = { grape: 1, press: 2, sanctum: 1, freeze: 3, bomb: 4, areaheal: 2, storm: 8 };
+export const MANA = { grape: 1, press: 2, sanctum: 1, freeze: 3, bomb: 4, areaheal: 2, storm: 8, fuse: 50 };
 
 // Gelände liefert Rohstoffe, wenn es im Gebiet einer eigenen Stadt liegt und dort das passende Gebäude steht (n: Felder-Wert, Gebirge 2).
 // Bewegung: alles passierbar außer Gebirge und Wasser.
@@ -28,7 +28,7 @@ export const ATK_TYPES = { melee: 'Nahkampf', ranged: 'Fernkampf', siege: 'Wucht
 export const ATK_TYPE = {
   warrior: 'melee', rider: 'melee', defender: 'melee', knight: 'melee', griffin: 'melee',
   archer: 'ranged', tower: 'ranged',
-  catapult: 'siege', trebuchet: 'siege', troll: 'siege',
+  catapult: 'siege', trebuchet: 'siege', troll: 'siege', giant: 'siege',
   dragon: 'magic', mage: 'magic', basilisk: 'magic', barrier: 'melee',
 };
 // Verteidigung in Prozent je Angriffsart des Angreifers: Schaden = Angriff × (100 % − Verteidigung)
@@ -44,6 +44,7 @@ export const DEF_TABLE = {
   mage: { melee: 10, ranged: 10, siege: 0, magic: 40 },
   basilisk: { melee: 30, ranged: 40, siege: 20, magic: 20 },
   troll: { melee: 30, ranged: 50, siege: 10, magic: 20 },
+  giant: { melee: 30, ranged: 50, siege: 10, magic: 20 },
   dragon: { melee: 50, ranged: 0, siege: 30, magic: 60 },
   tower: { melee: 30, ranged: 50, siege: 0, magic: 30 },
   barrier: { melee: 60, ranged: 70, siege: 0, magic: 50 },
@@ -67,7 +68,8 @@ export const UNITS = {
   knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 7, def: 0, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
   tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 4, def: 0, move: 0, range: 1, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
   mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5, mana: 3 }, upkeep: { food: 2, mana: 1 }, hp: 10, atk: 2, def: 0, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben +15 % Verteidigung, Flächenschaden halbiert. Heilt statt anzugreifen, bis 3 Felder weit. Kostet Mana und 1 Mana Unterhalt pro Runde. Höchstens einer pro Stadt.' },
-  troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 12, def: 0, move: 4, range: 1, supply: 3, perRealm: 5, needs: 'lair', desc: 'Ein Titan: viel Leben und harte Schläge. Braucht eine Trollhöhle, höchstens 5 pro Reich.' },
+  troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 12, def: 0, move: 4, range: 1, supply: 3, perRealm: 5, counters: 3, needs: 'lair', desc: 'Ein Titan: viel Leben und harte Schläge. Braucht eine Trollhöhle, höchstens 5 pro Reich.' },
+  giant: { name: 'Riesentroll', cost: { food: 90, wood: 50, ore: 100 }, hp: 350, atk: 20, def: 0, move: 3, range: 1, supply: 3, sweep: true, counters: 3, fused: true, desc: 'Aus 5 Trollen verschmolzen (50 Mana): Leben aller fünf zusammen. Sein Rundumschlag trifft alle Gegner auf den 6 Nachbarfeldern auf einmal. Zieht 1 Feld weniger als ein Troll.' },
   dragon: { name: 'Drache', cost: { food: 150, wood: 150, ore: 150 }, hp: 120, atk: 25, def: 0, move: 5, range: 1, supply: 3, perRealm: 1, flying: true, line: [0.75, 0.5], needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten. Sein Feueratem trifft auch die Gegner auf den 2 Feldern hinter dem Ziel (75 % und 50 %). Nur einer pro Reich.' },
   barrier: { name: 'Steinwall', cost: { wood: 6, ore: 14 }, hp: 50, atk: 0, def: 0, move: 0, range: 0, structure: true, desc: 'Sehr stabiles Wallstück, blockiert den Weg. Im Stadtgebiet setzen; benachbarte Wallstücke verbinden sich zu einer Mauer und lenken den Gegner.' },
   basilisk: { name: 'Basilisk', cost: { food: 18, wood: 8, ore: 16 }, hp: 28, atk: 6, def: 0, move: 3, range: 2, supply: 2, perRealm: 2, petrify: true, needs: 'nest', desc: 'Versteinernder Blick aus 2 Feldern: Das Ziel setzt seinen nächsten Zug aus und schlägt nicht zurück (Troll und Drache sind immun). Höchstens 2 pro Reich.' },
@@ -83,6 +85,7 @@ export const UNIT_COST_FIXED = {
   knight: { food: 20, wood: 10, ore: 12 },
   griffin: { food: 25, wood: 12, ore: 15 },
   catapult: { wood: 25, ore: 25 },
+  giant: { food: 180, wood: 100, ore: 200 }, // nur für Wert und Verbesserungskosten, entsteht durch Verschmelzen
 };
 for (const k of Object.keys(UNITS)) {
   if (UNIT_COST_FIXED[k]) UNITS[k].cost = { ...UNIT_COST_FIXED[k] };
@@ -133,9 +136,17 @@ export const PERK_CHOICES = {
   trebuchet: [['siege', 'hunter'], ['tough', 'swift']],
   mage: [['greatheal', 'wideaura'], ['tough', 'swift']],
   troll: [['rampage', 'tough'], ['siege', 'charge']],
+  giant: [['rampage', 'tough'], ['siege', 'charge']],
   basilisk: [['hunter', 'tough'], ['swift', 'siege']],
   dragon: [['fire', 'tough', 'swift'], ['siege', 'charge', 'hunter']],
 };
+// Gegenschläge: jede Einheit schlägt bis zu ihrem nächsten eigenen Zug nur so oft zurück (Titanen 3-mal)
+export const COUNTERS = 2;
+export function counterMax(type) {
+  return UNITS[type]?.counters ?? COUNTERS;
+}
+// Riesentroll: 5 Trolle verschmelzen, die anderen 4 stehen höchstens so weit weg
+export const FUSE = { count: 5, dist: 2 };
 export const PERK_RANKS = [2, 3, 4];
 export const FLANK_BONUS = 1; // +1 Angriff je weiterem eigenen Nachbarn am Ziel (Schlachtordnung: +2)
 export const FLANK_MAX = 3;

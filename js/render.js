@@ -12,7 +12,7 @@ const DEPTH = HEX * 0.3;
 const MARGIN = HEX * 1.4;
 const GREY = '#8d8a85';
 const FIG = 1.3; // Figurengröße relativ zum Feld
-const BIG = { dragon: 1.6 }; // der Drache ragt über die Nachbarfelder
+const BIG = { dragon: 1.6, giant: 1.35 }; // der Drache ragt über die Nachbarfelder
 // Größe der Stadtgrafik je Stufe: Dorf und Siedlung klein, Städte wachsen mit jeder Stufe
 const CITY_SCALE = [1, 1, 1.3, 1.6, 1.8, 1.95];
 const CHUNK = 512; // Kachelgröße für den Geländepuffer (Weltpixel)
