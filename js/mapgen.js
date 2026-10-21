@@ -109,6 +109,9 @@ function generateTerrain(rng, cols, rows, biome) {
   return { terrain, landCount: bestSize };
 }
 
+// Mindestabstand zwischen zwei Städten (4 freie Felder dazwischen)
+export const CITY_GAP = 5;
+
 function placeCities(rng, geo, terrain, players, villageDensity) {
   const land = [];
   for (let i = 0; i < geo.n; i++) {
@@ -122,7 +125,7 @@ function placeCities(rng, geo, terrain, players, villageDensity) {
 
   // Hauptstädte: möglichst großer Mindestabstand, mindestens 2 Felder vom Kartenrand (volles Gebiet mit 2 Ringen)
   const inner = land.filter((i) => { const c = geo.col(i), r = geo.row(i); return c > 1 && r > 1 && c < geo.cols - 2 && r < geo.rows - 2; });
-  const minCapDist = Math.max(4, Math.floor(Math.sqrt(geo.n) * (players === 2 ? 0.75 : 0.55)));
+  const minCapDist = Math.max(CITY_GAP, Math.floor(Math.sqrt(geo.n) * (players === 2 ? 0.75 : 0.55)));
   // Wertung: alle Hauptstädte innen (volles Gebiet) mit Abstand ≥ 5 (Gebiete überlappen nicht) geht vor dem großen Mindestabstand,
   // danach möglichst weit auseinander
   const isInner = new Set(inner);
@@ -133,16 +136,16 @@ function placeCities(rng, geo, terrain, players, villageDensity) {
     let md = Infinity;
     for (let a = 0; a < players; a++) for (let b = a + 1; b < players; b++) md = Math.min(md, geo.dist(pick[a], pick[b]));
     const nIn = pick.filter((i) => isInner.has(i)).length;
-    const s = (md >= minCapDist ? 100 : md >= 5 ? 60 : 0) + (nIn === players ? 60 : nIn * 5) + Math.min(md, 5) * 4 + md * 0.3 + rng.float() * 0.5;
+    const s = (md >= minCapDist ? 100 : md >= CITY_GAP ? 60 : 0) + (nIn === players ? 60 : nIn * 5) + Math.min(md, CITY_GAP) * 4 + md * 0.3 + rng.float() * 0.5;
     if (s > capScore) { capScore = s; caps = pick; capDistMin = md; }
   }
-  if (capDistMin < Math.min(minCapDist, 5)) return null;
+  if (capDistMin < Math.min(minCapDist, CITY_GAP)) return null;
 
   const cities = caps.map((idx) => ({ idx, owner: -1, level: 1, capital: true }));
   const capDist = caps.map((c) => bfsDistances(geo, terrain, [c]));
 
   const target = Math.max(players, Math.round(land.length / villageDensity));
-  // Städte haben 2 Felder Gebiet: immer mindestens 4 Felder Abstand zu jeder anderen Stadt (auch zu Hauptstädten).
+  // Städte haben 2 Felder Gebiet: zwischen zwei Städten liegen immer mindestens 4 freie Felder (Abstand 5), Gebiete überlappen nie.
   // Zufällige Reihenfolge wie bisher, aber mehrere Durchgänge: der mit den meisten Dörfern (bis zum Ziel) gewinnt
   let bestV = [];
   for (let pass = 0; pass < 24 && bestV.length < target; pass++) {
@@ -150,7 +153,7 @@ function placeCities(rng, geo, terrain, players, villageDensity) {
     const vs = [];
     for (const i of cand) {
       if (vs.length >= target) break;
-      if (cities.some((c) => geo.dist(c.idx, i) < 4) || vs.some((c) => geo.dist(c.idx, i) < 4)) continue;
+      if (cities.some((c) => geo.dist(c.idx, i) < CITY_GAP) || vs.some((c) => geo.dist(c.idx, i) < CITY_GAP)) continue;
       vs.push({ idx: i, owner: -1, level: 1, capital: false });
     }
     if (vs.length > bestV.length) bestV = vs;

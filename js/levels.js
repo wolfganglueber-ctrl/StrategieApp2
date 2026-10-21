@@ -4,7 +4,7 @@ import { MAP_SIZES } from './data.js';
 const WORLDS = [
   {
     name: 'Grünland', biomes: ['plains', 'mixed'],
-    sizes: 'S S S M M M M L L L', ai: ['1', '1', '1', '1', '2', '1', '2', '2', '1,1', '2,2'],
+    sizes: 'M M M M M M M L L L', ai: ['1', '1', '1', '1', '2', '1', '2', '2', '1,1', '2,2'],
   },
   {
     name: 'Tiefe Wälder', biomes: ['forest', 'forest', 'mixed'],

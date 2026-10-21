@@ -731,23 +731,14 @@ export function startTurn(state) {
       }
     }
   }
-  // Heilung für Einheiten, die letzte Runde geruht haben
+  // Heilung von selbst nur noch durch einzeln gekaufte Verbesserungen (Selbstheilung, Spezialisierung Zäh);
+  // sonst heilen nur Zauberer – kein Ausruhen, keine Stadtheilung mehr
   for (const u of state.units) {
     if (u.owner !== pid) continue;
     const max = statsOf(state, u).hp;
-    // Trolle und zähe Einheiten heilen jede Runde, alle anderen nur nach einer Ruhepause
-    const always = (UNITS[u.type].regen || 0) + (hasPerk(u, 'tough') ? 2 : 0) + upMod(state, u, 'regen') + (hasSkill(u, 'regen') ? Math.ceil(max / 10) : 0);
-    if ((!u.acted || always) && u.hp < max) {
-      let h = always;
-      if (!u.acted) {
-        let inTerritory = false;
-        for (const j of geo.within(u.idx, 1)) {
-          const c = cityOn(state, j);
-          if (c && c.owner === pid) { inTerritory = true; break; }
-        }
-        h += (inTerritory ? 4 : 2) + (hasTech(state, pid, 'medic') ? 2 : 0);
-      }
-      h = Math.min(max - u.hp, h);
+    const always = (hasPerk(u, 'tough') ? 2 : 0) + (hasSkill(u, 'regen') ? Math.ceil(max / 10) : 0);
+    if (always && u.hp < max) {
+      const h = Math.min(max - u.hp, always);
       u.hp += h;
       ev.push({ k: 'heal', id: u.id, idx: u.idx, amount: h });
     }
@@ -811,7 +802,7 @@ export function inAura(state, u, idx = u.idx) {
 
 // Heilen: Zauberer heilt eine eigene Einheit bis 3 Felder entfernt (statt anzugreifen)
 export function healAmount(state, u) {
-  return HEAL.base + (hasTech(state, u.owner, 'blessing') ? HEAL.blessing : 0) + (hasPerk(u, 'greatheal') ? 3 : 0);
+  return HEAL.base + (hasTech(state, u.owner, 'medic') ? 2 : 0) + (hasTech(state, u.owner, 'blessing') ? HEAL.blessing : 0) + (hasPerk(u, 'greatheal') ? 3 : 0);
 }
 export function needsHeal(state, healer, t) {
   return t.hp < statsOf(state, t).hp;
@@ -905,7 +896,8 @@ export function applyAction(state, a) {
         state.units = state.units.filter((x) => x !== t);
         state.stats.kills[pid]++;
         state.stats.losses[t.owner]++;
-        if (UNITS[u.type].range === 1 && !isStructure(u) && !castleBlocked(state, t.idx, pid)) {
+        // Nahkämpfer rücken nach – außer sie stehen in einer Stadt (dann halten sie sie)
+        if (UNITS[u.type].range === 1 && !isStructure(u) && !cityOn(state, u.idx) && !castleBlocked(state, t.idx, pid)) {
           e.advance = t.idx;
           u.idx = t.idx;
           u.walked = true;

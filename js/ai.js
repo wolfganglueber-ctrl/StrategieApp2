@@ -198,8 +198,7 @@ function attackScore(state, ctx, P, u, t, from) {
 function evaluateUnit(state, ctx, P, u, pid, rng) {
   const options = [];
   const stayBase = positionScore(state, ctx, P, u, u.idx, u.hp, pid);
-  const healBonus = canMove(u) && u.hp < ctx.st(u).hp ? 0.6 : 0;
-  options.push({ score: stayBase + healBonus, actions: [] });
+  options.push({ score: stayBase, actions: [] }); // Stehenbleiben heilt nicht mehr
 
   const froms = [];
   if (canAttack(u)) froms.push(u.idx);

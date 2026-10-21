@@ -1,5 +1,5 @@
 // Service Worker: offline spielbar. "Netzwerk zuerst", damit neue Versionen sofort ankommen.
-const CACHE = 'hexkrone-v79';
+const CACHE = 'hexkrone-v80';
 const ASSETS = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
   'js/main.js', 'js/render.js', 'js/input.js', 'js/game.js', 'js/ai.js', 'js/data.js', 'js/hex.js',
