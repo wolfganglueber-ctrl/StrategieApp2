@@ -85,6 +85,13 @@ Versionsverlauf (neueste zuerst):
 - Geräusche (js/audio.js): alles per Web Audio erzeugt, keine Dateien, offline. Effekte für Bewegung (Schritte, Hufe, Räder, Troll, Drachenflügel), Kampf (Klingen, Bogen per Saitenmodell, Katapult mit Holzknarzen und Geröll-Einschlag, Feueratem, Fall), Heilen, Bauen, Rekrutieren, Eroberung, Ränge, Sieg/Niederlage; Umgebung je nach Kartenausschnitt (Meer, Bach/See, Wind, Vögel, Stadt mit Schmied; keine Glocke mehr). Einstellbar: Geräusche An/Aus, Umgebung Aus/Leise/Normal/Laut.
 - Tests (`npm test`) laufen grün; `node tools/stats.mjs [spiele] [stufe] [größe]` zählt Einheiten und Fähigkeiten in KI-Partien.
 
+# Ursprung der Kampfwerte (Backup)
+Startwerte und Kampfformel (Commit e094f32, 16.10.) stammen aus dem Vorbild *The Battle of Polytopia*:
+- Einheiten (Leben/Angriff/Verteidigung/Bewegung/Preis in Sternen): Krieger 10/2/2/1/2, Schütze 10/2/1/1 R2/3, Reiter 10/2/1/2/3, Wächter 15/1/3/1/3, Ritter 15/3/1/3/7, Katapult 10/4/0/1 R3/7.
+- Formel: Angriffskraft = Angriff × Leben/MaxLeben; Verteidigungskraft = Verteidigung × Leben/MaxLeben × Geländebonus; Schaden = Angriffskraft/(Angriffskraft+Verteidigungskraft) × Angriff × 4,5; Gegenschlag spiegelbildlich mit Verteidigung.
+- Später: Werte ×4 und Faktor 1,125 (0.57, ganze Zahlen), Preise auf Nahrung/Holz/Erz verteilt und ×2 (`UNIT_PRICE`), neue Einheiten frei daran bemessen, Feinschliff per KI-Simulation (`npm run sim`) und Rückmeldungen.
+- Spielregeln/Zahlen sind i. d. R. nicht urheberrechtlich geschützt; vor kommerziellem Start trotzdem kurz prüfen lassen (siehe Erinnerungsliste).
+
 # Arbeitsweise (Wunsch von Wolfgang)
 - **Immer erst fragen, bevor Code geschrieben oder Simulationen (sim) gestartet werden.** Kurz sagen, was geplant ist und was es kostet (Tests, Build, Veröffentlichen), dann auf Freigabe warten.
 - Tipps zum sparsamen Nutzen des Nutzungslimits:
