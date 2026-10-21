@@ -444,11 +444,11 @@ export const PLAYER_COLORS = [
 export const NEUTRAL_COLOR = { name: 'Neutral', main: '#9a9286', dark: '#5b554c', light: '#e3ddd2' };
 
 export const DIFFICULTIES = [
-  { level: 1, name: 'Anfänger', desc: 'Lässt dich etwa 16 Runden in Ruhe, holt sich Dörfer nur langsam, forscht kaum und macht viele Fehler.' },
-  { level: 2, name: 'Leicht', desc: 'Etwa 11 Runden Schonfrist, gemächliche Ausbreitung, wenig Forschung.' },
+  { level: 1, name: 'Anfänger', desc: 'Lässt dich etwa 16 Runden in Ruhe, erobert höchstens 3 Städte, forscht kaum und macht viele Fehler.' },
+  { level: 2, name: 'Leicht', desc: 'Etwa 11 Runden Schonfrist, erobert höchstens 5 Städte, wenig Forschung.' },
   { level: 3, name: 'Normal', desc: 'Etwa 7 Runden Schonfrist, achtet auf Gefahren und Fokusfeuer, baut Wirtschaft und Forschung solide aus.' },
-  { level: 4, name: 'Schwer', desc: 'Nur 3 Runden Schonfrist, breitet sich zügig aus, forscht eifrig, macht selten Fehler.' },
-  { level: 5, name: 'Meister', desc: 'Keine Schonfrist, schnappt sich Dörfer früh, forscht und baut maximal, spielt fehlerfrei.' },
+  { level: 4, name: 'Schwer', desc: 'Nur 3 Runden Schonfrist, breitet sich zügig aus, baut aus und forscht eifrig, macht selten Fehler, +15 % Rohstoffe.' },
+  { level: 5, name: 'Meister', desc: 'Keine Schonfrist, schnappt sich Dörfer früh, forscht und baut maximal, spielt fehlerfrei, +30 % Rohstoffe.' },
   { level: 6, name: 'Kaiser', desc: 'Wie Meister, mit größerer Armee und +50 % Rohstoffen.' },
 ];
 

@@ -13,13 +13,14 @@ import { bfsDistances } from './mapgen.js';
 
 // calm: so viele Runden greift die KI menschliche Spieler nicht an (außer bei Gefahr für eigene Städte)
 // expand: wie gierig sie neutrale Dörfer einsammelt · tech: wie eifrig sie forscht
+// commit: wie entschlossen Verteidiger einer Zielstadt angegriffen werden · maxCities/maxTech: Obergrenzen der leichten Stufen
 export const AI_PARAMS = {
-  1: { noise: 6, mistake: 0.35, risk: 0, lossW: 0.3, smart: false, upgrade: 0.1, guard: 0, idle: 0.3, calm: 16, expand: 0.35, tech: 0.15 },
-  2: { noise: 3, mistake: 0.15, risk: 0.3, lossW: 0.6, smart: false, upgrade: 0.25, guard: 0.5, idle: 0.12, calm: 11, expand: 0.55, tech: 0.35 },
-  3: { noise: 2, mistake: 0.07, risk: 0.6, lossW: 0.9, smart: true, upgrade: 0.45, guard: 0.8, idle: 0.03, calm: 7, expand: 0.8, tech: 0.55 },
-  4: { noise: 0.5, mistake: 0.02, risk: 0.9, lossW: 1, smart: true, upgrade: 0.85, guard: 0.95, idle: 0, calm: 3, expand: 1.1, tech: 0.85, armyCap: 1.15 },
-  5: { noise: 0.4, mistake: 0, risk: 0.95, lossW: 1, smart: true, upgrade: 0.85, guard: 1, idle: 0, calm: 0, expand: 1.2, tech: 0.9, armyCap: 1.35, aggr: 1.6, boost: true },
-  6: { noise: 0.4, mistake: 0, risk: 0.95, lossW: 1, smart: true, upgrade: 0.85, guard: 1, idle: 0, calm: 0, expand: 1.3, tech: 0.9, armyCap: 1.5, aggr: 1.6, boost: true },
+  1: { noise: 6, mistake: 0.35, risk: 0, lossW: 0.3, smart: false, upgrade: 0.1, guard: 0, idle: 0.3, calm: 16, expand: 0.35, tech: 0.15, armyCap: 0.7, commit: 0.6, maxCities: 3, maxTech: 2 },
+  2: { noise: 3, mistake: 0.2, risk: 0.3, lossW: 0.6, smart: false, upgrade: 0.25, guard: 0.5, idle: 0.15, calm: 11, expand: 0.55, tech: 0.35, armyCap: 0.85, commit: 0.8, maxCities: 5, maxTech: 4 },
+  3: { noise: 2, mistake: 0.1, risk: 0.6, lossW: 0.9, smart: true, upgrade: 0.45, guard: 0.8, idle: 0.05, calm: 7, expand: 0.8, tech: 0.55, commit: 1, maxTech: 9 },
+  4: { noise: 0.5, mistake: 0.02, risk: 0.9, lossW: 1, smart: true, upgrade: 0.85, guard: 0.95, idle: 0, calm: 3, expand: 1.1, tech: 0.85, armyCap: 1.15, commit: 1.2, saveTech: true },
+  5: { noise: 0.4, mistake: 0, risk: 0.95, lossW: 1, smart: true, upgrade: 0.85, guard: 1, idle: 0, calm: 0, expand: 1.2, tech: 0.9, armyCap: 1.35, aggr: 1.6, boost: true, commit: 1.4, saveTech: true },
+  6: { noise: 0.4, mistake: 0, risk: 0.95, lossW: 1, smart: true, upgrade: 0.85, guard: 1, idle: 0, calm: 0, expand: 1.3, tech: 0.9, armyCap: 1.5, aggr: 1.6, boost: true, commit: 1.4, saveTech: true },
 };
 
 const memory = { key: '', done: new Set() };
@@ -51,11 +52,13 @@ function buildContext(state, pid, P) {
   const spared = (owner) => calm && owner >= 0 && state.players[owner]?.human;
   const nearOwn = (idx) => ownCities.some((c) => geo.dist(c.idx, idx) <= 2);
   const enemies = state.units.filter((u) => u.owner !== pid && (!vis || vis[u.idx]) && (!spared(u.owner) || nearOwn(u.idx)));
-  const targetCities = state.cities.filter((c) => c.owner !== pid && !spared(c.owner));
+  // Leichte Stufen erobern nur bis zu einer Obergrenze an Städten
+  const full = ownCities.length >= (P.maxCities ?? 99);
+  const targetCities = full ? [] : state.cities.filter((c) => c.owner !== pid && !spared(c.owner));
 
   // Teure Felder nur einmal pro Zug berechnen
-  if (memory.ctxKey !== memory.key + (calm ? 'c' : '')) {
-    memory.ctxKey = memory.key + (calm ? 'c' : '');
+  if (memory.ctxKey !== memory.key + (calm ? 'c' : '') + (full ? 'f' : '')) {
+    memory.ctxKey = memory.key + (calm ? 'c' : '') + (full ? 'f' : '');
     memory.distCity = bfsDistances(geo, state.terrain, targetCities.map((c) => c.idx));
     memory.distEnemy = bfsDistances(geo, state.terrain, enemies.map((u) => u.idx));
     const threat = new Array(geo.n);
@@ -182,6 +185,11 @@ function attackScore(state, ctx, P, u, t, from) {
   if (UNITS[u.type].petrify && !r.kill && canPetrify(t)) gain += Math.min(baseValue(t) * 0.3, 8);
   if (r.kill) gain += dv + 3;
   const tc = cityOn(state, t.idx);
+  // Verteidiger einer Zielstadt: jeder Treffer bringt die Eroberung näher (sonst umkreist die KI starke Wächter nur)
+  if (tc && ctx.targetCities.includes(tc)) {
+    const cityVal = 6 + tc.level * 2 + (tc.capital ? 6 : 0);
+    gain += (1 + (Math.min(r.dmg, t.hp) / DT.hp) * cityVal + (r.kill ? cityVal * 0.5 : 0)) * (P.commit ?? 1);
+  }
   if (tc && tc.owner === u.owner) gain += r.kill ? 8 : 3; // Besetzer aus eigener Stadt werfen
   if (tc && tc.capital && tc.owner === u.owner) gain += r.kill ? 6 : 2;
   if (UNITS[u.type].splash || UNITS[u.type].line) {
@@ -274,7 +282,8 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
   const options = UNIT_ORDER.filter((k) => !canRecruit(state, pid, ci, k));
   if (!options.length) return null;
   if (!P.smart) {
-    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, griffin: 0.5, catapult: 0.5, trebuchet: 0.5, mage: 0.5, basilisk: 1, troll: 3, dragon: 3 };
+    const walls = ctx.enemies.filter((e) => e.type === 'defender' || UNITS[e.type].structure).length;
+    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, griffin: 0.5, catapult: 0.5 + Math.min(walls, 4) * 0.6, trebuchet: 0.5, mage: 0.5, basilisk: 1, troll: 3, dragon: 3 };
     if (ctx.mine.filter((u) => u.type === 'catapult' || u.type === 'trebuchet').length >= Math.max(1, Math.floor(ctx.mine.filter((u) => !UNITS[u.type].structure).length / 4))) w.catapult = w.trebuchet = 0;
     return weightedPick(options, (k) => w[k], rng);
   }
@@ -315,6 +324,10 @@ function weightedPick(list, wf, rng) {
     if (r <= 0) return k;
   }
   return list[list.length - 1];
+}
+
+function cityIdxOf(state, c) {
+  return state.cityAt[c.idx];
 }
 
 function cityYieldSum(state, ci, territory) {
@@ -383,7 +396,15 @@ function economyAction(state, ctx, P, pid, rng) {
     ? ctx.ownCities.filter((c) => c.level < CITY_MAX_LEVEL && (ctx.cityDanger.get(c.idx) || 0) < 4).sort((x, y) => x.level - y.level)[0] : null;
   const upCost = upCity && upgradeCostOf(state, upCity);
   const saveUp = !!upCost && res.wood >= upCost.wood * 0.7 && res.ore >= upCost.ore * 0.7 && res.food < upCost.food;
-  const capped = starving || saveUp || unitCount(state, pid) >= unitCap(state, pid) * (P.armyCap || 1) + (totalDanger > 6 ? 2 : 0);
+  // Schwere Stufen investieren, sobald ihre Armee mithalten kann: erst Stadtausbau, dann Wirtschaftsforschung
+  const invest = P.saveTech && totalDanger <= 10 && myArmy >= maxEnemyArmy * 0.9 && ctx.mine.length >= ctx.ownCities.length + 1;
+  const nextEco = invest && ctx.ownCities.length >= 2 ? ['plough', 'mining', 'saw'].find((t) => techAvailable(state, pid, t)) : null;
+  const investUp = invest ? ctx.ownCities.filter((c) => c.level < CITY_MAX_LEVEL && (ctx.cityDanger.get(c.idx) || 0) < 4)
+    .sort((x, y) => x.level - y.level || cityYieldSum(state, cityIdxOf(state, y), ctx.territory) - cityYieldSum(state, cityIdxOf(state, x), ctx.territory))[0] : null;
+  if (investUp && canAfford(res, upgradeCostOf(state, investUp))) { memory.ctxKey = ''; return { type: 'upgrade', idx: investUp.idx }; }
+  if (nextEco && canAfford(res, TECHS[nextEco].cost)) return { type: 'research', tech: nextEco };
+  const saveTech = !!(investUp || nextEco);
+  const capped = starving || saveUp || saveTech || unitCount(state, pid) >= unitCap(state, pid) * (P.armyCap || 1) + (totalDanger > 6 ? 2 : 0);
   const wantArmy = !capped && (ctx.mine.length < ctx.ownCities.length + 2 || myArmy < maxEnemyArmy * 0.9 || totalDanger > 6);
   const cityIdx = (c) => state.cityAt[c.idx];
 
@@ -481,7 +502,7 @@ function economyAction(state, ctx, P, pid, rng) {
     }
   }
   // Forschung, wenn Rohstoffe übrig sind (Eifer je nach Stufe)
-  if ((P.tech ?? P.upgrade) > 0 && !saveTroll && rng() < (P.tech ?? P.upgrade)) {
+  if ((P.tech ?? P.upgrade) > 0 && !saveTroll && player.tech.length < (P.maxTech ?? 99) && rng() < (P.tech ?? P.upgrade)) {
     const resSum = res.food + res.wood + res.ore;
     // Wirtschaftsforschung (+50 % aufs Reich) lohnt sich erst mit mehreren Städten
     const eco = ctx.ownCities.length >= 3 ? ['plough', 'mining', 'saw'] : [];

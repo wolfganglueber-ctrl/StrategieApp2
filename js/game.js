@@ -10,6 +10,8 @@ import {
 import { generateMap } from './mapgen.js';
 
 export const STATE_VERSION = 6;
+// Rohstoffbonus der Computergegner je Stufe: Schwer +15 %, Meister +30 %, Kaiser +50 %
+export const AI_INCOME_BONUS = { 4: 0.15, 5: 0.3, 6: 0.5 };
 
 /*
  config: { seed, cols, rows, biome, players: [{ human: bool, ai: 1..6, name? }], levelId?, villageDensity?, fog? }
@@ -33,7 +35,7 @@ export function createGame(config) {
       human: !!p.human,
       ai: p.ai || 3,
       res: { ...START_RES },
-      incomeBonus: p.incomeBonus ?? (!p.human && p.ai >= 6 ? 0.5 : 0),
+      incomeBonus: p.incomeBonus ?? (!p.human ? AI_INCOME_BONUS[p.ai] || 0 : 0),
       alive: true,
       tech: [],
     })),
