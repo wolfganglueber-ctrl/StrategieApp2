@@ -168,6 +168,19 @@ const t0 = Date.now();
   check(cs[0] > 0 && cs[1] > 0 && cs[2] === 0, `Gegenschlag nur 2-mal (${cs})`);
   check(computeCombat(s, mk(20, 'warrior', 0, a0), { ...tgt, type: 'troll', cnt: 2 }).counter > 0, 'Troll schlägt 3-mal zurück');
 }
+// Startbalance: Wächter in einer Siedlung ohne Mauer (15 Leben) – 3 Krieger oder 2 Reiter + Schütze in 2 Runden, 6 Krieger in 1 Runde
+{
+  const s = createGame({ seed: 7, cols: 16, rows: 21, biome: 'plains', players: [{ ai: 3 }, { ai: 3 }] });
+  const v = s.cities.find((c) => !c.capital && !c.castle && !(c.buildings || []).includes('wall'));
+  const geo = getGeo(s.cols, s.rows);
+  const mk = (id, type, owner, idx) => ({ id, type, owner, idx, hp: UNITS[type].hp, rank: 1, xp: 0, moved: false, attacked: false });
+  const w = mk(1, 'defender', 1, v.idx);
+  const dmg = (type, idx) => { const a = mk(2, type, 0, idx); s.units = [w, a]; return computeCombat(s, a, w).dmg; };
+  const nb = geo.nb[v.idx][0], far = geo.within(v.idx, 2).find((j) => geo.dist(j, v.idx) === 2);
+  const dW = dmg('warrior', nb), dR = dmg('rider', nb), dA = dmg('archer', far);
+  check(6 * dW >= 15 && 4 * dW < 15, `Wächter in Siedlung: Krieger ${dW}`);
+  check(4 * dR + 2 * dA >= 15 && 4 * dR < 15, `Wächter in Siedlung: Reiter ${dR}, Schütze ${dA}`);
+}
 // Riesentroll: 5 Trolle verschmelzen, Rundumschlag trifft alle Nachbarn
 {
   const s = createGame({ seed: 6, cols: 14, rows: 16, biome: 'plains', players: [{ ai: 3 }, { ai: 3 }] });

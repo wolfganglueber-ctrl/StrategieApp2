@@ -35,8 +35,8 @@ export const ATK_TYPE = {
 export const DEF_TABLE = {
   warrior: { melee: 20, ranged: 20, siege: 10, magic: 10 },
   archer: { melee: 10, ranged: 10, siege: 0, magic: 0 },
-  rider: { melee: 10, ranged: 20, siege: 0, magic: 0 },
-  defender: { melee: 50, ranged: 50, siege: 20, magic: 20 },
+  rider: { melee: 10, ranged: 0, siege: 0, magic: 0 },
+  defender: { melee: 30, ranged: 40, siege: 20, magic: 20 },
   knight: { melee: 20, ranged: 30, siege: 10, magic: 10 },
   griffin: { melee: 15, ranged: 0, siege: 40, magic: 10 },
   catapult: { melee: 0, ranged: 50, siege: 0, magic: 0 },
@@ -62,8 +62,8 @@ export function defenseWords(type) {
 export const UNITS = {
   warrior: { name: 'Krieger', cost: { food: 5, ore: 2 }, hp: 10, atk: 5, def: 0, move: 2, range: 1, desc: 'Günstig und solide.' },
   archer: { name: 'Schütze', cost: { food: 3, wood: 5 }, hp: 10, atk: 4, def: 0, move: 2, range: 2, desc: 'Greift aus 2 Feldern Entfernung an.' },
-  rider: { name: 'Reiter', cost: { food: 6, wood: 2 }, hp: 10, atk: 4, def: 0, move: 3, range: 1, desc: 'Schnell – ideal zum Erobern von Dörfern.' },
-  defender: { name: 'Wächter', cost: { food: 3, ore: 5 }, hp: 15, atk: 2, def: 0, move: 2, range: 1, desc: 'Starke Verteidigung, schwacher Angriff.' },
+  rider: { name: 'Reiter', cost: { food: 6, wood: 2 }, hp: 10, atk: 5, def: 0, move: 3, range: 1, desc: 'Schnell – ideal zum Erobern von Dörfern, stark gegen Schützen, anfällig für Pfeile.' },
+  defender: { name: 'Wächter', cost: { food: 3, ore: 5 }, hp: 15, atk: 2, def: 0, move: 2, range: 1, desc: 'Hält Siedlungen gegen einzelne Angreifer, schwacher Angriff. Robuster gegen Pfeile als gegen Nahkampf.' },
   griffin: { name: 'Greifenreiter', cost: { food: 12, wood: 4, ore: 9 }, hp: 15, atk: 7, def: 0, move: 3, range: 1, flying: true, needs: 'barracks', desc: 'Ritter auf einem Greifen: Werte wie ein Ritter, fliegt aber über Berge, Seen und eigene Einheiten. Teurer als der Ritter, braucht eine Kaserne.' },
   knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 7, def: 0, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
   tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 4, def: 0, move: 0, range: 1, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
@@ -81,7 +81,8 @@ export const UNITS = {
 export const UNIT_PRICE = 2;
 // Feste Endpreise (Nahrung, Holz, Erz), werden nicht verdoppelt
 export const UNIT_COST_FIXED = {
-  defender: { food: 10, wood: 10, ore: 10 },
+  defender: { food: 8, ore: 8 },
+  rider: { food: 12, wood: 6 },
   knight: { food: 20, wood: 10, ore: 12 },
   griffin: { food: 25, wood: 12, ore: 15 },
   catapult: { wood: 25, ore: 25 },
