@@ -34,4 +34,5 @@ Aufbau:
 - Kleine, abgeschlossene Änderungen, nach jeder Änderung testen.
 - Bestehenden Code-Stil beibehalten.
 - Die Entwicklung läuft vom Handy aus: Das Repo ist die einzige Wahrheit, nichts bleibt nur lokal.
+- **Rückfragen immer als Auswahl:** Fragen an Wolfgang stellen mit dem Auswahl-Dialog (AskUserQuestion), je Frage eine eigene Abfrage mit 2–4 Optionen samt kurzer Erklärung, empfohlene Option zuerst mit „(Empfohlen)“, „Sonstiges“ für freie Antworten kommt automatisch. Vergleiche und Zahlen davor als Tabelle zeigen. Keine offenen Fragen als Fließtext.
 - Lies zu Sitzungsbeginn NOTES.md. Aktualisiere NOTES.md vor Sitzungsende, committe und pushe.
