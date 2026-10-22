@@ -384,8 +384,9 @@ export const CITY_NAMES = ['', 'Dorf', 'Stadt', 'Metropole', 'Residenzstadt', 'K
 export const ECO_TECH = { food: 'plough', wood: 'saw', ore: 'mining' };
 export const ECO_TECH_PCT = 0.5;
 export const START_RES = { food: 6, wood: 36, ore: 4, mana: 0 };
-// Startguthaben für den Menschen gegen leichte KI (maßgeblich ist der stärkste Gegner)
-export const START_BONUS = { 1: { food: 40, wood: 20, ore: 20 }, 2: { food: 20, ore: 10 } };
+// Startguthaben für den Menschen gegen leichte KI (maßgeblich ist der stärkste Gegner) – vorerst abgeschaltet,
+// erst werden die Stufen ohne Bonus abgestimmt (z. B. { 1: { food: 40, wood: 20, ore: 20 }, 2: { food: 20, ore: 10 } })
+export const START_BONUS = {};
 export const TRADE_RATE = 3;
 export const TRADE_RATE_GUILD = 2;
 
@@ -473,12 +474,12 @@ export const PLAYER_COLORS = [
 export const NEUTRAL_COLOR = { name: 'Neutral', main: '#9a9286', dark: '#5b554c', light: '#e3ddd2' };
 
 export const DIFFICULTIES = [
-  { level: 1, name: 'Anfänger', desc: 'Nimmt sich ein Dorf und verteidigt sich, greift dich erst nach etwa 30 Runden zaghaft an. Nur einfache Einheiten. Du startest mit +40 Nahrung, +20 Holz, +20 Erz.' },
-  { level: 2, name: 'Leicht', desc: 'Etwa 18 Runden Schonfrist, höchstens 4 Städte, wenig Ausbau und Forschung, dazu Ritter und Katapulte. Du startest mit +20 Nahrung, +10 Erz.' },
+  { level: 1, name: 'Anfänger', desc: 'Nimmt sich ein Dorf und verteidigt sich, greift dich erst nach etwa 30 Runden zaghaft an. Nur einfache Einheiten.' },
+  { level: 2, name: 'Leicht', desc: 'Etwa 18 Runden Schonfrist, höchstens 4 Städte, wenig Ausbau und Forschung, dazu Ritter und Katapulte.' },
   { level: 3, name: 'Normal', desc: 'Etwa 10 Runden Schonfrist, höchstens 7 Städte, baut und forscht solide, nutzt Greifen, Zauberer und Triböcke, entwickelt Einheiten gelegentlich.' },
   { level: 4, name: 'Schwer', desc: 'Nur 5 Runden Schonfrist, höchstens 10 Städte, baut und forscht eifrig, dazu Basilisken und Trolle, verbessert Einheiten gezielt.' },
-  { level: 5, name: 'Meister', desc: 'Kaum Schonfrist, erobert ohne Grenze, alle Einheiten inkl. Drache, verbessert viel, spielt fast fehlerfrei, +25 % Rohstoffe.' },
-  { level: 6, name: 'Kaiser', desc: 'Wie Meister, ohne Schonfrist, mit größerer Armee und +50 % Rohstoffen.' },
+  { level: 5, name: 'Meister', desc: 'Kaum Schonfrist, erobert ohne Grenze, alle Einheiten inkl. Drache, verbessert viel, spielt fast fehlerfrei.' },
+  { level: 6, name: 'Kaiser', desc: 'Wie Meister, ohne Schonfrist und mit größerer Armee.' },
 ];
 
 // Kleinste Karte ist „Riesig“ (Klein, Mittel, Groß gibt es nicht mehr)

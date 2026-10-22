@@ -489,7 +489,7 @@ function economyAction(state, ctx, P, pid, rng) {
     }
   }
   // Türme in bedrohten Städten
-  if (P.smart) {
+  if (P.smart && !P.noTowers) {
     for (const c of ctx.ownCities) {
       const danger = ctx.cityDanger.get(c.idx) || 0;
       if (danger < 6) continue;
@@ -571,7 +571,8 @@ function economyAction(state, ctx, P, pid, rng) {
 // Liefert die nächste Aktion für den aktuellen KI-Spieler.
 export function planAction(state, rng = Math.random) {
   const pid = state.current;
-  const P = AI_PARAMS[state.players[pid].ai] || AI_PARAMS[3];
+  // Spieler-Bots für die Abstimmung (tools/simbots.mjs) bringen eigene Werte mit
+  const P = state.players[pid].params || AI_PARAMS[state.players[pid].ai] || AI_PARAMS[3];
   const key = state.gameId + ':' + state.turn + ':' + pid;
   if (memory.key !== key) {
     memory.key = key;

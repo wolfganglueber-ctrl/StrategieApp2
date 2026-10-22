@@ -3,9 +3,10 @@ import { createGame, applyAction, cloneState, computeCombat, statsOf, spawnUnit,
 import { getGeo } from '../js/hex.js';
 import { planAction } from '../js/ai.js';
 import { getLevels } from '../js/levels.js';
-import { MAP_SIZES, BIOMES, UNITS, buildingYield } from '../js/data.js';
+import { MAP_SIZES, BIOMES, UNITS, buildingYield, START_BONUS } from '../js/data.js';
 import { mulberry32 } from '../js/rng.js';
 import { createDefenseGame, waveUnits } from '../js/defense.js';
+import { BOTS, BOT_ORDER } from './bots.mjs';
 
 let fails = 0;
 function check(cond, msg) {
@@ -185,7 +186,8 @@ const t0 = Date.now();
 {
   const cfg = (ai) => ({ seed: 11, cols: 16, rows: 21, biome: 'plains', players: [{ human: true }, { ai }] });
   const r = (ai, pl = 0) => createGame(cfg(ai)).players[pl].res;
-  check(r(1).food - r(3).food === 40 && r(1).ore - r(3).ore === 20 && r(2).food - r(3).food === 20 && r(2).ore - r(3).ore === 10, 'Startguthaben Stufe 1/2');
+  // Startguthaben ist vorerst abgeschaltet (START_BONUS leer)
+  check(r(1).food - r(3).food === (START_BONUS[1]?.food || 0) && r(2).ore - r(3).ore === (START_BONUS[2]?.ore || 0), 'Startguthaben Stufe 1/2');
   check(r(1, 1).food === r(3, 1).food, 'KI ohne Startguthaben');
 }
 // Türme: Einzel-Verbesserung und Bauarten
@@ -281,6 +283,16 @@ check(waveUnits(30, 1, mulberry32(1)).filter((t) => t === 'dragon').length >= 1,
   for (let k = 0; k < 6; k++) if (applyAction(s, { type: 'boost', unitId: u.id, stat: 'atk' })) ok++;
   check(ok === 5, `Burgverteidigung: Verbesserung bis Stufe 5 (${ok})`);
 }
+
+// Spieler-Bots (für tools/simbots.mjs): kurze Partien gegen Stufe 1 und 4 ohne Regelfehler
+for (const [k, b] of BOT_ORDER.entries()) {
+  const level = k % 2 ? 4 : 1;
+  const s = createGame({ seed: 70 + k, cols: MAP_SIZES.XL.cols, rows: MAP_SIZES.XL.rows, biome: 'mixed', players: [{ human: true }, { ai: level }] });
+  s.players[0].params = BOTS[b].params;
+  playOut(s, mulberry32(k + 3), 15);
+  check(s.cities.some((c) => c.owner === 0), `Bot ${b} hat nach 15 Runden keine Stadt mehr`);
+}
+console.log('Spieler-Bots ohne Regelfehler');
 
 let games = 0;
 for (const size of Object.keys(MAP_SIZES)) {

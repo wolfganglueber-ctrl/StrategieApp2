@@ -10,8 +10,8 @@ import {
 import { generateMap } from './mapgen.js';
 
 export const STATE_VERSION = 6;
-// Rohstoffbonus der Computergegner je Stufe: Schwer +15 %, Meister +30 %, Kaiser +50 %
-export const AI_INCOME_BONUS = { 5: 0.25, 6: 0.5 };
+// Rohstoffbonus der Computergegner je Stufe
+export const AI_INCOME_BONUS = {}; // vorerst kein Rohstoffbonus (z. B. { 5: 0.25, 6: 0.5 }), erst Abstimmung ohne Bonus
 
 // Spielmodus-Erweiterungen: die Burgverteidigung (defense.js) hängt sich hier ein, wenn state.defense gesetzt ist
 export const modeHooks = {};
