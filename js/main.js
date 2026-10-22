@@ -6,7 +6,7 @@ import {
   incomeOf, realmYield, boostedYield, cityBaseYield, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, flankers, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, terrainDefense,
-  canBoost, boostMax, rankXpNeed, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, canStorm, canFuse, fuseGroup, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
+  canBoost, boostMax, boostStats, canTowerKind, rankXpNeed, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, canStorm, canFuse, fuseGroup, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
 } from './game.js';
 import { planAction } from './ai.js';
 import { createDefenseGame, DEFENSE, DEFENSE_DIFFS, wavesInfo } from './defense.js';
@@ -17,7 +17,7 @@ import {
   upgradeCost, cityDefense, citySupply, canAfford, RES, BASE_RES, RES_INFO, MANA, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
   RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, MAX_SLOTS, buildingYield, ECO_TECH, ECO_TECH_PCT, PLANT_COST, plantCost, PLANT_KINDS, ECO_BUILDINGS, slotsUsed, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
-  BOOST_ADD, AURA, defenseWords, counterMax, FUSE, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
+  BOOST_ADD, AURA, defenseWords, counterMax, FUSE, TOWER_BOOST_ADD, TOWER_KINDS, TOWER_KIND_ORDER, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
 import { store } from './storage.js';
@@ -657,7 +657,7 @@ function unitNotes(u) {
     notes.push(r < MAX_RANK ? `${UNITS[u.type].healer ? 'Heilungen' : 'Besiegte Gegner'}: ${u.xp || 0}/${rankXpNeed(S, r + 1)} bis ${RANK_NAMES[r + 1]}.` : 'Höchste Stufe erreicht.');
   }
   for (const p of u.perks || []) notes.push(`${PERKS[p].icon} ${PERKS[p].name}: ${PERKS[p].desc}.`);
-  const b = BOOST_STATS.filter(([k]) => u.boost?.[k]).map(([k, name, ic]) => `${ic} ${name} ${boostText(k, u.boost[k])}`);
+  const b = BOOST_STATS.filter(([k]) => u.boost?.[k]).map(([k, name, ic]) => `${ic} ${name} ${boostText(k, u.boost[k], u.type)}`);
   if (b.length) notes.push(`⬆ Verbessert: ${b.join(', ')}.`);
   for (const k of u.skills || []) notes.push(`${SKILLS[k].icon} ${SKILLS[k].name}: ${SKILLS[k].desc}.`);
   if (u.iced || u.ice) notes.push('❄️ Vereist.');
@@ -810,8 +810,8 @@ function magicTargets(u) {
 }
 
 // Zuschlag einer Verbesserungsstufe als Text: Angriff/Leben/Durchschlag als Zahl, Verteidigung in Prozent
-function boostText(k, lvl) {
-  return `+${BOOST_ADD[k][lvl]}${k === 'def' ? ' %' : ''}`;
+function boostText(k, lvl, type) {
+  return `+${(type === 'tower' ? TOWER_BOOST_ADD : BOOST_ADD)[k][lvl]}${k === 'def' ? ' %' : ''}`;
 }
 
 // Einzel-Verbesserungen einer Einheit: Angriff, Verteidigung, Leben, Durchschlag (je 3 Stufen) und Fähigkeiten
@@ -827,7 +827,7 @@ function openBoost(u0) {
       if (quickAct(a, false)) { draw(); $('modalBox').scrollTop = top; }
     };
     const list = el('div', { class: 'tech-list' });
-    for (const [k, name, ic] of BOOST_STATS) {
+    for (const [k, name, ic] of BOOST_STATS.filter(([k]) => boostStats(u).includes(k))) {
       const lvl = u.boost?.[k] || 0;
       const next = { ...u, boost: { ...(u.boost || {}), [k]: lvl + 1 } };
       const max = boostMax(S);
@@ -837,7 +837,7 @@ function openBoost(u0) {
         el('span', { class: 'ticon' }, ic),
         el('div', { class: 'binfo' },
           el('b', {}, `${name} ${'●'.repeat(lvl)}${'○'.repeat(max - lvl)}`),
-          el('span', {}, k === 'def' ? (lvl < max ? `${boostText(k, lvl + 1)} (Zuschlag ${now} % → ${then} %)` : `${boostText(k, max)}`) : lvl < max ? `${boostText(k, lvl + 1)}: ${now} → ${then}` : `${boostText(k, max)}: ${now}`)),
+          el('span', {}, k === 'def' ? (lvl < max ? `${boostText(k, lvl + 1, u.type)} (Zuschlag ${now} % → ${then} %)` : `${boostText(k, max, u.type)}`) : lvl < max ? `${boostText(k, lvl + 1, u.type)}: ${now} → ${then}` : `${boostText(k, max, u.type)}: ${now}`)),
         lvl >= max ? el('span', { class: 'done' }, '✓')
           : el('button', { class: 'btn small', disabled: !my || !canAfford(p.res, cost), onclick: () => buy({ type: 'boost', unitId: u.id, stat: k }) }, costEl(cost, p.res))));
     }
@@ -854,10 +854,26 @@ function openBoost(u0) {
         have ? el('span', { class: 'done' }, '✓')
           : el('button', { class: 'btn small', disabled: !my || !opts.includes(k) || !canAfford(p.res, cost), onclick: () => buy({ type: 'skill', unitId: u.id, skill: k }) }, costEl(cost, p.res))));
     }
-    openClosable(el('h2', {}, `⬆ ${UNITS[u.type].name} verbessern`),
-      unitCard(u, 'Gilt nur für diese eine Einheit'),
+    // Türme: Bauart statt Fähigkeiten (einmalig ab Turmstufe 2)
+    let extra;
+    if (u.type === 'tower') {
+      extra = el('div', { class: 'tech-list' });
+      for (const k of TOWER_KIND_ORDER) {
+        const K = TOWER_KINDS[k];
+        const have = u.kind === k;
+        extra.append(el('div', { class: 'tech-card' + (have ? ' done' : u.kind || (u.level || 1) < 2 ? ' locked' : '') },
+          el('span', { class: 'ticon' }, K.icon),
+          el('div', { class: 'binfo' }, el('b', {}, K.name), el('span', {}, K.desc), !u.kind && (u.level || 1) < 2 ? el('span', { class: 'muted' }, '🔒 ab Turmstufe 2') : null),
+          have ? el('span', { class: 'done' }, '✓')
+            : u.kind ? null
+              : el('button', { class: 'btn small', disabled: !my || !canTowerKind(S, u, k), onclick: () => buy({ type: 'towerKind', unitId: u.id, kind: k }) }, costEl(K.cost, p.res))));
+      }
+    }
+    openClosable(el('h2', {}, `⬆ ${u.kind ? TOWER_KINDS[u.kind].name : UNITS[u.type].name} verbessern`),
+      unitCard(u, u.type === 'tower' ? 'Gilt nur für diesen einen Turm' : 'Gilt nur für diese eine Einheit'),
       el('h3', {}, 'Werte'), list,
-      el('h3', {}, 'Fähigkeiten'), skills.length ? sk : el('p', { class: 'muted' }, 'Diese Einheit hat keine Fähigkeiten – nur Werte lassen sich verbessern.'),
+      ...(u.type === 'tower' ? [el('h3', {}, 'Bauart (einmalig wählbar)'), extra]
+        : [el('h3', {}, 'Fähigkeiten'), skills.length ? sk : el('p', { class: 'muted' }, 'Diese Einheit hat keine Fähigkeiten – nur Werte lassen sich verbessern.')]),
       el('button', { class: 'btn big', onclick: closeModal }, 'Schließen'));
     $('modalBox').classList.add('wide');
   };
@@ -1478,7 +1494,7 @@ async function playEvent(ev, f, isAI, pan = true) {
     case 'boost':
       if (f > 0) R.ring(ev.idx, '#fde047', 500 * f);
       sound.play('chime', { pan: panOf(ev.idx), vol: isAI ? 0.3 : 1 });
-      R.floatText(ev.idx, `${BOOST_STATS.find((b) => b[0] === ev.stat)[2]} ${boostText(ev.stat, ev.level)}`, '#fde68a', 1000 * Math.max(f, 0.6));
+      R.floatText(ev.idx, `${BOOST_STATS.find((b) => b[0] === ev.stat)[2]} ${boostText(ev.stat, ev.level, ev.type)}`, '#fde68a', 1000 * Math.max(f, 0.6));
       break;
     case 'skill':
       if (f > 0) R.ring(ev.idx, '#fde047', 500 * f);
@@ -1500,6 +1516,13 @@ async function playEvent(ev, f, isAI, pan = true) {
       updateHud();
       break;
     }
+    case 'towerKind':
+      R.sprites = new Map(); // neues Aussehen
+      R.invalidate(true, ev.idx);
+      if (f > 0) R.ring(ev.idx, '#fde047', 600 * f);
+      sound.play('hammer', { pan: panOf(ev.idx), vol: isAI ? 0.5 : 1 });
+      R.floatText(ev.idx, `${TOWER_KINDS[ev.kind].icon} ${TOWER_KINDS[ev.kind].name}`, '#fde68a', 1200 * Math.max(f, 0.6));
+      break;
     case 'fuse':
       R.invalidate(true, ev.idx);
       if (f > 0) {
@@ -1679,7 +1702,7 @@ function rankText(u) {
 }
 
 function unitCard(u, subtitle) {
-  const name = u.type === 'tower' ? `Turm · Stufe ${u.level}` : UNITS[u.type].structure ? UNITS[u.type].name : `${UNITS[u.type].name} · ${rankText(u)}`;
+  const name = u.type === 'tower' ? `${u.kind ? TOWER_KINDS[u.kind].name : 'Turm'} · Stufe ${u.level}` : UNITS[u.type].structure ? UNITS[u.type].name : `${UNITS[u.type].name} · ${rankText(u)}`;
   return el('div', { class: 'unit-card' },
     iconCanvas(u.type, u.owner, 48, u.level),
     el('div', { class: 'uc-main' },
@@ -2044,6 +2067,9 @@ function renderPanelContent(panel) {
           el('span', { class: 'muted' }, `Ausbau auf Stufe ${u.level + 1}: ${nx.hp} Leben, Angriff ${fmt(nx.atk)}, Reichweite ${nx.range}`),
           el('button', { class: 'btn small primary', disabled: !canAfford(S.players[S.current].res, cost), onclick: () => act({ type: 'towerUp', unitId: u.id }) }, costEl(cost, S.players[S.current].res))));
       } else panel.append(el('div', { class: 'note' }, 'Höchste Turmstufe erreicht.'));
+      if (u.kind) panel.append(el('div', { class: 'note' }, `${TOWER_KINDS[u.kind].icon} ${TOWER_KINDS[u.kind].name}: ${TOWER_KINDS[u.kind].desc}.`));
+      panel.append(el('div', { class: 'unit-actions' },
+        el('button', { class: 'btn small primary', title: 'Leben, Angriff, Verteidigung und Bauart nur dieses Turms verbessern', onclick: () => openBoost(u) }, (u.level || 1) >= 2 && !u.kind ? '⬆ Verbessern · Bauart wählbar' : '⬆ Verbessern')));
     }
     if (isStructure(u) && u.owner === S.current) {
       panel.append(el('div', { class: 'upgrade-row' },
@@ -2476,6 +2502,7 @@ function renderHelp() {
     <p>Eroberung: Der Bergfried lässt sich erst betreten, wenn auf den 6 Burgfeldern kein Verteidiger mehr steht. Die letzte Burg fällt also nur nach einer großen Schlacht.</p>
     <h3>Türme</h3>
     <p>Im Reiter „Gebäude“ einer Stadt baust du Türme auf ein freies Feld im Stadtgebiet (bis zu ${TOWERS_PER_CITY} pro Stadt, in der Burg 6). Türme bewegen sich nicht, greifen aber Gegner direkt daneben an (ab Stufe 3 bis 2 Felder weit) und lassen sich in 3 Stufen ausbauen – der Ausbau ist teuer: tippe den Turm an. Hat ein Turm in deinem Zug noch nicht geschossen, feuert er beim Zugende automatisch auf das lohnendste Ziel (sichtbar animiert; in den Einstellungen abschaltbar).</p>
+    <p><b>Türme einzeln verbessern:</b> Tippe den Turm an und dann „⬆ Verbessern“: Leben (+4/+8/+12), Angriff (+1/+2/+3) und Verteidigung (+5/+10/+15 %) je 3 Stufen. Ab Turmstufe 2 wählst du einmalig eine Bauart: ${TOWER_KIND_ORDER.map((k) => `${TOWER_KINDS[k].icon} <b>${TOWER_KINDS[k].name}</b> (${TOWER_KINDS[k].desc})`).join(', ')}.</p>
     <h3>Steinwälle 🧱</h3>
     <p>Im Reiter „Gebäude“ einer Stadt setzt du Steinwälle auf freie Felder bis 2 Felder um die Stadt (bis zu 6 pro Stadt). Sie sind sehr stabil (50 Leben, Verteidigung 24), greifen nicht an, versperren aber den Weg: Gegner müssen sie umgehen oder mühsam einreißen – ideal, um Angreifer in die Reichweite deiner Türme und Schützen zu lenken. Nebeneinander gesetzte Wallstücke verbinden sich zu einer Mauer. Katapulte und Belagerer sind gegen sie besonders wirksam.</p>
     <h3>Forschung 🔬</h3>
@@ -2580,4 +2607,4 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !loc
 }
 
 // Für Tests/Debugging
-window.__hex = { get state() { return S; }, get sel() { return sel; }, R };
+window.__hex = { get state() { return S; }, get sel() { return sel; }, R, refresh: () => refresh() };

@@ -181,6 +181,42 @@ const t0 = Date.now();
   check(6 * dW >= 15 && 4 * dW < 15, `Wächter in Siedlung: Krieger ${dW}`);
   check(4 * dR + 2 * dA >= 15 && 4 * dR < 15, `Wächter in Siedlung: Reiter ${dR}, Schütze ${dA}`);
 }
+// Startguthaben gegen leichte KI, Stadtausbau 30 % billiger
+{
+  const cfg = (ai) => ({ seed: 11, cols: 16, rows: 21, biome: 'plains', players: [{ human: true }, { ai }] });
+  const r = (ai, pl = 0) => createGame(cfg(ai)).players[pl].res;
+  check(r(1).food - r(3).food === 40 && r(1).ore - r(3).ore === 20 && r(2).food - r(3).food === 20 && r(2).ore - r(3).ore === 10, 'Startguthaben Stufe 1/2');
+  check(r(1, 1).food === r(3, 1).food, 'KI ohne Startguthaben');
+}
+// Türme: Einzel-Verbesserung und Bauarten
+{
+  const s = createGame({ seed: 6, cols: 14, rows: 16, biome: 'plains', players: [{ ai: 3 }, { ai: 3 }] });
+  const geo = getGeo(s.cols, s.rows);
+  const c0 = [...s.terrain.keys()].find((i) => geo.within(i, 2).length === 19 && geo.within(i, 2).every((j) => s.terrain[j] === 'plain' && s.cityAt[j] < 0));
+  s.units = s.units.filter((u) => geo.dist(u.idx, c0) > 4);
+  s.current = 0;
+  s.players[0].res = { food: 999, wood: 999, ore: 999, mana: 999 };
+  const tw = spawnUnit(s, 'tower', 0, c0, true);
+  check(!applyAction(s, { type: 'towerKind', unitId: tw.id, kind: 'cannon' }), 'Bauart erst ab Turmstufe 2');
+  tw.level = 2;
+  tw.hp = statsOf(s, tw).hp;
+  check(applyAction(s, { type: 'boost', unitId: tw.id, stat: 'hp' }) && statsOf(s, tw).hp === 22, `Turm Leben +4 (${statsOf(s, tw).hp})`);
+  check(!applyAction(s, { type: 'boost', unitId: tw.id, stat: 'pen' }), 'Turm ohne Durchschlag');
+  check(applyAction(s, { type: 'towerKind', unitId: tw.id, kind: 'cannon' }) && tw.kind === 'cannon' && statsOf(s, tw).atk === 8, 'Kanonenturm +2 Angriff');
+  check(!applyAction(s, { type: 'towerKind', unitId: tw.id, kind: 'fire' }), 'Bauart nur einmal');
+  const foes = geo.nb[c0].slice(0, 2).map((j) => spawnUnit(s, 'warrior', 1, j, true));
+  const ae = applyAction(s, { type: 'attack', unitId: tw.id, targetId: foes[0].id })[0];
+  check(ae.splash?.length === 1, 'Kanonenturm Flächenschaden');
+  const t2 = spawnUnit(s, 'tower', 0, geo.within(c0, 2).find((j) => geo.dist(j, c0) === 2), true);
+  t2.level = 2;
+  applyAction(s, { type: 'towerKind', unitId: t2.id, kind: 'fire' });
+  const f2 = spawnUnit(s, 'warrior', 1, geo.nb[t2.idx].find((j) => !s.units.some((u) => u.idx === j) && geo.dist(j, c0) > 1), true);
+  applyAction(s, { type: 'attack', unitId: t2.id, targetId: f2.id });
+  const hp0 = f2.hp;
+  check(f2.fire === 2, 'Feuerturm setzt in Brand');
+  applyAction(s, { type: 'end', volley: false });
+  check(!s.units.includes(f2) || f2.hp === hp0 - 2, `Brand 2 Schaden (${hp0} → ${f2.hp})`);
+}
 // Riesentroll: 5 Trolle verschmelzen, Rundumschlag trifft alle Nachbarn
 {
   const s = createGame({ seed: 6, cols: 14, rows: 16, biome: 'plains', players: [{ ai: 3 }, { ai: 3 }] });

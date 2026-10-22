@@ -7,20 +7,26 @@ import {
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, terrainDefense, hitDamage, unitRange, unitCap, canRecruit,
   spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, unitUpOptions, unitUpList, canBuild, canPetrify,
-  canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage, canTerraform, cityTiles, cityYield, canFuse, sweepTargets,
+  canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage, canTerraform, cityTiles, cityYield, canFuse, sweepTargets, canTowerKind, atkKind,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
-// calm: so viele Runden greift die KI menschliche Spieler nicht an (außer bei Gefahr für eigene Städte)
-// expand: wie gierig sie neutrale Dörfer einsammelt · tech: wie eifrig sie forscht
-// commit: wie entschlossen Verteidiger einer Zielstadt angegriffen werden · maxCities/maxTech: Obergrenzen der leichten Stufen
+// Jede Eigenschaft steigt von Stufe 1 bis 6 gleichmäßig an:
+// Eroberung – calm: so viele Runden greift die KI Menschen nicht an (außer bei Gefahr für eigene Städte), maxCities, expand (Gier auf Dörfer)
+// Kampf – mistake, idle, noise (Fehler, Leerlauf, Rauschen), risk/lossW (Vorsicht), aggr, commit (Entschlossenheit gegen Stadtverteidiger)
+// Ausbau – upgrade (Gebäude/Stadtausbau), cityMax (höchste Stadtstufe), tech/maxTech (Forschung)
+// Einheiten – units (erlaubte Typen), unitUp (Einheiten-Entwicklung), boost (Einzel-Verbesserungen, auch Türme), armyCap (Armeegröße)
+const U1 = ['warrior', 'archer', 'rider', 'defender'];
+const U2 = [...U1, 'knight', 'catapult'];
+const U3 = [...U2, 'griffin', 'mage', 'trebuchet'];
+const U4 = [...U3, 'basilisk', 'troll'];
 export const AI_PARAMS = {
-  1: { noise: 6, mistake: 0.35, risk: 0, lossW: 0.3, smart: false, upgrade: 0.1, guard: 0, idle: 0.3, calm: 16, expand: 0.35, tech: 0.15, armyCap: 0.7, commit: 0.6, maxCities: 3, maxTech: 2 },
-  2: { noise: 3, mistake: 0.2, risk: 0.3, lossW: 0.6, smart: false, upgrade: 0.25, guard: 0.5, idle: 0.15, calm: 11, expand: 0.55, tech: 0.35, armyCap: 0.85, commit: 0.8, maxCities: 5, maxTech: 4 },
-  3: { noise: 2, mistake: 0.1, risk: 0.6, lossW: 0.9, smart: true, upgrade: 0.45, guard: 0.8, idle: 0.05, calm: 7, expand: 0.8, tech: 0.55, commit: 1, maxTech: 9 },
-  4: { noise: 0.5, mistake: 0.02, risk: 0.9, lossW: 1, smart: true, upgrade: 0.85, guard: 0.95, idle: 0, calm: 3, expand: 1.1, tech: 0.85, armyCap: 1.15, commit: 1.2, saveTech: true },
-  5: { noise: 0.4, mistake: 0, risk: 0.95, lossW: 1, smart: true, upgrade: 0.85, guard: 1, idle: 0, calm: 0, expand: 1.2, tech: 0.9, armyCap: 1.35, aggr: 1.6, boost: true, commit: 1.4, saveTech: true },
-  6: { noise: 0.4, mistake: 0, risk: 0.95, lossW: 1, smart: true, upgrade: 0.85, guard: 1, idle: 0, calm: 0, expand: 1.3, tech: 0.9, armyCap: 1.5, aggr: 1.6, boost: true, commit: 1.4, saveTech: true },
+  1: { noise: 6, mistake: 0.5, risk: 0, lossW: 0.3, smart: false, upgrade: 0.1, cityMax: 2, guard: 0.3, idle: 0.5, calm: 30, expand: 0.3, tech: 0.1, maxTech: 1, armyCap: 0.5, aggr: 0.5, commit: 0.4, maxCities: 2, units: U1, unitUp: 0, boost: 0 },
+  2: { noise: 3.5, mistake: 0.3, risk: 0.3, lossW: 0.6, smart: false, upgrade: 0.25, cityMax: 3, guard: 0.6, idle: 0.25, calm: 18, expand: 0.55, tech: 0.3, maxTech: 3, armyCap: 0.7, aggr: 0.7, commit: 0.7, maxCities: 4, units: U2, unitUp: 0.1, boost: 0 },
+  3: { noise: 2, mistake: 0.15, risk: 0.6, lossW: 0.9, smart: true, upgrade: 0.45, guard: 0.8, idle: 0.1, calm: 10, expand: 0.8, tech: 0.55, maxTech: 7, armyCap: 0.9, aggr: 1, commit: 1, maxCities: 7, units: U3, unitUp: 0.3, boost: 0.1 },
+  4: { noise: 0.8, mistake: 0.06, risk: 0.85, lossW: 1, smart: true, upgrade: 0.75, guard: 0.95, idle: 0.03, calm: 5, expand: 1.05, tech: 0.8, maxTech: 12, armyCap: 1.1, aggr: 1.2, commit: 1.2, maxCities: 10, units: U4, unitUp: 0.5, boost: 0.25, saveTech: true },
+  5: { noise: 0.4, mistake: 0.02, risk: 0.95, lossW: 1, smart: true, upgrade: 0.9, guard: 1, idle: 0, calm: 2, expand: 1.2, tech: 0.9, armyCap: 1.3, aggr: 1.5, commit: 1.4, unitUp: 0.7, boost: 0.5, saveTech: true },
+  6: { noise: 0.4, mistake: 0, risk: 0.95, lossW: 1, smart: true, upgrade: 1, guard: 1, idle: 0, calm: 0, expand: 1.3, tech: 0.95, armyCap: 1.5, aggr: 1.6, commit: 1.4, unitUp: 0.8, boost: 0.7, saveTech: true },
 };
 
 const memory = { key: '', done: new Set() };
@@ -52,10 +58,10 @@ function buildContext(state, pid, P) {
   const spared = (owner) => calm && owner >= 0 && state.players[owner]?.human;
   const nearOwn = (idx) => ownCities.some((c) => geo.dist(c.idx, idx) <= 2);
   const enemies = state.units.filter((u) => u.owner !== pid && (!vis || vis[u.idx]) && (!spared(u.owner) || nearOwn(u.idx)));
-  // Leichte Stufen erobern nur bis zu einer Obergrenze an Städten
+  // Leichte Stufen sammeln nur bis zu einer Obergrenze neutrale Dörfer ein (Gegner greifen sie nach der Schonfrist trotzdem an)
   const full = ownCities.length >= (P.maxCities ?? 99);
   // Burgverteidigung: die Angreifer wollen nur die Städte des Spielers (vor allem die Burg)
-  const targetCities = full ? [] : state.defense && pid === 1 ? state.cities.filter((c) => c.owner === 0) : state.cities.filter((c) => c.owner !== pid && !spared(c.owner));
+  const targetCities = state.defense && pid === 1 ? state.cities.filter((c) => c.owner === 0) : state.cities.filter((c) => c.owner !== pid && !spared(c.owner) && !(full && c.owner < 0));
 
   // Teure Felder nur einmal pro Zug berechnen
   if (memory.ctxKey !== memory.key + (calm ? 'c' : '') + (full ? 'f' : '')) {
@@ -128,7 +134,7 @@ function expectedDamage(state, ctx, u, idx, hp) {
   for (const e of list) {
     if (!ctx.alive.has(e)) continue;
     const A = ctx.st(e);
-    const kind = ATK_TYPE[e.type] || 'melee';
+    const kind = atkKind(e);
     const pct = Math.max(0, Math.min(DEF_MAX, (DEF_TABLE[u.type]?.[kind] ?? 0) + D.def + (kind === 'siege' ? Math.round(terr / 2) : terr) - A.pen));
     sum += hitDamage(A.atk, pct);
   }
@@ -290,7 +296,7 @@ function actionsFor(u, from, t) {
 
 function chooseRecruit(state, ctx, P, pid, ci, rng) {
   const city = state.cities[ci];
-  const options = UNIT_ORDER.filter((k) => !canRecruit(state, pid, ci, k));
+  const options = UNIT_ORDER.filter((k) => (!P.units || P.units.includes(k)) && !canRecruit(state, pid, ci, k));
   if (!options.length) return null;
   if (!P.smart) {
     const walls = ctx.enemies.filter((e) => e.type === 'defender' || UNITS[e.type].structure).length;
@@ -430,7 +436,7 @@ function economyAction(state, ctx, P, pid, rng) {
   if (P.smart && totalDanger < 8 && ctx.mine.length >= ctx.ownCities.length) {
     for (const [type, b, want] of [['dragon', 'dragonlair', 1], ['troll', 'lair', 2]]) {
       const home = ctx.ownCities.find((c) => hasBuilding(c, b));
-      if (!home || ctx.mine.filter((u) => u.type === type).length >= want) continue;
+      if (!home || (P.units && !P.units.includes(type)) || ctx.mine.filter((u) => u.type === type).length >= want) continue;
       if (!canRecruit(state, pid, cityIdx(home), type)) return { type: 'recruit', idx: home.idx, unitType: type };
       if (type === 'dragon') continue; // viel zu teuer zum gezielten Sparen
       saveTroll = true;
@@ -471,7 +477,7 @@ function economyAction(state, ctx, P, pid, rng) {
     const safe = ctx.ownCities.filter((c) => (ctx.cityDanger.get(c.idx) || 0) < 4);
     // Stadtausbau vor neuen Gebäuden: verdoppelt bzw. verdreifacht den Ertrag (Städte mit viel Ertrag zuerst)
     const ups = safe
-      .filter((c) => c.level < CITY_MAX_LEVEL && canAfford(res, upgradeCostOf(state, c)))
+      .filter((c) => c.level < (P.cityMax ?? CITY_MAX_LEVEL) && canAfford(res, upgradeCostOf(state, c)))
       .sort((a, b) => (a.level - b.level) || (cityYieldSum(state, cityIdx(b), ctx.territory) - cityYieldSum(state, cityIdx(a), ctx.territory)));
     if (ups.length) {
       memory.ctxKey = ''; // Ausbau verschiebt Gebietsgrenzen: Karte neu berechnen
@@ -520,7 +526,7 @@ function economyAction(state, ctx, P, pid, rng) {
     const prio = [...eco, 'bow', 'smith', 'horse', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'plough', 'mining', 'saw', 'stirrups', 'keep', 'tactics', 'granary', 'counterweight', 'siegecart', 'battlements', 'medic', 'enlight', 'blessing', 'guild'].filter((t) => t !== 'guild' || tradeRate(state, pid));
     if (resSum > (wantArmy ? 70 : 35)) {
       // Einheiten-Entwicklung: die meistgenutzten Einheiten gezielt verbessern (abwechselnd mit normaler Forschung)
-      if (P.smart && rng() < 0.5) {
+      if (rng() < (P.unitUp ?? 0)) {
         const counts = {};
         for (const u of ctx.mine) if (UNIT_UPS[u.type]) counts[u.type] = (counts[u.type] || 0) + 1;
         for (const [type] of Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 2)) {
@@ -531,9 +537,15 @@ function economyAction(state, ctx, P, pid, rng) {
       for (const t of prio) {
         if (techAvailable(state, pid, t) && canAfford(res, TECHS[t].cost)) return { type: 'research', tech: t };
       }
-      // Einzel-Verbesserungen (nur Meister und Kaiser): die wertvollsten Einheiten (hoher Rang, Titanen) gezielt stärken
-      if (P.boost && resSum > (wantArmy ? 120 : 60) && rng() < 0.5) {
-        const pick = ctx.mine.filter(canBoost).sort((a, b) => baseValue(b) - baseValue(a)).slice(0, 3);
+      // Einzel-Verbesserungen (ab Stufe 3, mit der Stufe häufiger): die wertvollsten Einheiten und Türme gezielt stärken
+      if (P.boost && resSum > (wantArmy ? 120 : 60) && rng() < P.boost) {
+        // Türme ab Stufe 2 bekommen eine Bauart (meist Kanone oder Bollwerk)
+        const tw = ctx.mine.find((u) => u.type === 'tower' && (u.level || 1) >= 2 && !u.kind);
+        if (tw && rng() < 0.5) {
+          const kind = ['cannon', 'bulwark', 'ballista', 'cannon'][Math.floor(rng() * 4)];
+          if (canTowerKind(state, tw, kind)) return { type: 'towerKind', unitId: tw.id, kind };
+        }
+        const pick = ctx.mine.filter((u) => canBoost(u) && u.type !== 'tower').sort((a, b) => baseValue(b) - baseValue(a)).slice(0, 3);
         for (const u of pick) {
           const sk = skillOptions(u).filter((k) => k !== 'bomb');
           if (sk.length && rng() < 0.4 && canAfford(res, skillCost(u.type))) return { type: 'skill', unitId: u.id, skill: sk[0] };

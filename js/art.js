@@ -2251,6 +2251,152 @@ function drawTowerFigure(ctx, col, level) {
   ctx.restore();
 }
 
+// Bauart des Turms: Kanone, Balliste, Eisenbeschläge (Bollwerk) oder Feuerbecken
+function drawTowerKind(ctx, kind, level) {
+  const r = level >= 3 ? 12 : 10;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  if (kind === 'cannon') {
+    // Kanonenrohr ragt aus der Schießscharte nach rechts, Kugeln am Fuß
+    ctx.save();
+    ctx.translate(r - 2, -24);
+    ctx.rotate(-0.18);
+    ctx.fillStyle = grad(ctx, 0, 0, '#5b6068', '#1d2024');
+    const g = ctx.createLinearGradient(0, -3.2, 0, 3.2);
+    g.addColorStop(0, '#8a9099');
+    g.addColorStop(0.5, '#3c4148');
+    g.addColorStop(1, '#16181b');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.roundRect(-3, -3.2, 15, 6.4, 2);
+    ctx.fill();
+    outline(ctx, 0.8);
+    ctx.fillStyle = '#2a2d31';
+    ctx.beginPath();
+    ctx.roundRect(10.5, -4, 3.5, 8, 1.2);
+    ctx.fill();
+    outline(ctx, 0.6);
+    ctx.fillStyle = '#0b0c0d';
+    ctx.beginPath();
+    ctx.ellipse(14, 0, 0.9, 2.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    for (const [x, y] of [[-r - 5, 6], [-r - 1.5, 6.5], [-r - 3.3, 3.6]]) {
+      const b = ctx.createRadialGradient(x - 0.8, y - 0.8, 0.3, x, y, 2.2);
+      b.addColorStop(0, '#9aa0a8');
+      b.addColorStop(1, '#202326');
+      ctx.fillStyle = b;
+      ctx.beginPath();
+      ctx.arc(x, y, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (kind === 'ballista') {
+    // Große Armbrust auf der Plattform
+    ctx.save();
+    ctx.translate(0, -40);
+    ctx.strokeStyle = '#3b2412';
+    ctx.lineWidth = 2.6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-9, -3);
+    ctx.quadraticCurveTo(0, 5, 9, -3);
+    ctx.stroke();
+    ctx.strokeStyle = '#a0703c';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.strokeStyle = '#efe6d2';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(-9, -3);
+    ctx.lineTo(0, 4);
+    ctx.lineTo(9, -3);
+    ctx.stroke();
+    ctx.fillStyle = grad(ctx, -1.5, 1.5, '#b07a44', '#5e3b1c');
+    ctx.fillRect(-1.4, -6, 2.8, 12);
+    ctx.strokeStyle = 'rgba(20,14,10,0.85)';
+    ctx.lineWidth = 0.6;
+    ctx.strokeRect(-1.4, -6, 2.8, 12);
+    ctx.fillStyle = '#c9ced6';
+    ctx.beginPath();
+    ctx.moveTo(0, -11);
+    ctx.lineTo(1.8, -6.5);
+    ctx.lineTo(-1.8, -6.5);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.5);
+    ctx.restore();
+  } else if (kind === 'bulwark') {
+    // Eisenbänder mit Nieten und ein Schild am Turm
+    for (const y of [-30, -12]) {
+      ctx.fillStyle = grad(ctx, -r, r, '#9aa1aa', '#3b4047');
+      ctx.fillRect(-r - 0.5, y, 2 * r + 1, 3);
+      ctx.strokeStyle = 'rgba(20,14,10,0.85)';
+      ctx.lineWidth = 0.6;
+      ctx.strokeRect(-r - 0.5, y, 2 * r + 1, 3);
+      ctx.fillStyle = '#e5e7eb';
+      for (let x = -r + 2; x <= r - 2; x += 4) {
+        ctx.beginPath();
+        ctx.arc(x, y + 1.5, 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.fillStyle = grad(ctx, -5, 5, '#d1d5db', '#4b5563');
+    ctx.beginPath();
+    ctx.moveTo(0, -26);
+    ctx.lineTo(5, -24);
+    ctx.lineTo(5, -19);
+    ctx.quadraticCurveTo(4, -15, 0, -13.5);
+    ctx.quadraticCurveTo(-4, -15, -5, -19);
+    ctx.lineTo(-5, -24);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.8);
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, -24);
+    ctx.lineTo(0, -16);
+    ctx.moveTo(-3, -21);
+    ctx.lineTo(3, -21);
+    ctx.stroke();
+  } else if (kind === 'fire') {
+    // Feuerbecken an einem Ausleger, Glut und Flammen
+    ctx.strokeStyle = '#2b2b2b';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(r - 1, -26);
+    ctx.lineTo(r + 6, -30);
+    ctx.stroke();
+    const bx = r + 7, by = -31;
+    ctx.fillStyle = grad(ctx, bx - 4, bx + 4, '#57534e', '#1c1917');
+    ctx.beginPath();
+    ctx.moveTo(bx - 4.5, by);
+    ctx.lineTo(bx + 4.5, by);
+    ctx.lineTo(bx + 2.5, by + 4);
+    ctx.lineTo(bx - 2.5, by + 4);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.6);
+    const fl = ctx.createRadialGradient(bx, by - 2, 0.5, bx, by - 3, 8);
+    fl.addColorStop(0, 'rgba(254,240,138,0.95)');
+    fl.addColorStop(0.45, 'rgba(249,115,22,0.85)');
+    fl.addColorStop(1, 'rgba(220,38,38,0)');
+    ctx.fillStyle = fl;
+    ctx.beginPath();
+    ctx.moveTo(bx - 4, by);
+    ctx.quadraticCurveTo(bx - 5, by - 6, bx - 1, by - 11);
+    ctx.quadraticCurveTo(bx, by - 6, bx + 1.5, by - 9);
+    ctx.quadraticCurveTo(bx + 5, by - 5, bx + 4, by);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(251,146,60,0.35)';
+    ctx.beginPath();
+    ctx.arc(bx, by - 3, 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 // Steinwall: massiver Mauerblock mit Zinnen und Wappenband
 function drawBarrierFigure(ctx, col) {
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -2323,7 +2469,7 @@ export function drawFigure(ctx, type, col, level = 1, noPedestal = false, opts =
   try { drawFigureInner(ctx, type, col, level, noPedestal); } finally { FIGST = prevFig; }
 }
 function drawFigureInner(ctx, type, col, level, noPedestal) {
-  if (type === 'tower') { drawTowerFigure(ctx, col, level); return; }
+  if (type === 'tower') { drawTowerFigure(ctx, col, level); if (FIGST.kind) drawTowerKind(ctx, FIGST.kind, level); return; }
   if (type === 'barrier') { drawBarrierFigure(ctx, col); return; }
   ctx.save();
   ctx.lineJoin = 'round';

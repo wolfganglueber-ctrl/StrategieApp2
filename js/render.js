@@ -1033,7 +1033,7 @@ export class Renderer {
   }
 
   // Figuren werden einmal pro Typ/Farbe/Zoomstufe in einen Puffer gezeichnet
-  sprite(type, owner, exhausted, level, stone = false, fly = false) {
+  sprite(type, owner, exhausted, level, stone = false, fly = false, kind = null) {
     // Aussehen je nach Einheiten-Entwicklung des Besitzers
     const ups = this.state?.players[owner]?.unitUps?.[type] || [];
     const k0 = Math.max(0.5, Math.round(this.cam.z * this.dpr * 4) / 4) * (HEX / 40) * FIG;
@@ -1042,7 +1042,7 @@ export class Renderer {
       this.spriteScale = k0;
     }
     const k = k0 * (BIG[type] || 1);
-    const key = type + owner + (exhausted ? 'x' : '') + (stone ? (stone === 'ice' ? 'i' : 's') : '') + (fly ? 'f' : '') + (level || '') + ups.join('');
+    const key = type + owner + (exhausted ? 'x' : '') + (stone ? (stone === 'ice' ? 'i' : 's') : '') + (fly ? 'f' : '') + (level || '') + (kind || '') + ups.join('');
     let sp = this.sprites.get(key);
     if (sp) return sp;
     const base = PLAYER_COLORS[owner] || NEUTRAL_COLOR;
@@ -1056,7 +1056,7 @@ export class Renderer {
     raw.height = H;
     const rc = raw.getContext('2d');
     rc.setTransform(k, 0, 0, k, B.left * k, B.top * k);
-    drawFigure(rc, type, col, level, fly, { stage: ups.length, ups: new Set(ups) });
+    drawFigure(rc, type, col, level, fly, { stage: ups.length, ups: new Set(ups), kind });
     // Plastische Beleuchtung: Licht von links oben, Schatten nach rechts unten
     rc.setTransform(1, 0, 0, 1, 0, 0);
     rc.globalCompositeOperation = 'source-atop';
@@ -1162,7 +1162,7 @@ export class Renderer {
       ctx.fillRect(x - 30 * s, y - 40 * s, 60 * s, 60 * s);
     }
     const stone = u.stone || u.stoneNow ? (u.iced || u.ice ? 'ice' : true) : false;
-    const sp = this.sprite(u.type, u.owner, exhausted && !stone, u.level, stone, fly);
+    const sp = this.sprite(u.type, u.owner, exhausted && !stone, u.level, stone, fly, u.kind);
     const B = FIG_BOX;
     if (exhausted) ctx.globalAlpha *= 0.8;
     ctx.drawImage(sp.cv, x - B.left * s * scale * big, y - B.top * s * scale * big, (B.left + B.right) * s * scale * big, (B.top + B.bottom) * s * scale * big);

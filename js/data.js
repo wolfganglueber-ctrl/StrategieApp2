@@ -171,6 +171,16 @@ export const TOWER_LEVELS = [null,
   { hp: 24, atk: 8, def: 20, range: 2 },
 ];
 export const TOWER_UPGRADE = [null, { wood: 12, ore: 16 }, { wood: 16, ore: 24 }];
+// Türme einzeln verbessern: Leben, Angriff, Verteidigung je 3 Stufen (Preis wie bei Einheiten in % des Turmpreises)
+export const TOWER_BOOST_ADD = { hp: [0, 4, 8, 12, 16, 20], atk: [0, 1, 2, 3, 4, 5], def: [0, 5, 10, 15, 20, 25] };
+// Bauart eines Turms, einmalig ab Turmstufe 2
+export const TOWER_KINDS = {
+  cannon: { name: 'Kanonenturm', icon: '💣', cost: { wood: 15, ore: 20 }, desc: 'Schießt mit Wucht, +2 Angriff, 30 % Flächenschaden auf die Nachbarn des Ziels' },
+  ballista: { name: 'Ballistenturm', icon: '🏹', cost: { wood: 20, ore: 15 }, desc: '+1 Reichweite, Durchschlag +20 gegen Reiterei und Titanen' },
+  bulwark: { name: 'Bollwerk', icon: '🛡', cost: { wood: 10, ore: 25 }, desc: '+10 Leben, +15 % Verteidigung, heilt sich jede Runde um 2' },
+  fire: { name: 'Feuerturm', icon: '🔥', cost: { wood: 15, ore: 15, mana: 4 }, desc: 'Schießt mit Feuer/Magie und setzt das Ziel in Brand: 2 Schaden zu Beginn seines nächsten Zuges' },
+};
+export const TOWER_KIND_ORDER = ['cannon', 'ballista', 'bulwark', 'fire'];
 export const TOWERS_PER_CITY = 4;
 // Bauwerke im Stadtgebiet: Höchstzahl pro Stadt
 export const STRUCTURE_LIMIT = { tower: TOWERS_PER_CITY, barrier: 6 };
@@ -352,9 +362,11 @@ const CLASS_SKILLS = { melee: ['regen', 'hold'], ranged: ['range1', 'range2', 'f
 export function skillsFor(type) {
   return CLASS_SKILLS[unitClass(type)] || [];
 }
+// Türme sind billig gebaut; ihre Einzel-Verbesserungen rechnen mit einem höheren Grundwert
+const TOWER_BOOST_BASE = { wood: 18, ore: 18 };
 function pctCost(type, pct) {
   const c = {};
-  for (const [k, v] of Object.entries(UNITS[type].cost)) c[k] = Math.ceil((v * pct) / 100);
+  for (const [k, v] of Object.entries(type === 'tower' ? TOWER_BOOST_BASE : UNITS[type].cost)) c[k] = Math.ceil((v * pct) / 100);
   return c;
 }
 // Kosten der nächsten Stufe (lvl = 0..2) bzw. einer Fähigkeit
@@ -372,6 +384,8 @@ export const CITY_NAMES = ['', 'Dorf', 'Stadt', 'Metropole', 'Residenzstadt', 'K
 export const ECO_TECH = { food: 'plough', wood: 'saw', ore: 'mining' };
 export const ECO_TECH_PCT = 0.5;
 export const START_RES = { food: 6, wood: 36, ore: 4, mana: 0 };
+// Startguthaben für den Menschen gegen leichte KI (maßgeblich ist der stärkste Gegner)
+export const START_BONUS = { 1: { food: 40, wood: 20, ore: 20 }, 2: { food: 20, ore: 10 } };
 export const TRADE_RATE = 3;
 export const TRADE_RATE_GUILD = 2;
 
@@ -430,7 +444,7 @@ export function citySlots(city) {
   return Math.min(MAX_SLOTS, city.level * 2);
 }
 export function upgradeCost(city) {
-  return [null, { food: 45, wood: 12, ore: 12 }, { food: 65, wood: 22, ore: 22 }, { food: 85, wood: 32, ore: 32 }, { food: 105, wood: 42, ore: 42 }][city.level];
+  return [null, { food: 32, wood: 8, ore: 8 }, { food: 46, wood: 15, ore: 15 }, { food: 60, wood: 22, ore: 22 }, { food: 74, wood: 29, ore: 29 }][city.level];
 }
 export function cityDefense(city, stonework = false) {
   // Verteidigungszuschlag in Prozentpunkten: Stadt 20, mit Mauer 40 (Steinmetz 50)
@@ -459,12 +473,12 @@ export const PLAYER_COLORS = [
 export const NEUTRAL_COLOR = { name: 'Neutral', main: '#9a9286', dark: '#5b554c', light: '#e3ddd2' };
 
 export const DIFFICULTIES = [
-  { level: 1, name: 'Anfänger', desc: 'Lässt dich etwa 16 Runden in Ruhe, erobert höchstens 3 Städte, forscht kaum und macht viele Fehler.' },
-  { level: 2, name: 'Leicht', desc: 'Etwa 11 Runden Schonfrist, erobert höchstens 5 Städte, wenig Forschung.' },
-  { level: 3, name: 'Normal', desc: 'Etwa 7 Runden Schonfrist, achtet auf Gefahren und Fokusfeuer, baut Wirtschaft und Forschung solide aus.' },
-  { level: 4, name: 'Schwer', desc: 'Nur 3 Runden Schonfrist, breitet sich zügig aus, baut aus und forscht eifrig, macht selten Fehler, +15 % Rohstoffe.' },
-  { level: 5, name: 'Meister', desc: 'Keine Schonfrist, schnappt sich Dörfer früh, forscht und baut maximal, spielt fehlerfrei, +30 % Rohstoffe.' },
-  { level: 6, name: 'Kaiser', desc: 'Wie Meister, mit größerer Armee und +50 % Rohstoffen.' },
+  { level: 1, name: 'Anfänger', desc: 'Nimmt sich ein Dorf und verteidigt sich, greift dich erst nach etwa 30 Runden zaghaft an. Nur einfache Einheiten. Du startest mit +40 Nahrung, +20 Holz, +20 Erz.' },
+  { level: 2, name: 'Leicht', desc: 'Etwa 18 Runden Schonfrist, höchstens 4 Städte, wenig Ausbau und Forschung, dazu Ritter und Katapulte. Du startest mit +20 Nahrung, +10 Erz.' },
+  { level: 3, name: 'Normal', desc: 'Etwa 10 Runden Schonfrist, höchstens 7 Städte, baut und forscht solide, nutzt Greifen, Zauberer und Triböcke, entwickelt Einheiten gelegentlich.' },
+  { level: 4, name: 'Schwer', desc: 'Nur 5 Runden Schonfrist, höchstens 10 Städte, baut und forscht eifrig, dazu Basilisken und Trolle, verbessert Einheiten gezielt.' },
+  { level: 5, name: 'Meister', desc: 'Kaum Schonfrist, erobert ohne Grenze, alle Einheiten inkl. Drache, verbessert viel, spielt fast fehlerfrei, +25 % Rohstoffe.' },
+  { level: 6, name: 'Kaiser', desc: 'Wie Meister, ohne Schonfrist, mit größerer Armee und +50 % Rohstoffen.' },
 ];
 
 // Kleinste Karte ist „Riesig“ (Klein, Mittel, Groß gibt es nicht mehr)

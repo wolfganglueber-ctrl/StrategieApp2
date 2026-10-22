@@ -5,13 +5,13 @@ import {
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
   PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, buildingYield, plantCost, START_BUILDINGS, slotsUsed, usesSlot, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_ADD, ATK_TYPE, DEF_TABLE, DEF_MAX, SKILLS, skillsFor, boostCost, skillCost,
-  BASE_RES, MANA, ECO_TECH, ECO_TECH_PCT, counterMax, FUSE,
+  BASE_RES, MANA, ECO_TECH, ECO_TECH_PCT, counterMax, FUSE, TOWER_BOOST_ADD, TOWER_KINDS, START_BONUS,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
 export const STATE_VERSION = 6;
 // Rohstoffbonus der Computergegner je Stufe: Schwer +15 %, Meister +30 %, Kaiser +50 %
-export const AI_INCOME_BONUS = { 4: 0.15, 5: 0.3, 6: 0.5 };
+export const AI_INCOME_BONUS = { 5: 0.25, 6: 0.5 };
 
 // Spielmodus-Erweiterungen: die Burgverteidigung (defense.js) hängt sich hier ein, wenn state.defense gesetzt ist
 export const modeHooks = {};
@@ -41,7 +41,7 @@ export function createGame(config) {
       name: p.name || (p.human ? 'Du' : PLAYER_COLORS[i].name),
       human: !!p.human,
       ai: p.ai || 3,
-      res: { ...START_RES },
+      res: { ...START_RES, ...startBonus(config, p) },
       incomeBonus: p.incomeBonus ?? (!p.human ? AI_INCOME_BONUS[p.ai] || 0 : 0),
       alive: true,
       tech: [],
@@ -85,6 +85,17 @@ export function geoOf(state) {
   return getGeo(state.cols, state.rows);
 }
 
+// Gegen Anfänger und Leicht bekommt der Mensch ein Startguthaben (maßgeblich ist der stärkste Gegner)
+function startBonus(config, p) {
+  if (!p.human) return {};
+  const ais = config.players.filter((x) => !x.human).map((x) => x.ai || 3);
+  const b = ais.length ? START_BONUS[Math.max(...ais)] : null;
+  if (!b) return {};
+  const out = {};
+  for (const [k, v] of Object.entries(b)) out[k] = (START_RES[k] || 0) + v;
+  return out;
+}
+
 export function spawnUnit(state, type, owner, idx, ready) {
   const u = { id: state.nextUnitId++, type, owner, idx, hp: 1, moved: !ready, attacked: !ready, acted: false, rank: 1, xp: 0 };
   if (type === 'tower') u.level = 1;
@@ -107,6 +118,9 @@ export function statsOf(state, u) {
   if (u.type === 'tower') {
     Object.assign(st, TOWER_LEVELS[u.level || 1]);
     if (hasTech(state, u.owner, 'stonework')) st.hp += 6;
+    if (u.kind === 'cannon') st.atk += 2;
+    if (u.kind === 'ballista') st.range += 1;
+    if (u.kind === 'bulwark') { st.hp += 10; st.def += 15; }
   }
   if (u.type === 'barrier' && hasTech(state, u.owner, 'battlements')) st.hp += 25;
   const techs = state.players[u.owner]?.tech;
@@ -140,7 +154,10 @@ export function statsOf(state, u) {
   if (state.defense && modeHooks.mods) modeHooks.mods(state, u, st); // Karten der Burgverteidigung
   st.move = Math.min(st.move, moveCap(u.type));
   // Einzel-Verbesserungen dieser einen Einheit
-  if (u.boost) for (const k of ['atk', 'def', 'hp', 'pen']) if (u.boost[k]) st[k] += BOOST_ADD[k][u.boost[k]];
+  if (u.boost) {
+    const add = u.type === 'tower' ? TOWER_BOOST_ADD : BOOST_ADD;
+    for (const k of ['atk', 'def', 'hp', 'pen']) if (u.boost[k] && add[k]) st[k] += add[k][u.boost[k]];
+  }
   if (hasSkill(u, 'range1')) st.range++;
   if (hasSkill(u, 'range2')) st.range++;
   // Stellung halten: nicht gezogen → +10 % Verteidigung
@@ -212,12 +229,18 @@ export function terrainDefense(state, idx) {
 export function penetration(state, att, def, defIdx = def.idx) {
   let p = statsOf(state, att).pen;
   if (hasPerk(att, 'siege') && (cityOn(state, defIdx) || castleOf(state, defIdx) || isStructure(def))) p += 20;
-  if (hasPerk(att, 'hunter') && (CAVALRY.includes(def.type) || def.type === 'troll' || def.type === 'giant' || def.type === 'dragon')) p += 20;
+  if ((hasPerk(att, 'hunter') || att.kind === 'ballista') && (CAVALRY.includes(def.type) || def.type === 'troll' || def.type === 'giant' || def.type === 'dragon')) p += 20;
   return p;
+}
+// Angriffsart einer Einheit (Kanonenturm: Wucht, Feuerturm: Feuer/Magie)
+export function atkKind(u) {
+  if (u.type === 'tower' && u.kind === 'cannon') return 'siege';
+  if (u.type === 'tower' && u.kind === 'fire') return 'magic';
+  return ATK_TYPE[u.type] || 'melee';
 }
 // Verteidigung des Ziels gegen diesen Angreifer, aufgeschlüsselt
 export function defenseVs(state, att, def, defIdx = def.idx) {
-  const kind = ATK_TYPE[att.type] || 'melee';
+  const kind = atkKind(att);
   const base = DEF_TABLE[def.type]?.[kind] ?? 0;
   const bonus = statsOf(state, def).def;
   const t = terrainDefense(state, defIdx);
@@ -272,7 +295,7 @@ export function flankers(state, att, def) {
 
 export function splashOf(u) {
   if (hasPerk(u, 'precise')) return 0;
-  const base = Math.max(UNITS[u.type].splash || 0, hasPerk(u, 'blast') ? 0.4 : 0);
+  const base = Math.max(UNITS[u.type].splash || 0, hasPerk(u, 'blast') ? 0.4 : 0, u.kind === 'cannon' ? 0.3 : 0);
   const fire = (hasPerk(u, 'fire') ? 0.25 : 0) + (hasSkill(u, 'firearrow') ? 0.25 : 0);
   if (fire) return base + fire;
   if (hasPerk(u, 'rampage')) return Math.max(base, 0.3);
@@ -778,12 +801,25 @@ export function startTurn(state) {
       }
     }
   }
+  // Vom Feuerturm in Brand gesetzt: Schaden zu Beginn des eigenen Zuges
+  for (const u of state.units.filter((x) => x.owner === pid && x.fire)) {
+    const dmg = u.fire;
+    delete u.fire;
+    const snap = snapshotUnit(u);
+    u.hp -= dmg;
+    const killed = u.hp <= 0;
+    if (killed) {
+      state.units = state.units.filter((x) => x !== u);
+      state.stats.losses[pid]++;
+    }
+    ev.push({ k: 'burn', id: u.id, idx: u.idx, dmg, killed, snap });
+  }
   // Heilung von selbst nur noch durch einzeln gekaufte Verbesserungen (Selbstheilung, Spezialisierung Zäh);
   // sonst heilen nur Zauberer – kein Ausruhen, keine Stadtheilung mehr
   for (const u of state.units) {
     if (u.owner !== pid) continue;
     const max = statsOf(state, u).hp;
-    const always = (hasPerk(u, 'tough') ? 2 : 0) + (hasSkill(u, 'regen') ? Math.ceil(max / 10) : 0);
+    const always = (hasPerk(u, 'tough') ? 2 : 0) + (hasSkill(u, 'regen') ? Math.ceil(max / 10) : 0) + (u.kind === 'bulwark' ? 2 : 0);
     if (always && u.hp < max) {
       const h = Math.min(max - u.hp, always);
       u.hp += h;
@@ -1017,6 +1053,7 @@ function applyActionCore(state, a) {
         }
       }
       if (!sweep && (splashOf(u) || UNITS[u.type].line)) e.splash = applySplash(state, u, defSnap.idx, r.dmg, attSnap.idx);
+      if (u.kind === 'fire' && !e.killed && state.units.includes(t)) { t.fire = 2; e.fire = true; } // Feuerturm: Ziel brennt
       ev.push(e);
       // Erfahrung: Angreifer +1 (+1 für einen Sieg), überlebender Verteidiger +1
       // Erfahrung = besiegte Gegner (auch durch Flächenschaden oder Gegenschlag)
@@ -1073,7 +1110,7 @@ function applyActionCore(state, a) {
     case 'boost': {
       // Einzel-Verbesserung (Angriff, Verteidigung, Leben, Durchschlag) für genau diese Einheit
       const u = unitById(state, a.unitId);
-      if (!u || u.owner !== pid || !canBoost(u) || !['atk', 'def', 'hp', 'pen'].includes(a.stat)) return null;
+      if (!u || u.owner !== pid || !canBoost(u) || !boostStats(u).includes(a.stat)) return null;
       const lvl = u.boost?.[a.stat] || 0;
       if (lvl >= boostMax(state)) return null;
       const cost = boostCost(u.type, lvl);
@@ -1082,7 +1119,7 @@ function applyActionCore(state, a) {
       const before = statsOf(state, u).hp;
       u.boost = { ...(u.boost || {}), [a.stat]: lvl + 1 };
       u.hp += statsOf(state, u).hp - before;
-      ev.push({ k: 'boost', id: u.id, idx: u.idx, stat: a.stat, level: lvl + 1 });
+      ev.push({ k: 'boost', id: u.id, idx: u.idx, stat: a.stat, level: lvl + 1, type: u.type });
       break;
     }
     case 'skill': {
@@ -1178,6 +1215,17 @@ function applyActionCore(state, a) {
       for (const k of RES) player.res[k] -= UNITS[type].cost[k] || 0;
       const u = spawnUnit(state, type, pid, a.idx, false);
       ev.push({ k: 'recruit', id: u.id, idx: a.idx });
+      break;
+    }
+    case 'towerKind': {
+      const u = unitById(state, a.unitId);
+      if (!u || u.owner !== pid || !canTowerKind(state, u, a.kind)) return null;
+      const cost = TOWER_KINDS[a.kind].cost;
+      for (const k of RES) player.res[k] -= cost[k] || 0;
+      const before = statsOf(state, u).hp;
+      u.kind = a.kind;
+      u.hp += statsOf(state, u).hp - before;
+      ev.push({ k: 'towerKind', id: u.id, idx: u.idx, kind: a.kind });
       break;
     }
     case 'towerUp': {
@@ -1368,9 +1416,16 @@ export function canTerraform(state, pid, idx, territory = computeTerritory(state
   return null;
 }
 
-// Einzel-Verbesserungen: alle Einheiten außer Bauwerken
+// Einzel-Verbesserungen: alle Einheiten und Türme (keine Steinwälle); Türme ohne Durchschlag
 export function canBoost(u) {
-  return !!u && !isStructure(u);
+  return !!u && (!isStructure(u) || u.type === 'tower');
+}
+export function boostStats(u) {
+  return u.type === 'tower' ? ['atk', 'def', 'hp'] : ['atk', 'def', 'hp', 'pen'];
+}
+// Bauart für einen Turm wählbar (ab Stufe 2, einmalig)
+export function canTowerKind(state, u, kind) {
+  return !!u && u.type === 'tower' && (u.level || 1) >= 2 && !u.kind && !!TOWER_KINDS[kind] && canAfford(state.players[u.owner].res, TOWER_KINDS[kind].cost);
 }
 // Fähigkeiten, die diese Einheit noch lernen kann
 export function skillOptions(u) {
