@@ -122,7 +122,7 @@ Startwerte und Kampfformel (Commit e094f32, 16.10.) stammen aus dem Vorbild *The
 - **Burgverteidigung Schritt 2 (Wunsch aus dieser Sitzung):** „Kriegsrat“ – dauerhafte prozentuale Verbesserungen über Partien hinweg, bezahlt mit „Ruhm“ (je nach erreichter Welle/Schwierigkeit), gespeichert im localStorage; Wellenvorschau über den Toren (was kommt als Nächstes); Bestwerte-Anzeige; Feinschliff.
 - Burgverteidigung Balance: Test-Bot gewinnt nie (Ø Welle Normal ~26, Schwer ~18); Wolfgangs Rückmeldung nach eigenen Partien abwarten, dann Wellenbudget/Bosse/Beute anpassen (Simulation nur nach Rückfrage).
 - Wolfgang testet 0.86–0.89: Ring-Ertrag, Städteregler, Stadtstufen 4/5, neuer Start (36 Holz, Reiter + Wächter), KI-Stufen, Kampfsystem, Scrollen auf Episch am Handy, Burgverteidigung.
-- Balance-Simulation der KI-Stufen nach der Ring-Regel (0.85), den dichteren Karten (0.86) und der Gegenschlag-Grenze (0.90) – vorher fragen.
+- KI-Stufen abstimmen (später, erst spielt Wolfgang selbst mit 0.91). Simulation 0.91 auf Riesig, je 20 Partien: 2:1 17:0 (3 offen), 3:2 20:0, 4:3 18:2, 5:4 10:10, 6:5 12:8. Unten zu steil, 5 nicht besser als 4. Ideen: Meister-Bonus +30 → +40 % oder Schwer +15 → +10 %, Stufe 3 etwas mehr Fehler/Leerlauf; Ziel je Paarung ~14–16 : 4–6.
 - Wächter-Finetuning (Start ist in 0.91 gelöst): mit Entwicklung (+30 %), Rang, Schildwall, Forschung und Verbesserung erreicht er weiter überall die 80-%-Grenze, auch gegen Wucht; Ideen: Zuschläge über 50 % nur halb, Obergrenze gegen Wucht 50 %, Wächter-Entwicklung auf Leben/Aura umbauen.
 - Bekanntes Problem: Stufe 2 bleibt nach ihren 5 Städten neben gegnerischen Städten stehen, ohne anzugreifen (gewollt kein Erobern, sieht aber unschön aus).
 - Frage offen: Soll die Kampagne auch „viele“ Städte bekommen (derzeit „normal“)?
@@ -132,4 +132,4 @@ Startwerte und Kampfformel (Commit e094f32, 16.10.) stammen aus dem Vorbild *The
 - Ideen von früher: Marschbefehl (automatisches Ziehen über mehrere Runden); Balancing Troll (in Städten mit Mauer sehr zäh) und KI-Heilen (selten genutzt).
 
 # Nächster Schritt
-Wolfgangs Rückmeldung zur Burgverteidigung (0.89) einholen und danach – nach Rückfrage – Schritt 2 (Kriegsrat mit Ruhm, Wellenvorschau, Bestwerte) umsetzen.
+Wolfgangs Rückmeldung zur Startbalance (0.91) und zur Burgverteidigung abwarten; danach – nach Rückfrage – KI-Stufen abstimmen oder Burgverteidigung Schritt 2 (Kriegsrat mit Ruhm, Wellenvorschau, Bestwerte).
