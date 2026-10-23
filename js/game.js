@@ -4,8 +4,8 @@ import {
   TERRAIN, UNITS, RES, START_RES, upgradeCost, cityDefense, CITY_MAX_LEVEL, PLAYER_COLORS, citySupply, upkeepOf,
   cityRadius, canAfford, BUILDINGS, citySlots, hasBuilding, TRADE_RATE, TRADE_RATE_GUILD, TECHS, TOWER_LEVELS,
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
-  PERK_RANKS, FLANK_BONUS, FLANK_MAX, CAVALRY, buildingYield, plantCost, START_BUILDINGS, slotsUsed, usesSlot, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_ADD, ATK_TYPE, DEF_TABLE, DEF_MAX, SKILLS, skillsFor, boostCost, skillCost,
-  BASE_RES, MANA, ECO_TECH, ECO_TECH_PCT, counterMax, FUSE, TOWER_BOOST_ADD, TOWER_KINDS, START_BONUS,
+  PERK_RANKS, CAVALRY, buildingYield, plantCost, START_BUILDINGS, slotsUsed, usesSlot, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_ADD, ATK_TYPE, DEF_TABLE, DEF_MAX, SKILLS, skillsFor, boostCost, skillCost,
+  BASE_RES, MANA, ECO_TECH, ECO_TECH_PCT, ARCHER_MAX_RANGE, counterMax, FUSE, TOWER_BOOST_ADD, TOWER_KINDS, START_BONUS,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -122,7 +122,7 @@ export function statsOf(state, u) {
     if (u.kind === 'ballista') st.range += 1;
     if (u.kind === 'bulwark') { st.hp += 10; st.def += 15; }
   }
-  if (u.type === 'barrier' && hasTech(state, u.owner, 'battlements')) st.hp += 25;
+  if (u.type === 'barrier' && hasTech(state, u.owner, 'battlements')) st.hp += 12;
   const techs = state.players[u.owner]?.tech;
   if (techs) {
     for (const t of techs) {
@@ -160,6 +160,7 @@ export function statsOf(state, u) {
   }
   if (hasSkill(u, 'range1')) st.range++;
   if (hasSkill(u, 'range2')) st.range++;
+  if (u.type === 'archer') st.range = Math.min(st.range, ARCHER_MAX_RANGE); // Schützen höchstens 4 Felder weit
   // Stellung halten: nicht gezogen → +10 % Verteidigung
   if (hasSkill(u, 'hold') && !u.walked) st.def += 10;
   st.atk = Math.ceil(st.atk - 1e-9);
@@ -208,13 +209,12 @@ function upMod(state, u, k) {
 }
 
 // Kampf ohne verborgene Formel: Schaden = Angriff × (100 % − Verteidigung), gerundet, mindestens 1.
-// Angriff = fester Wert + Entwicklung/Rang/Verbesserung + Sturmangriff + Flanke.
+// Angriff = fester Wert + Entwicklung/Rang/Verbesserung + Sturmangriff (kein Flankenbonus mehr).
 // Verteidigung = Grundwert gegen die Angriffsart des Angreifers + Zuschläge + Gelände (+ Schutzaura) − Durchschlag (0–80 %).
 export function attackValue(state, att, def, fromIdx = att.idx) {
   const A = statsOf(state, att);
   let v = A.atk;
   if (hasPerk(att, 'charge') && (att.moved || fromIdx !== att.idx)) v += 2;
-  if (!isStructure(att)) v += (hasTech(state, att.owner, 'tactics') ? 2 : FLANK_BONUS) * flankers(state, att, def);
   return v;
 }
 // Geländezuschlag in Prozentpunkten: Stadt 20, mit Mauer 40 (Steinmetz 50), Burgfelder 30 (Burgausbau 40)
@@ -260,8 +260,6 @@ export function combatInfo(state, att, def, fromIdx = att.idx) {
   const A = statsOf(state, att);
   const atkNotes = [], defNotes = [];
   if (hasPerk(att, 'charge') && (att.moved || fromIdx !== att.idx)) atkNotes.push('Sturmangriff +2');
-  const fl = isStructure(att) ? 0 : flankers(state, att, def);
-  if (fl) atkNotes.push(`Flanke ${fl}× +${(hasTech(state, att.owner, 'tactics') ? 2 : FLANK_BONUS) * fl}`);
   const dv = defenseVs(state, att, def);
   defNotes.push(`gegen ${ATK_LABEL[dv.kind]} ${dv.base} %`);
   if (dv.bonus) defNotes.push(`Zuschläge +${dv.bonus} %`);
@@ -282,16 +280,6 @@ export function combatInfo(state, att, def, fromIdx = att.idx) {
   return { ...r, atk: A.atk, atkValue: attackValue(state, att, def, fromIdx), atkNotes, defPct: dv.pct, defNotes, extra, sweepCounter, noCounter, lance: hasPerk(att, 'lance') && unitRange(state, def) <= 1 };
 }
 const ATK_LABEL = { melee: 'Nahkampf', ranged: 'Fernkampf', siege: 'Wucht', magic: 'Feuer/Magie' };
-
-// Andere eigene Einheiten direkt neben dem Ziel
-export function flankers(state, att, def) {
-  const geo = geoOf(state);
-  let n = 0;
-  for (const x of state.units) {
-    if (x.owner === att.owner && x !== att && !isStructure(x) && geo.dist(x.idx, def.idx) === 1) n++;
-  }
-  return Math.min(FLANK_MAX, n);
-}
 
 export function splashOf(u) {
   if (hasPerk(u, 'precise')) return 0;

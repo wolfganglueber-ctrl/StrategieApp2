@@ -19,7 +19,7 @@ import { bfsDistances } from './mapgen.js';
 const U1 = ['warrior', 'archer', 'rider', 'defender'];
 const U2 = [...U1, 'knight', 'catapult'];
 const U3 = [...U2, 'griffin', 'mage', 'trebuchet'];
-const U4 = [...U3, 'basilisk', 'troll'];
+const U4 = [...U3, 'basilisk', 'blackknight', 'troll'];
 export const AI_PARAMS = {
   1: { noise: 6, mistake: 0.5, risk: 0, lossW: 0.3, smart: false, upgrade: 0.1, cityMax: 2, guard: 0.3, idle: 0.5, calm: 30, expand: 0.3, tech: 0.1, maxTech: 1, armyCap: 0.5, aggr: 0.5, commit: 0.4, maxCities: 2, units: U1, unitUp: 0, boost: 0 },
   2: { noise: 3.5, mistake: 0.3, risk: 0.3, lossW: 0.6, smart: false, upgrade: 0.25, cityMax: 2, guard: 0.3, idle: 0.25, calm: 25, expand: 0.55, tech: 0.3, maxTech: 3, armyCap: 0.6, aggr: 0.5, commit: 0.7, maxCities: 4, units: U2, unitUp: 0.1, boost: 0 },
@@ -300,7 +300,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
   if (!options.length) return null;
   if (!P.smart) {
     const walls = ctx.enemies.filter((e) => e.type === 'defender' || UNITS[e.type].structure).length;
-    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, griffin: 0.5, catapult: 0.5 + Math.min(walls, 4) * 0.6, trebuchet: 0.5, mage: 0.5, basilisk: 1, troll: 3, dragon: 3 };
+    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, griffin: 0.5, blackknight: 1, catapult: 0.5 + Math.min(walls, 4) * 0.6, trebuchet: 0.5, mage: 0.5, basilisk: 1, troll: 3, dragon: 3 };
     if (ctx.mine.filter((u) => u.type === 'catapult' || u.type === 'trebuchet').length >= Math.max(1, Math.floor(ctx.mine.filter((u) => !UNITS[u.type].structure).length / 4))) w.catapult = w.trebuchet = 0;
     return weightedPick(options, (k) => w[k], rng);
   }
@@ -324,6 +324,7 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
     trebuchet: siegeFull ? 0 : 2,
     mage: ctx.mine.length >= 4 ? 3 : 0.5,
     basilisk: ctx.mine.length >= 5 ? 3 : 0.6,
+    blackknight: 3.5,
     troll: 50,
     dragon: 60,
   };
@@ -365,6 +366,7 @@ function chooseBuilding(state, ctx, pid, ci, inc) {
     workshop: ctx.ownCities.length >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'barracks')) ? 1.4 : 0.2,
     dragonlair: c.level >= 3 && ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.6 : 0, // KI baut sie spät
     lair: c.level >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.5 : 0,
+    tavern: c.level >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'tavern')) ? 2 : 0,
     nest: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'nest')) ? 1.3 : 0.1,
     sanctum: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'sanctum')) ? 1.5 : 0.3,
     wall: (ctx.cityDanger.get(c.idx) || 0) > 3 ? 3 : 0.4,
@@ -523,7 +525,7 @@ function economyAction(state, ctx, P, pid, rng) {
     const resSum = res.food + res.wood + res.ore;
     // Wirtschaftsforschung (+50 % aufs Reich) lohnt sich erst mit mehreren Städten
     const eco = ctx.ownCities.length >= 3 ? ['plough', 'mining', 'saw'] : [];
-    const prio = [...eco, 'bow', 'smith', 'horse', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'plough', 'mining', 'saw', 'stirrups', 'keep', 'tactics', 'granary', 'counterweight', 'siegecart', 'battlements', 'medic', 'enlight', 'blessing', 'guild'].filter((t) => t !== 'guild' || tradeRate(state, pid));
+    const prio = [...eco, 'bow', 'smith', 'horse', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'plough', 'mining', 'saw', 'stirrups', 'keep', 'warbow', 'granary', 'counterweight', 'siegecart', 'battlements', 'medic', 'enlight', 'blessing', 'guild'].filter((t) => t !== 'guild' || tradeRate(state, pid));
     if (resSum > (wantArmy ? 70 : 35)) {
       // Einheiten-Entwicklung: die meistgenutzten Einheiten gezielt verbessern (abwechselnd mit normaler Forschung)
       if (rng() < (P.unitUp ?? 0)) {

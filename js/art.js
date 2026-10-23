@@ -2475,7 +2475,7 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
   ctx.lineJoin = 'round';
   if (!noPedestal) {
     stageAura(ctx);
-    pedestal(ctx, col, type === 'troll' || type === 'giant' || type === 'dragon' ? 18 : 15);
+    pedestal(ctx, col, type === 'troll' || type === 'giant' || type === 'dragon' || type === 'blackknight' ? 18 : 15);
     stageMarks(ctx, type === 'troll' || type === 'giant' || type === 'dragon' ? 18 : 15);
   }
   switch (type) {
@@ -3041,6 +3041,63 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
     case 'giant':
       drawGiant(ctx, col);
       break;
+    case 'blackknight': {
+      // Gepanzerter Schwarzer Ritter: schwarzer Ritter auf gepanzertem Rappen, dazu Schulterdornen, glühender Sehschlitz
+      // und ein großer Turmschild mit Spielerwappen
+      const prev = FIGST;
+      FIGST = { stage: 4, ups: new Set(['k3b']) };
+      drawFigureInner(ctx, 'knight', col, level, true);
+      FIGST = prev;
+      ctx.save();
+      ctx.translate(0, 6);
+      // Rossharnisch-Platten am Pferdehals
+      ctx.fillStyle = grad(ctx, 4, 16, '#4b4f57', '#121317');
+      ctx.beginPath();
+      ctx.moveTo(6, -14);
+      ctx.lineTo(16, -18);
+      ctx.lineTo(17, -10);
+      ctx.lineTo(7, -6);
+      ctx.closePath();
+      ctx.fill();
+      outline(ctx, 0.6);
+      // Schulterdornen
+      ctx.fillStyle = '#2a2c31';
+      for (const [x, y, dx] of [[-6, -31, -4], [3.5, -31, 4]]) {
+        ctx.beginPath();
+        ctx.moveTo(x - 2, y + 1);
+        ctx.lineTo(x + dx, y - 4);
+        ctx.lineTo(x + 2, y + 1);
+        ctx.closePath();
+        ctx.fill();
+        outline(ctx, 0.5);
+      }
+      // Glühender Sehschlitz
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(-3.4, -39.2, 4.8, 1.1);
+      ctx.fillStyle = 'rgba(239,68,68,0.35)';
+      ctx.beginPath();
+      ctx.ellipse(-1, -38.6, 4.5, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Turmschild
+      ctx.fillStyle = grad(ctx, -14, -4, '#3f434b', '#0f1013');
+      ctx.beginPath();
+      ctx.roundRect(-14, -36, 9.5, 21, 2);
+      ctx.fill();
+      outline(ctx, 0.9);
+      ctx.strokeStyle = '#8b8f97';
+      ctx.lineWidth = 0.7;
+      ctx.strokeRect(-12.8, -34.8, 7.1, 18.6);
+      ctx.fillStyle = col.main;
+      ctx.beginPath();
+      ctx.moveTo(-9.25, -32);
+      ctx.lineTo(-6.8, -26);
+      ctx.lineTo(-9.25, -20);
+      ctx.lineTo(-11.7, -26);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      break;
+    }
     case 'dragon':
       drawDragon(ctx, col);
       break;

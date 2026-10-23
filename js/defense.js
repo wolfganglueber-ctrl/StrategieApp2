@@ -124,7 +124,7 @@ function placeQueued(state, ev) {
 
 // ---------------------------------------------------------------- Karten (gelten für diese Partie)
 const CARD_TYPES = {
-  warrior: 'Krieger', archer: 'Schützen', rider: 'Reiter', defender: 'Wächter', knight: 'Ritter', griffin: 'Greifenreiter',
+  warrior: 'Krieger', archer: 'Schützen', rider: 'Reiter', defender: 'Wächter', knight: 'Ritter', griffin: 'Greifenreiter', blackknight: 'Schwarze Ritter',
   catapult: 'Katapulte', trebuchet: 'Triböcke', mage: 'Zauberer', basilisk: 'Basilisken', tower: 'Türme', barrier: 'Steinwälle',
 };
 function cardPool(state) {

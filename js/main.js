@@ -5,7 +5,7 @@ import {
   createGame, applyAction, cloneState, getHealTargets, healAmount, auraRadius, inAura, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn,
   incomeOf, realmYield, boostedYield, cityBaseYield, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
-  perkOptions, flankers, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, terrainDefense,
+  perkOptions, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, terrainDefense,
   canBoost, boostMax, boostStats, canTowerKind, rankXpNeed, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, canStorm, canFuse, fuseGroup, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
 } from './game.js';
 import { planAction } from './ai.js';
@@ -16,7 +16,7 @@ import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, BASE_RES, RES_INFO, MANA, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
-  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, MAX_SLOTS, buildingYield, ECO_TECH, ECO_TECH_PCT, PLANT_COST, plantCost, PLANT_KINDS, ECO_BUILDINGS, slotsUsed, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
+  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, MAX_SLOTS, CITY_SLOTS, buildingYield, ECO_TECH, ECO_TECH_PCT, PLANT_COST, plantCost, PLANT_KINDS, ECO_BUILDINGS, slotsUsed, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
   BOOST_ADD, AURA, defenseWords, counterMax, FUSE, TOWER_BOOST_ADD, TOWER_KINDS, TOWER_KIND_ORDER, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
 } from './data.js';
 import { getLevels, getWorldNames, starsFor } from './levels.js';
@@ -1225,7 +1225,7 @@ function attackFx(ev, L, hit, ranged, f) {
 }
 
 // ---------------------------------------------------------------- Klänge
-const MOVE_SOUND = { rider: 'hooves', knight: 'hooves', catapult: 'wheels', trebuchet: 'wheels', troll: 'stomp', giant: 'stomp', mage: 'glide', dragon: 'wings', basilisk: 'steps' };
+const MOVE_SOUND = { rider: 'hooves', knight: 'hooves', blackknight: 'hooves', catapult: 'wheels', trebuchet: 'wheels', troll: 'stomp', giant: 'stomp', mage: 'glide', dragon: 'wings', basilisk: 'steps' };
 
 // Stereo-Position eines Feldes: links/rechts am Bildschirm
 function panOf(idx) {
@@ -2484,7 +2484,7 @@ function renderHelp() {
     <b>Durchschlag 🗡</b> senkt die Verteidigung des Ziels um so viele Prozentpunkte. Ihn gibt es nicht von Anfang an, sondern als Einzel-Verbesserung (10 / 20 / 30) und durch die Spezialisierungen Belagerer (gegen Städte und Bauwerke) und Jäger (gegen Reiterei und Titanen).</p>
     <h3>Städte</h3>
     <p>Steht deine Einheit zu Beginn deines Zuges auf einer fremden Stadt, wird sie erobert – samt Gebäuden; Türme und Steinwälle in ihrem Gebiet wechseln mit auf deine Seite.
-    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Bauplätze: 2 / 4 / 6 / 8 / 10.<br>
+    Stufen: ${CITY_NAMES.slice(1).join(' → ')}. Bauplätze: ${CITY_SLOTS.slice(1).join(' / ')} (Mauer, Türme und Wirtschaftsgebäude belegen keinen).<br>
     <b>Ertrag:</b> Jedes Feld liefert seinen Rohstoff: Wiese/See 1 Nahrung, Wald 1 Holz, Hügel, Lehm oder Erzgrube 1 Erz, Gebirge 2 Erz, Traubenhain 1 Mana – auf jeder Stufe einmal mehr (Stufe 2 das Doppelte … Stufe 5 das Fünffache). Der <b>innere Ring</b> (die 6 Felder direkt um die Stadt) liefert immer, auch direkt nach der Eroberung. Den <b>äußeren Ring</b> (2. Feld) erschließt du je Rohstoff mit einem Gebäude: Bauernhof (Nahrung), Holzfäller (Holz), Mine (Erz), Kelterei (Mana). Pflug, Sägewerk und Bergbau geben je +50 % auf Nahrung, Holz bzw. Erz. Das Stadtzentrum selbst liefert nichts. Jede Hauptstadt startet mit Bauernhof, Holzfäller und Mine. Wirtschaftsgebäude und die Mauer belegen keinen Bauplatz, die Plätze sind für Einheiten-Gebäude und den Markt. Ob du zuerst baust oder ausbaust, ist egal. Jede Stufe bringt außerdem 2 Bauplätze und 2 Versorgung. Erobern lohnt sich früh, Ausbauen macht jede eroberte Stadt bis zu fünfmal so wertvoll.</p>
     <h3>Versorgung</h3>
     <p><b>Versorgung:</b> Oben neben ⚔ steht „Truppen/Versorgung“. Jede Stadt versorgt Truppen (${[1, 2, 3, 4, 5, 6, 7, 8].map((l) => citySupply({ level: l })).join(' / ')} je nach Stufe; Basilisk zählt 2, Troll und Drache 3). Jede Einheit isst 2 Nahrung pro Runde. Einheiten über der Versorgung kosten doppelten Unterhalt, über dem 1,5-Fachen dreifachen. Eine riesige Armee frisst also schnell den ganzen Ertrag – lieber wenige, gut verbesserte Einheiten.</p>
@@ -2517,7 +2517,7 @@ function renderHelp() {
     <p>Einheiten heilen nicht von selbst – auch nicht in Städten. Leben zurück gibt es nur durch <b>Zauberer</b> (4 Leben, Heilkunde und Segen je +2, Großheiler +3) und durch Verbesserungen einzelner Einheiten: 💚 Selbstheilung (10 % pro Runde) und die Spezialisierung 💪 Zäh (2 pro Runde).</p>
     <h3>Einheiten</h3>
     <table><tr><th>Einheit</th><th>❤</th><th>Angr.</th><th>Bew.</th><th>Reichw.</th></tr>${rows}</table>
-    <p>Ritter und Greifenreiter brauchen eine Kaserne, Katapulte und Triboks eine Werkstatt, Zauberer einen Turm der Weisen, der Basilisk ein Basiliskennest, der Schwarze Troll eine Trollhöhle, der Drache eine Drachenhöhle. Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
+    <p>Ritter und Greifenreiter brauchen eine Kaserne, Katapulte und Triboks eine Werkstatt, Zauberer einen Turm der Weisen, der Basilisk ein Basiliskennest, der Gepanzerte Schwarze Ritter eine Taverne (Stadt ab Stufe 3), der Schwarze Troll eine Trollhöhle, der Drache eine Drachenhöhle. Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
     <h3>Zugweite</h3>
     <p>Auch voll entwickelt ziehen Fußtruppen höchstens 4 Felder, Katapulte 3, Reiter, Ritter und Greifenreiter 6 – auch wenn sie über eigene Einheiten springen.</p>
     <h3>Ränge und Fähigkeiten ★</h3>
@@ -2525,8 +2525,8 @@ function renderHelp() {
     Bei jeder Stufe wählst du eine <b>Spezialisierung</b>. Einheiten, die gerade eine wählen dürfen, schimmern golden, blinken auf und tragen ein ⬆; gewählte Spezialisierungen erscheinen als kleines Abzeichen neben der Figur: ${Object.values(PERKS).map((p) => `${p.icon} ${p.name} (${p.desc})`).join(', ')}.</p>
     <h3>Zauberer 🔮</h3>
     <p>Eigene Einheiten neben einem Zauberer (blaues Schild-Symbol) bekommen +15 % Verteidigung, Flächenschaden halbiert. Statt anzugreifen heilt der Zauberer eine eigene Einheit bis 3 Felder entfernt (grün markiert antippen). Höchstens ein Zauberer pro Stadt.</p>
-    <h3>Katapult und Flanke</h3>
-    <p>Katapulte sind Belagerungswaffen (Wucht): Türme und Wälle haben dagegen keine Verteidigung, und Stadt- und Burgboni zählen nur halb. Sie treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Gegenmittel: Reiter und Ritter, denn Katapulte haben keine Verteidigung und können nach einer Bewegung nicht schießen. Jede weitere eigene Einheit direkt neben dem Ziel gibt beim Angriff +1 Angriff (Schlachtordnung +2, höchstens 3 Nachbarn): Einkesseln lohnt sich.</p>
+    <h3>Katapult</h3>
+    <p>Katapulte sind Belagerungswaffen (Wucht): Türme und Wälle haben dagegen keine Verteidigung, und Stadt- und Burgboni zählen nur halb. Sie treffen auch alle Gegner neben dem Ziel mit halbem Schaden – stelle deine Truppen nicht zu dicht. Gegenmittel: Reiter und Ritter, denn Katapulte haben keine Verteidigung und können nach einer Bewegung nicht schießen.</p>
     <h3>Schwarzer Troll</h3>
     <p>Ein Titan für das späte Spiel: viel Leben und harte Schläge, kann ebenfalls Ränge sammeln. Er kostet viel und braucht eine Trollhöhle (Stadt ab Stufe 3). Höchstens 5 pro Reich.</p>
     <h3>🗿 Riesentroll</h3>

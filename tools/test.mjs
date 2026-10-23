@@ -1,9 +1,9 @@
 // Schnelltests: alle Kampagnenlevel erzeugen, Zufallsspiele in allen Größen ohne Fehler durchspielen.
-import { createGame, applyAction, cloneState, computeCombat, statsOf, spawnUnit, getBombTargets, migrateState, stormArea, canTerraform, incomeOf, realmYield, cityTiles, cityYield } from '../js/game.js';
+import { createGame, applyAction, cloneState, computeCombat, statsOf, spawnUnit, canRecruit, getBombTargets, migrateState, stormArea, canTerraform, incomeOf, realmYield, cityTiles, cityYield } from '../js/game.js';
 import { getGeo } from '../js/hex.js';
 import { planAction } from '../js/ai.js';
 import { getLevels } from '../js/levels.js';
-import { MAP_SIZES, BIOMES, UNITS, buildingYield, START_BONUS } from '../js/data.js';
+import { MAP_SIZES, BIOMES, UNITS, buildingYield, START_BONUS, citySlots } from '../js/data.js';
 import { mulberry32 } from '../js/rng.js';
 import { createDefenseGame, waveUnits } from '../js/defense.js';
 import { BOTS, BOT_ORDER } from './bots.mjs';
@@ -219,6 +219,18 @@ const t0 = Date.now();
   applyAction(s, { type: 'end', volley: false });
   check(!s.units.includes(f2) || f2.hp === hp0 - 2, `Brand 2 Schaden (${hp0} → ${f2.hp})`);
 }
+// 0.95: Schützen höchstens Reichweite 4, Bauplätze 2–6, Steinwall 25 Leben, Schwarzer Ritter braucht eine Taverne
+{
+  const s = createGame({ seed: 13, cols: 16, rows: 21, biome: 'plains', players: [{ ai: 3 }, { ai: 3 }] });
+  const a = { id: 999, type: 'archer', owner: 0, idx: 0, hp: 10, rank: 1, xp: 0, skills: ['range1', 'range2'] };
+  s.players[0].tech.push('bow', 'warbow');
+  check(statsOf(s, a).range === 4, `Schütze höchstens Reichweite 4 (${statsOf(s, a).range})`);
+  check([1, 2, 3, 4, 5].map((level) => citySlots({ level })).join() === '2,3,4,5,6', 'Bauplätze 2/3/4/5/6');
+  check(statsOf(s, { type: 'barrier', owner: 0, rank: 1 }).hp === 25, 'Steinwall 25 Leben');
+  const ci = s.cities.findIndex((c) => c.owner === 0);
+  s.players[0].res = { food: 999, wood: 999, ore: 999, mana: 99 };
+  check(canRecruit(s, 0, ci, 'blackknight') === 'needs', 'Schwarzer Ritter braucht Taverne');
+}
 // Riesentroll: 5 Trolle verschmelzen, Rundumschlag trifft alle Nachbarn
 {
   const s = createGame({ seed: 6, cols: 14, rows: 16, biome: 'plains', players: [{ ai: 3 }, { ai: 3 }] });
@@ -258,7 +270,7 @@ console.log(`50 Level erzeugt (${Date.now() - t0} ms)`);
 for (const diff of [0, 1, 2]) {
   const s = createDefenseGame({ seed: 900 + diff * 31, diff });
   check(s.defense.gates.length >= 2, `Burgverteidigung ${diff}: zu wenige Tore (${s.defense.gates.length})`);
-  s.players[0].ai = 3;
+  s.players[0].ai = 5; // starke Verteidigung, damit der Regeltest bis zu den späteren Wellen kommt
   const rng = mulberry32(diff + 5);
   let n = 0, loot = 0, cards = 0;
   while (!s.over && s.turn <= 30) {
