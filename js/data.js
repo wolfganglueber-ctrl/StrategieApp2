@@ -477,9 +477,9 @@ export const DIFFICULTIES = [
   { level: 1, name: 'Anfänger', desc: 'Nimmt sich ein Dorf und verteidigt sich, greift dich erst nach etwa 30 Runden zaghaft an. Nur einfache Einheiten.' },
   { level: 2, name: 'Leicht', desc: 'Etwa 18 Runden Schonfrist, höchstens 4 Städte, wenig Ausbau und Forschung, dazu Ritter und Katapulte.' },
   { level: 3, name: 'Normal', desc: 'Etwa 10 Runden Schonfrist, höchstens 7 Städte, baut und forscht solide, nutzt Greifen, Zauberer und Triböcke, entwickelt Einheiten gelegentlich.' },
-  { level: 4, name: 'Schwer', desc: 'Nur 5 Runden Schonfrist, höchstens 10 Städte, baut und forscht eifrig, dazu Basilisken und Trolle, verbessert Einheiten gezielt.' },
-  { level: 5, name: 'Meister', desc: 'Kaum Schonfrist, erobert ohne Grenze, alle Einheiten inkl. Drache, verbessert viel, spielt fast fehlerfrei.' },
-  { level: 6, name: 'Kaiser', desc: 'Wie Meister, ohne Schonfrist und mit größerer Armee.' },
+  { level: 4, name: 'Schwer', desc: 'Nur 5 Runden Schonfrist, höchstens 10 Städte, baut und forscht eifrig, dazu Basilisken und Trolle, verbessert Einheiten gezielt, +10 % Rohstoffe.' },
+  { level: 5, name: 'Meister', desc: 'Kaum Schonfrist, erobert ohne Grenze, alle Einheiten inkl. Drache, verbessert viel, spielt fast fehlerfrei, +25 % Rohstoffe.' },
+  { level: 6, name: 'Kaiser', desc: 'Wie Meister, ohne Schonfrist, mit größerer Armee und +45 % Rohstoffen.' },
 ];
 
 // Kleinste Karte ist „Riesig“ (Klein, Mittel, Groß gibt es nicht mehr)

@@ -1,6 +1,8 @@
 // Spieler-Bots für die Abstimmung der KI-Stufen: sie ahmen drei Arten menschlicher Spieler nach.
 // Sie spielen mit derselben KI (planAction), aber mit eigenen Werten (state.players[pid].params) und gelten als Mensch,
 // damit Schonfrist und Startguthaben wie im echten Spiel greifen.
+import { AI_PARAMS } from '../js/ai.js';
+
 const BASIC = ['warrior', 'archer', 'rider', 'defender'];
 
 export const BOTS = {
@@ -14,10 +16,11 @@ export const BOTS = {
     name: 'Gelegenheitsspieler',
     params: { noise: 2, mistake: 0.1, risk: 0.6, lossW: 0.9, smart: true, upgrade: 0.6, guard: 0.8, idle: 0.05, calm: 0, expand: 1, tech: 0.5, maxTech: 8, armyCap: 1, aggr: 1, commit: 1, unitUp: 0, boost: 0, noTowers: true },
   },
-  // Holt alles raus: maximaler Ausbau und Ertrag, Forschung, Entwicklung, Einzel-Verbesserungen, Türme und Wälle
+  // Holt alles raus: spielt wie Stufe 6 (maximaler Ausbau, Forschung, Entwicklung, Türme und Wälle), verbessert etwas
+  // zurückhaltender, aber ohne Rohstoffbonus
   pro: {
     name: 'Profi',
-    params: { noise: 0.4, mistake: 0, risk: 0.95, lossW: 1, smart: true, upgrade: 1, guard: 1, idle: 0, calm: 0, expand: 1.3, tech: 0.95, armyCap: 1.3, aggr: 1.4, commit: 1.4, unitUp: 0.8, boost: 0.7, saveTech: true },
+    params: { ...AI_PARAMS[6], boost: 0.5 },
   },
 };
 export const BOT_ORDER = ['beginner', 'casual', 'pro'];

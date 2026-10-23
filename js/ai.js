@@ -22,7 +22,7 @@ const U3 = [...U2, 'griffin', 'mage', 'trebuchet'];
 const U4 = [...U3, 'basilisk', 'troll'];
 export const AI_PARAMS = {
   1: { noise: 6, mistake: 0.5, risk: 0, lossW: 0.3, smart: false, upgrade: 0.1, cityMax: 2, guard: 0.3, idle: 0.5, calm: 30, expand: 0.3, tech: 0.1, maxTech: 1, armyCap: 0.5, aggr: 0.5, commit: 0.4, maxCities: 2, units: U1, unitUp: 0, boost: 0 },
-  2: { noise: 3.5, mistake: 0.3, risk: 0.3, lossW: 0.6, smart: false, upgrade: 0.25, cityMax: 3, guard: 0.6, idle: 0.25, calm: 25, expand: 0.55, tech: 0.3, maxTech: 3, armyCap: 0.6, aggr: 0.5, commit: 0.7, maxCities: 4, units: U2, unitUp: 0.1, boost: 0 },
+  2: { noise: 3.5, mistake: 0.3, risk: 0.3, lossW: 0.6, smart: false, upgrade: 0.25, cityMax: 2, guard: 0.3, idle: 0.25, calm: 25, expand: 0.55, tech: 0.3, maxTech: 3, armyCap: 0.6, aggr: 0.5, commit: 0.7, maxCities: 4, units: U2, unitUp: 0.1, boost: 0 },
   3: { noise: 2, mistake: 0.15, risk: 0.6, lossW: 0.9, smart: true, upgrade: 0.45, guard: 0.8, idle: 0.1, calm: 10, expand: 0.8, tech: 0.55, maxTech: 7, armyCap: 0.9, aggr: 1, commit: 1, maxCities: 7, units: U3, unitUp: 0.3, boost: 0.1 },
   4: { noise: 0.8, mistake: 0.03, risk: 0.85, lossW: 1, smart: true, upgrade: 0.75, guard: 0.95, idle: 0.03, calm: 5, expand: 1.05, tech: 0.8, maxTech: 12, armyCap: 1.2, aggr: 1.3, commit: 1.2, maxCities: 10, units: U4, unitUp: 0.6, boost: 0.25, saveTech: true },
   5: { noise: 0.4, mistake: 0.02, risk: 0.95, lossW: 1, smart: true, upgrade: 0.9, guard: 1, idle: 0, calm: 2, expand: 1.2, tech: 0.9, armyCap: 1.45, aggr: 1.6, commit: 1.4, unitUp: 0.7, boost: 0.5, saveTech: true },
