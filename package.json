@@ -1,12 +1,13 @@
 {
-  "name": "hexkrone",
-  "version": "0.5.0",
+  "name": "knightyknight",
+  "version": "0.96.0",
   "private": true,
   "description": "Rundenbasiertes Hex-Strategiespiel als Web-App (PWA)",
   "type": "module",
   "scripts": {
     "start": "npx --yes http-server -c-1 -p 8080 .",
     "sim": "node tools/sim.mjs",
+    "simbots": "node tools/simbots.mjs",
     "test": "node tools/test.mjs",
     "build": "node tools/build-single.mjs",
     "build:artifact": "node tools/build-artifact.mjs"
