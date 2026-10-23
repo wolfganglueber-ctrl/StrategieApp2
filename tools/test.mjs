@@ -230,6 +230,8 @@ const t0 = Date.now();
   const ci = s.cities.findIndex((c) => c.owner === 0);
   s.players[0].res = { food: 999, wood: 999, ore: 999, mana: 99 };
   check(canRecruit(s, 0, ci, 'blackknight') === 'needs', 'Schwarzer Ritter braucht Taverne');
+  const bk = { type: 'blackknight', owner: 0, rank: 1 };
+  check(statsOf(s, bk).hp === 35 && statsOf(s, bk).atk === 15 && statsOf(s, bk).pen === 30 && statsOf(s, bk).range === 2 && statsOf(s, bk).move === 4, 'Schwarzer Ritter 35/15, Durchschlag 30, Reichweite 2, Bewegung 4');
 }
 // Riesentroll: 5 Trolle verschmelzen, Rundumschlag trifft alle Nachbarn
 {

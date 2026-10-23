@@ -3041,63 +3041,9 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
     case 'giant':
       drawGiant(ctx, col);
       break;
-    case 'blackknight': {
-      // Gepanzerter Schwarzer Ritter: schwarzer Ritter auf gepanzertem Rappen, dazu Schulterdornen, glühender Sehschlitz
-      // und ein großer Turmschild mit Spielerwappen
-      const prev = FIGST;
-      FIGST = { stage: 4, ups: new Set(['k3b']) };
-      drawFigureInner(ctx, 'knight', col, level, true);
-      FIGST = prev;
-      ctx.save();
-      ctx.translate(0, 6);
-      // Rossharnisch-Platten am Pferdehals
-      ctx.fillStyle = grad(ctx, 4, 16, '#4b4f57', '#121317');
-      ctx.beginPath();
-      ctx.moveTo(6, -14);
-      ctx.lineTo(16, -18);
-      ctx.lineTo(17, -10);
-      ctx.lineTo(7, -6);
-      ctx.closePath();
-      ctx.fill();
-      outline(ctx, 0.6);
-      // Schulterdornen
-      ctx.fillStyle = '#2a2c31';
-      for (const [x, y, dx] of [[-6, -31, -4], [3.5, -31, 4]]) {
-        ctx.beginPath();
-        ctx.moveTo(x - 2, y + 1);
-        ctx.lineTo(x + dx, y - 4);
-        ctx.lineTo(x + 2, y + 1);
-        ctx.closePath();
-        ctx.fill();
-        outline(ctx, 0.5);
-      }
-      // Glühender Sehschlitz
-      ctx.fillStyle = '#ef4444';
-      ctx.fillRect(-3.4, -39.2, 4.8, 1.1);
-      ctx.fillStyle = 'rgba(239,68,68,0.35)';
-      ctx.beginPath();
-      ctx.ellipse(-1, -38.6, 4.5, 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Turmschild
-      ctx.fillStyle = grad(ctx, -14, -4, '#3f434b', '#0f1013');
-      ctx.beginPath();
-      ctx.roundRect(-14, -36, 9.5, 21, 2);
-      ctx.fill();
-      outline(ctx, 0.9);
-      ctx.strokeStyle = '#8b8f97';
-      ctx.lineWidth = 0.7;
-      ctx.strokeRect(-12.8, -34.8, 7.1, 18.6);
-      ctx.fillStyle = col.main;
-      ctx.beginPath();
-      ctx.moveTo(-9.25, -32);
-      ctx.lineTo(-6.8, -26);
-      ctx.lineTo(-9.25, -20);
-      ctx.lineTo(-11.7, -26);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
+    case 'blackknight':
+      drawBlackKnight(ctx, col);
       break;
-    }
     case 'dragon':
       drawDragon(ctx, col);
       break;
@@ -3593,6 +3539,164 @@ export function drawCastle(ctx, city, x, y, H, col) {
 }
 
 // Schwarzer Troll: gebeugter Koloss mit Steinhammer, Stachel-Schulterpanzer, Kette und Kriegsbemalung
+// Gepanzerter Schwarzer Ritter: großer, breiter Fußritter in tiefschwarzer Platte, Teufelshörner am Helm,
+// glühender Sehschlitz, lange Axt. Entwicklung: Dornen (2), rote Runen (5), Schild beim Bollwerk (3b)
+function drawBlackKnight(ctx, col) {
+  const st = FIGST.stage;
+  const plate = (x0, x1) => grad(ctx, x0, x1, '#5a5f68', '#0c0d10');
+  // Umhang in Spielerfarbe
+  ctx.fillStyle = cloth(ctx, -13, 9, col);
+  ctx.beginPath();
+  ctx.moveTo(-10, -40);
+  ctx.quadraticCurveTo(-17, -18, -15, 4);
+  ctx.lineTo(9, 4);
+  ctx.quadraticCurveTo(10, -18, 6, -40);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.8);
+  // Lange Axt hinter dem Körper (schräg, Klinge oben rechts)
+  ctx.strokeStyle = 'rgba(10,8,6,0.9)';
+  ctx.lineWidth = 3.2;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-12, 4);
+  ctx.lineTo(16, -54);
+  ctx.stroke();
+  ctx.strokeStyle = grad(ctx, -12, 16, '#5b3a22', '#24160c');
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = plate(10, 26);
+  ctx.beginPath();
+  ctx.moveTo(13, -52);
+  ctx.quadraticCurveTo(26, -56, 25, -42);
+  ctx.quadraticCurveTo(21, -45, 17, -44);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.8);
+  ctx.strokeStyle = '#c9ced6';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(25, -42);
+  ctx.quadraticCurveTo(26, -52, 14, -52.5);
+  ctx.stroke();
+  // Breite Beine mit Beinschienen
+  for (const [x, f] of [[-6, -7], [5, 6]]) {
+    ctx.fillStyle = plate(x - 4, x + 4);
+    ctx.beginPath();
+    ctx.roundRect(x - 3.6, -15, 7.2, 17, 2);
+    ctx.fill();
+    outline(ctx, 0.8);
+    ctx.fillStyle = '#0b0c0e';
+    ctx.beginPath();
+    ctx.ellipse(f, 3, 5, 2.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Mächtiger Brustpanzer
+  ctx.fillStyle = plate(-13, 11);
+  ctx.beginPath();
+  ctx.moveTo(-13, -38);
+  ctx.quadraticCurveTo(-1, -44, 11, -38);
+  ctx.lineTo(9, -14);
+  ctx.quadraticCurveTo(-1, -10, -11, -14);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 1.1);
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(-1, -40);
+  ctx.lineTo(-1, -13);
+  for (const y of [-31, -24, -18]) { ctx.moveTo(-10, y); ctx.quadraticCurveTo(-1, y + 2, 8, y); }
+  ctx.stroke();
+  // Gürtel in Spielerfarbe
+  ctx.fillStyle = col.main;
+  ctx.fillRect(-11, -17, 20, 3);
+  outline(ctx, 0.5);
+  // Runen (Dämonenfürst)
+  if (st >= 5) {
+    ctx.strokeStyle = 'rgba(239,68,68,0.9)';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(-6, -34); ctx.lineTo(-4, -28); ctx.lineTo(-7, -24);
+    ctx.moveTo(4, -34); ctx.lineTo(2, -28); ctx.lineTo(5, -24);
+    ctx.stroke();
+  }
+  // Riesige Schulterplatten, ab Dornenrüstung mit Dornen
+  for (const [x, dir] of [[-14, -1], [12, 1]]) {
+    ctx.fillStyle = plate(x - 6, x + 6);
+    ctx.beginPath();
+    ctx.ellipse(x, -37, 7, 4.8, dir * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    outline(ctx, 0.9);
+    if (st >= 2) {
+      ctx.fillStyle = '#1b1c20';
+      for (const k of [0, 1, 2]) {
+        const px = x + dir * (k * 2.5 - 2.5), py = -41 + Math.abs(k - 1) * 1.2;
+        ctx.beginPath();
+        ctx.moveTo(px - 1.2, py + 1);
+        ctx.lineTo(px + dir * 0.6, py - 4);
+        ctx.lineTo(px + 1.2, py + 1);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+  }
+  // Arme in Plattenhandschuhen, die Hände am Axtschaft
+  for (const [x0, y0, x1, y1] of [[-14, -35, -6, -20], [12, -35, 8, -26]]) {
+    ctx.strokeStyle = 'rgba(10,8,6,0.9)';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+    ctx.strokeStyle = plate(Math.min(x0, x1) - 3, Math.max(x0, x1) + 3);
+    ctx.lineWidth = 4.6;
+    ctx.stroke();
+  }
+  // Bollwerk der Finsternis: Turmschild
+  if (FIGST.ups.has('x3b')) {
+    ctx.fillStyle = plate(-20, -10);
+    ctx.beginPath();
+    ctx.roundRect(-21, -34, 10, 22, 2);
+    ctx.fill();
+    outline(ctx, 0.9);
+    ctx.fillStyle = col.main;
+    ctx.beginPath();
+    ctx.moveTo(-16, -30); ctx.lineTo(-13.5, -23); ctx.lineTo(-16, -16); ctx.lineTo(-18.5, -23);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Topfhelm mit Teufelshörnern und glühendem Sehschlitz
+  ctx.fillStyle = plate(-7, 6);
+  ctx.beginPath();
+  ctx.roundRect(-6.8, -55, 12.6, 14, [5, 5, 2, 2]);
+  ctx.fill();
+  outline(ctx, 1);
+  for (const dir of [-1, 1]) {
+    const bx = -0.5 + dir * 5.5;
+    ctx.fillStyle = grad(ctx, bx - 3, bx + 3, '#7f1d1d', '#1c0606');
+    ctx.beginPath();
+    ctx.moveTo(bx - dir * 0.5, -52);
+    ctx.quadraticCurveTo(bx + dir * 7, -54, bx + dir * 6, -63);
+    ctx.quadraticCurveTo(bx + dir * 4, -57, bx - dir * 0.5, -48.5);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.6);
+  }
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(-5, -49.5, 9.6, 1.4);
+  ctx.fillStyle = 'rgba(239,68,68,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(-0.2, -48.8, 7, 2.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(-0.5, -54.5);
+  ctx.lineTo(-0.5, -50.5);
+  ctx.stroke();
+}
+
 // Riesentroll: aus 5 Trollen verschmolzen – moosgrüne Steinhaut, zwei Köpfe, Hauer, riesige Steinkeule, Knochenkette
 function drawGiant(ctx, col) {
   const skin = '#4d5a3a', skinD = '#1e2416', skinL = '#8b9a6a';

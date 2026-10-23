@@ -114,7 +114,7 @@ export function hasTech(state, pid, t) {
 export function statsOf(state, u) {
   const T = UNITS[u.type];
   // def = Zuschlag auf die Verteidigung in Prozentpunkten (Grundwerte je Angriffsart in DEF_TABLE), pen = Durchschlag
-  const st = { hp: T.hp, atk: T.atk, def: T.def || 0, pen: 0, move: T.move, range: T.range };
+  const st = { hp: T.hp, atk: T.atk, def: T.def || 0, pen: T.pen || 0, move: T.move, range: T.range };
   if (u.type === 'tower') {
     Object.assign(st, TOWER_LEVELS[u.level || 1]);
     if (hasTech(state, u.owner, 'stonework')) st.hp += 6;

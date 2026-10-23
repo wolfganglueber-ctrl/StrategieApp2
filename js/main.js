@@ -1225,7 +1225,7 @@ function attackFx(ev, L, hit, ranged, f) {
 }
 
 // ---------------------------------------------------------------- Klänge
-const MOVE_SOUND = { rider: 'hooves', knight: 'hooves', blackknight: 'hooves', catapult: 'wheels', trebuchet: 'wheels', troll: 'stomp', giant: 'stomp', mage: 'glide', dragon: 'wings', basilisk: 'steps' };
+const MOVE_SOUND = { rider: 'hooves', knight: 'hooves', blackknight: 'steps', catapult: 'wheels', trebuchet: 'wheels', troll: 'stomp', giant: 'stomp', mage: 'glide', dragon: 'wings', basilisk: 'steps' };
 
 // Stereo-Position eines Feldes: links/rechts am Bildschirm
 function panOf(idx) {

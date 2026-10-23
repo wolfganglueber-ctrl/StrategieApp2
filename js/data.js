@@ -69,7 +69,7 @@ export const UNITS = {
   knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 7, def: 0, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
   tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 4, def: 0, move: 0, range: 1, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
   mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5, mana: 3 }, upkeep: { food: 2, mana: 1 }, hp: 10, atk: 2, def: 0, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben +15 % Verteidigung, Flächenschaden halbiert. Heilt statt anzugreifen, bis 3 Felder weit. Kostet Mana und 1 Mana Unterhalt pro Runde. Höchstens einer pro Stadt.' },
-  blackknight: { name: 'Gepanzerter Schwarzer Ritter', cost: { food: 35, wood: 15, ore: 40 }, hp: 28, atk: 10, def: 0, move: 2, range: 1, supply: 2, needs: 'tavern', desc: 'Schwer gepanzerter Ritter in schwarzer Rüstung: viel Leben, harter Schlag, robust gegen Nahkampf und Pfeile, aber langsam. Kommt aus der Taverne.' },
+  blackknight: { name: 'Gepanzerter Schwarzer Ritter', cost: { food: 35, wood: 15, ore: 40 }, hp: 35, atk: 15, def: 0, pen: 30, move: 4, range: 2, line: [1], supply: 2, needs: 'tavern', desc: 'Riesiger Ritter zu Fuß in schwarzer Rüstung mit Teufelshörnern. Seine lange Axt reicht 2 Felder weit und trifft auch den Gegner direkt hinter dem Ziel. Durchschlag 30, robust gegen Nahkampf und Pfeile. Kommt aus der Taverne.' },
   troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 12, def: 0, move: 4, range: 1, supply: 3, perRealm: 5, counters: 3, needs: 'lair', desc: 'Ein Titan: viel Leben und harte Schläge. Braucht eine Trollhöhle, höchstens 5 pro Reich.' },
   giant: { name: 'Riesentroll', cost: { food: 90, wood: 50, ore: 100 }, hp: 350, atk: 20, def: 0, move: 3, range: 1, supply: 3, sweep: true, counters: 3, fused: true, desc: 'Aus 5 Trollen verschmolzen (50 Mana): Leben aller fünf zusammen. Sein Rundumschlag trifft alle Gegner auf den 6 Nachbarfeldern auf einmal. Zieht 1 Feld weniger als ein Troll.' },
   dragon: { name: 'Drache', cost: { food: 150, wood: 150, ore: 150 }, hp: 120, atk: 25, def: 0, move: 5, range: 1, supply: 3, perRealm: 1, flying: true, line: [0.75, 0.5], needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten. Sein Feueratem trifft auch die Gegner auf den 2 Feldern hinter dem Ziel (75 % und 50 %). Nur einer pro Reich.' },
@@ -100,7 +100,7 @@ for (const k of Object.keys(UNITS)) {
 }
 export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'griffin', 'catapult', 'trebuchet', 'mage', 'basilisk', 'blackknight', 'troll', 'dragon'];
 // Höchste Zugweite bei voller Entwicklung (gilt auch für Sprünge über eigene Einheiten)
-export const MOVE_CAP = { catapult: 3, trebuchet: 3, rider: 6, knight: 6, griffin: 6, dragon: 6 };
+export const MOVE_CAP = { catapult: 3, trebuchet: 3, rider: 6, knight: 6, griffin: 6, dragon: 6, blackknight: 5 };
 export const MOVE_CAP_DEFAULT = 4;
 export function moveCap(type) {
   return MOVE_CAP[type] ?? MOVE_CAP_DEFAULT;
@@ -230,7 +230,7 @@ export const TECH_ORDER = Object.keys(TECHS);
 // mod: Werte (hp, atk, def, move, range, regen) · perk: Sonderfähigkeit wie bei den Rängen (siehe PERKS)
 // Jede Stufe verändert auch das Aussehen der Einheit.
 export const UP_GROUPS = [
-  ['melee', 'Nahkämpfer', ['warrior', 'rider', 'defender', 'knight', 'griffin']],
+  ['melee', 'Nahkämpfer', ['warrior', 'rider', 'defender', 'knight', 'griffin', 'blackknight']],
   ['ranged', 'Fernkämpfer', ['archer', 'basilisk']],
   ['mage', 'Zauberer', ['mage']],
   ['siege', 'Katapulte', ['catapult', 'trebuchet']],
@@ -287,6 +287,13 @@ export const UNIT_UPS = {
     U('m4', 'Elixier', 'Heilt 3 mehr', {}, 'greatheal'),
     U('m5', 'Erzmagier', '+2 Angriff, +10 % Verteidigung', { atk: 2, def: 10 }),
   ],
+  blackknight: [
+    U('x1', 'Höllenstahl', '+2 Angriff', { atk: 2 }),
+    U('x2', 'Dornenrüstung', '+5 Leben, +5 % Verteidigung', { hp: 5, def: 5 }),
+    [U('x3a', 'Schlächter', 'Sturmangriff: +2 Angriff nach dem Ziehen', {}, 'charge'), U('x3b', 'Bollwerk der Finsternis', '+15 % Verteidigung', { def: 15 })],
+    U('x4', 'Höllenross-Schritt', '+1 Bewegung', { move: 1 }),
+    U('x5', 'Dämonenfürst', '+3 Angriff, +5 Leben', { atk: 3, hp: 5 }),
+  ],
   basilisk: [
     U('b1', 'Härtere Schuppen', '+5 % Verteidigung', { def: 5 }),
     U('b2', 'Giftzahn', '+2 Angriff', { atk: 2 }),
@@ -328,7 +335,7 @@ for (const [type, tiers] of Object.entries(UNIT_UPS)) tiers.forEach((t, i) => (A
 // Kosten je Stufe (Titanen teurer)
 const UP_COST = [[20, 15, 20], [30, 25, 30], [45, 35, 45], [60, 50, 60], [85, 70, 85]];
 export function unitUpCost(type, tier) {
-  const w = type === 'dragon' ? 2.5 : type === 'troll' || type === 'basilisk' ? 1.5 : 1;
+  const w = type === 'dragon' ? 2.5 : type === 'troll' || type === 'basilisk' || type === 'blackknight' ? 1.5 : 1;
   const [f, wd, o] = UP_COST[tier];
   return { food: Math.round(f * w), wood: Math.round(wd * w), ore: Math.round(o * w) };
 }
