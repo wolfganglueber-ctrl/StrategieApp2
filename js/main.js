@@ -98,10 +98,8 @@ function startLevel(level) {
   if (level.id === 1 || !store.progress().seenIntro) showIntro();
 }
 
-// Regler „Städte auf der Karte“: normal (zufällig verteilt), viele (dichtes Gitter), voll (Gitter + jede Lücke);
-// immer mit 4 freien Feldern zwischen zwei Städten, Gebiete überlappen nie
-const CITY_DENSITY = [18, -1, 0];
-const CITY_LABELS = ['normal', 'viele', 'voll'];
+// Regler „Städte auf der Karte“: 20–100 % der höchstmöglichen Städtezahl (100 % = jedes Feld mit 4 freien Feldern
+// Abstand belegt, Gebiete überlappen nie); darunter werden zufällig (fest zum Karten-Code) Dörfer weggelassen
 function skirmishConfig(setup) {
   const size = MAP_SIZES[setup.size] || MAP_SIZES.XL;
   let biome = setup.biome;
@@ -112,7 +110,8 @@ function skirmishConfig(setup) {
   }
   return {
     seed: seedFromCode(code), cols: size.cols, rows: size.rows, biome, fog: !!settings.fog,
-    villageDensity: CITY_DENSITY[setup.cities] ?? CITY_DENSITY[1],
+    villageDensity: 0,
+    cityPct: (setup.cityPct || 80) / 100,
     players: [{ human: true }, ...Array.from({ length: setup.enemies }, () => ({ ai: setup.diff }))],
   };
 }
@@ -2400,7 +2399,7 @@ function renderLevels() {
 // ---------------------------------------------------------------- Freies Spiel
 const setup = Object.assign({ size: 'XL', biome: 'mixed', enemies: 1, diff: 3, fog: false, code: randomSeedCode() }, store.lastSetup() || {});
 if (!MAP_SIZES[setup.size]) setup.size = 'XL'; // alte Auswahl Klein/Mittel/Groß
-if (!(setup.cities >= 0 && setup.cities <= 2) || setup.citiesV !== 2) { setup.cities = 1; setup.citiesV = 2; } // neuer Regler: Standard „viele“
+if (!(setup.cityPct >= 20 && setup.cityPct <= 100) || setup.citiesV !== 3) { setup.cityPct = 80; setup.citiesV = 3; } // Regler in Prozent (0.99), Standard 80 %
 
 function renderSetup() {
   const seg = (id, options, key) => {
@@ -2417,7 +2416,7 @@ function renderSetup() {
   const d = DIFFICULTIES[setup.diff - 1];
   $('diffDesc').textContent = `${d.name}: ${d.desc}`;
   $('seedInput').value = setup.code;
-  $('citiesRange').value = setup.cities;
+  $('citiesRange').value = setup.cityPct;
   updateCitiesInfo();
 }
 // Vorschau: genaue Anzahl Städte dieser Karte (Dörfer halten Abstand, daher passen nicht beliebig viele).
@@ -2425,9 +2424,9 @@ function renderSetup() {
 const citiesCache = new Map();
 let citiesTimer = null;
 function updateCitiesInfo() {
-  const label = CITY_LABELS[setup.cities];
+  const label = `${setup.cityPct} %`;
   const c = skirmishConfig({ ...setup, code: setup.code || 'A' });
-  const key = [c.seed, c.cols, c.rows, c.biome, c.villageDensity, c.players.length].join('|');
+  const key = [c.seed, c.cols, c.rows, c.biome, c.cityPct, c.players.length].join('|');
   const show = (n) => { $('citiesInfo').textContent = `(${label}: ${n} Städte inkl. Hauptstädte)`; };
   if (citiesCache.has(key)) { show(citiesCache.get(key)); return; }
   show('…');
@@ -2437,10 +2436,10 @@ function updateCitiesInfo() {
     try { n = generateMap({ ...c, players: c.players.length }).cities.length; } catch { /* Karte nicht erzeugbar */ }
     citiesCache.set(key, n);
     const cur = skirmishConfig({ ...setup, code: setup.code || 'A' });
-    if (key === [cur.seed, cur.cols, cur.rows, cur.biome, cur.villageDensity, cur.players.length].join('|')) show(n);
+    if (key === [cur.seed, cur.cols, cur.rows, cur.biome, cur.cityPct, cur.players.length].join('|')) show(n);
   }, 0)), 300);
 }
-$('citiesRange').addEventListener('input', (e) => { setup.cities = +e.target.value; updateCitiesInfo(); });
+$('citiesRange').addEventListener('input', (e) => { setup.cityPct = +e.target.value; updateCitiesInfo(); });
 $('seedInput').addEventListener('input', (e) => { setup.code = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); updateCitiesInfo(); });
 $('btnDice').addEventListener('click', () => { setup.code = randomSeedCode(); renderSetup(); });
 $('btnStartSkirmish').addEventListener('click', () => {

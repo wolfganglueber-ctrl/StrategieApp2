@@ -3,6 +3,7 @@ import { createGame, applyAction, cloneState, computeCombat, statsOf, spawnUnit,
 import { getGeo } from '../js/hex.js';
 import { planAction } from '../js/ai.js';
 import { getLevels } from '../js/levels.js';
+import { generateMap } from '../js/mapgen.js';
 import { MAP_SIZES, BIOMES, UNITS, buildingYield, START_BONUS, citySlots } from '../js/data.js';
 import { mulberry32 } from '../js/rng.js';
 import { createDefenseGame, waveUnits } from '../js/defense.js';
@@ -250,6 +251,12 @@ const t0 = Date.now();
   const near = splashDamage(s, bk, n1, 5).map((h) => h.unit);
   const far = splashDamage(s, bk, n2, 5).map((h) => h.unit);
   check(near.includes(e2) && !far.includes(e3), `Axt: Doppeltreffer nur bis Feld 2 (${near.length}/${far.length})`);
+}
+// Regler „Städte auf der Karte“: Anteil der höchstmöglichen Städtezahl, Hauptstädte bleiben
+{
+  const n = (p) => generateMap({ seed: 4711, cols: MAP_SIZES.XL.cols, rows: MAP_SIZES.XL.rows, players: 2, villageDensity: 0, cityPct: p }).cities;
+  const full = n(1).length, low = n(0.2);
+  check(Math.abs(low.length - Math.round(full * 0.2)) <= 1 && low.filter((c) => c.capital).length === 2 && n(0.6).length > low.length, `Städte-Regler 20 % ${low.length} von ${full}`);
 }
 // Riesentroll: 5 Trolle verschmelzen, Rundumschlag trifft alle Nachbarn
 {

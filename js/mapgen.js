@@ -191,7 +191,8 @@ function placeCities(rng, geo, terrain, players, villageDensity) {
   return { cities, imbalance, missing: Number.isFinite(target) ? Math.max(0, target - bestV.length) : -bestV.length }; // voll: mehr Dörfer = besser
 }
 
-export function generateMap({ seed, cols, rows, players, biome = 'mixed', villageDensity = 18 }) {
+// cityPct (0,2–1): Anteil der höchstmöglichen Städtezahl (100 % = jedes Feld mit 4 freien Feldern Abstand belegt, nur mit villageDensity 0)
+export function generateMap({ seed, cols, rows, players, biome = 'mixed', villageDensity = 18, cityPct = 1 }) {
   const bio = BIOMES[biome] || BIOMES.mixed;
   const geo = getGeo(cols, rows);
   let best = null;
@@ -207,6 +208,14 @@ export function generateMap({ seed, cols, rows, players, biome = 'mixed', villag
     if ((score <= 1 && villageDensity > 0) || (best && attempt >= 11)) break; // 12 Versuche reichen (sonst dauert das Erzeugen am Handy spürbar)
   }
   if (!best) throw new Error('Karte konnte nicht erzeugt werden');
+  // Regler „Städte auf der Karte“: zufällig (fest zum Code) Dörfer entfernen, Hauptstädte bleiben
+  if (cityPct < 1) {
+    const caps = best.cities.filter((c) => c.capital);
+    const vill = new Rng((seed ^ 0x2545f491) >>> 0).shuffle(best.cities.filter((c) => !c.capital));
+    const keep = Math.max(0, Math.round(best.cities.length * cityPct) - caps.length);
+    const kept = new Set(vill.slice(0, keep));
+    best.cities = best.cities.filter((c) => c.capital || kept.has(c));
+  }
   for (const c of best.cities) best.terrain[c.idx] = 'plain';
   // Jede Hauptstadt bekommt einen fairen Rohstoff-Mix in ihrem Gebiet
   const isCity = new Set(best.cities.map((c) => c.idx));
