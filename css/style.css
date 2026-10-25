@@ -432,33 +432,32 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .range { width: 100%; accent-color: #fbbf24; margin: 4px 0 2px; }
 
+/* Kompakte Anzeige (Handy automatisch oder Einstellung „Schriftgröße im Spiel“ unter 100 %): body.compact, Faktor --ui-zoom.
+   Auf dem PC (100 %) gelten die Größen wie bis 0.95. */
 /* Rohstoffleiste: Vorrat groß, Ertrag pro Runde klein darunter (auch vierstellig lesbar) */
-.resbar .pill .rv { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.05; }
-.resbar .pill .rv b { font-size: 15px; }
-.resbar .pill .rv small { font-size: 11px; }
-/* Schrift im Spiel wie die Gegner-Rohstoffzeile (11,5 px, schmale Handys 10,5 px), damit mehr Karte frei bleibt:
-   die Leiste unten (Einheiten-/Stadtfenster, Zug beenden …) wird als Ganzes verkleinert (Knopfschrift 15 px → 11,5 px),
-   die Hinweisfenster bekommen dieselbe Schriftgröße */
-.bottom { zoom: 0.77; }
-.tip { max-width: 200px; padding: 7px 9px; font-size: 11.5px; border-radius: 9px; }
-.tip-title { font-size: 11.5px; margin-bottom: 4px; }
-.tip-grid { gap: 2px 9px; }
-.tip-desc { margin-top: 4px; }
-@media (max-width: 500px) {
-  .bottom { zoom: 0.7; }
-  .tip { font-size: 10.5px; max-width: 180px; }
-  .tip-title { font-size: 10.5px; }
-}
+body.compact .resbar .pill .rv { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.05; }
+body.compact .resbar .pill .rv b { font-size: 15px; }
+body.compact .resbar .pill .rv small { font-size: 11px; }
+/* Leiste unten (Einheiten-/Stadtfenster, Zug beenden …) als Ganzes verkleinert, Hinweisfenster mit kleinerer Schrift */
+body.compact .bottom { zoom: var(--ui-zoom, 1); }
+body.compact .tip { max-width: 200px; padding: 7px 9px; font-size: calc(15px * var(--ui-zoom, 1)); border-radius: 9px; }
+body.compact .tip-title { font-size: calc(15px * var(--ui-zoom, 1)); margin-bottom: 4px; }
+body.compact .tip-grid { gap: 2px 9px; }
+body.compact .tip-desc { margin-top: 4px; }
 /* Fenster Forschung, Entwicklung, Verbesserungen: Symbole halb so groß, damit mehr Einträge auf den Bildschirm passen */
-#modalBox .ticon { font-size: 20px; width: 26px; }
-#modalBox .tech-card { padding: 5px 8px; gap: 8px; }
-#modalBox .tech-card .done { font-size: 15px; padding: 0 4px; }
-#modalBox .up-card canvas.fig { width: 28px !important; height: 28px !important; }
-#modalBox .up-unit canvas.fig { width: 26px !important; height: 26px !important; }
-#modalBox .unit-card canvas.fig { width: 30px !important; height: 30px !important; }
-#modalBox .tchip .ico { width: 18px; height: 18px; }
-#modalBox .tech-card .cost { font-size: 11.5px; gap: 3px; }
-#modalBox .tech-card .cost .ico { width: 13px; height: 13px; }
-#modalBox .tech-card .btn.small { padding: 4px 6px; }
-#modalBox .tech-card .binfo { font-size: 13px; }
-#modalBox .tech-card .binfo span { font-size: 11.5px; }
+body.compact #modalBox .ticon { font-size: 20px; width: 26px; }
+body.compact #modalBox .tech-card { padding: 5px 8px; gap: 8px; }
+body.compact #modalBox .tech-card .done { font-size: 15px; padding: 0 4px; }
+body.compact #modalBox .up-card canvas.fig { width: 28px !important; height: 28px !important; }
+body.compact #modalBox .up-unit canvas.fig { width: 26px !important; height: 26px !important; }
+body.compact #modalBox .unit-card canvas.fig { width: 30px !important; height: 30px !important; }
+body.compact #modalBox .tchip .ico { width: 18px; height: 18px; }
+body.compact #modalBox .tech-card .cost { font-size: 11.5px; gap: 3px; }
+body.compact #modalBox .tech-card .cost .ico { width: 13px; height: 13px; }
+body.compact #modalBox .tech-card .btn.small { padding: 4px 6px; }
+body.compact #modalBox .tech-card .binfo { font-size: 13px; }
+body.compact #modalBox .tech-card .binfo span { font-size: 11.5px; }
+/* Stadtmenü auf dem Handy 50 % höher (40 → 60 % der Bildschirmhöhe vor dem Verkleinern) */
+.panel-small .panel.city-open { max-height: min(60vh, calc(100vh - var(--hud-top, 110px) - 90px)); }
+/* Nur ein Bildlauf im Bedienfeld: die Gebäudeliste scrollt nicht mehr extra */
+.panel .build-list { max-height: none; overflow: visible; }

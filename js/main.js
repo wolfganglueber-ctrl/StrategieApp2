@@ -489,6 +489,7 @@ function refresh() {
   }
   if (sel.infoIdx != null) o.selected = sel.infoIdx;
   R.overlay = o;
+  $('panel').classList.toggle('city-open', sel.cityIdx != null);
   R.gates = S.defense?.gates || null;
   R.invalidate();
   renderPanel();
@@ -1295,6 +1296,11 @@ function applyPanelSize() {
   const v = settings.panelSize && settings.panelSize !== 'auto' ? settings.panelSize : detectPanelSize();
   document.body.classList.remove('panel-small', 'panel-medium', 'panel-large');
   document.body.classList.add('panel-' + v);
+  // Schriftgröße im Spiel: automatisch auf dem Handy 77 % (schmal 70 %), sonst 100 % (PC wie bis 0.95)
+  const phone = detectPanelSize() === 'small';
+  const z = settings.uiScale && settings.uiScale !== 'auto' ? +settings.uiScale : phone ? (window.innerWidth <= 500 ? 0.7 : 0.77) : 1;
+  document.body.classList.toggle('compact', z < 1);
+  document.documentElement.style.setProperty('--ui-zoom', String(z));
 }
 applyPanelSize();
 window.addEventListener('resize', applyPanelSize);
@@ -2342,6 +2348,8 @@ function openSettings(onClose) {
     seg([[0, 'Aus'], [0.3, 'Leise'], [0.6, 'Normal'], [1, 'Laut']], settings.ambience, (v) => { settings.ambience = v; store.saveSettings(settings); applySoundSettings(); }),
     el('label', {}, 'Größe der Menüs unten (Stadt, Einheit)'),
     seg([['auto', 'Automatisch'], ['small', 'Klein'], ['medium', 'Mittel'], ['large', 'Groß']], settings.panelSize || 'auto', (v) => { settings.panelSize = v; store.saveSettings(settings); applyPanelSize(); }),
+    el('label', {}, 'Schriftgröße im Spiel (Leiste unten, Hinweise, Fenster)'),
+    seg([['auto', 'Auto'], [0.6, '60 %'], [0.7, '70 %'], [0.8, '80 %'], [0.9, '90 %'], [1, '100 %']], settings.uiScale ?? 'auto', (v) => { settings.uiScale = v; store.saveSettings(settings); applyPanelSize(); }),
     el('label', {}, 'Vibration'),
     toggle('vibrate'),
     el('label', {}, 'Zugende bestätigen'),
