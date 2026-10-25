@@ -1849,7 +1849,7 @@ function renderCityPanel(panel, ci, occ) {
         onmouseleave: () => { const n = $('recruitNote'); if (n && n.dataset.base != null) n.textContent = n.dataset.base; },
       },
         iconCanvas(k, p.id, 58),
-        el('div', { class: 'name' }, T.name),
+        el('div', { class: 'name' }, T.short || T.name),
         why === 'needs' ? el('span', { class: 'lock' }, '🔒 ', BUILDINGS[T.needs].name) : why === 'tech' ? el('span', { class: 'lock' }, '🔬 ', TECHS[T.tech].name) : costEl(T.cost, p.res)));
     }
     panel.append(grid);
