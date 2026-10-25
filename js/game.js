@@ -886,7 +886,7 @@ export function getHealTargets(state, u, fromIdx = u.idx) {
 }
 
 // Flächenschaden (Katapult): gegnerische Einheiten neben dem Ziel bekommen einen Teil des Schadens.
-// Feueratem in Linie (Drache): die Felder hinter dem Ziel in Angriffsrichtung werden mitgetroffen.
+// Feueratem in Linie (Drache), lange Axt (Schwarzer Ritter): die Felder hinter dem Ziel in Angriffsrichtung werden mitgetroffen.
 export function splashDamage(state, att, idx, dmg, from = att.idx) {
   const geo = geoOf(state);
   const res = [];
@@ -898,8 +898,6 @@ export function splashDamage(state, att, idx, dmg, from = att.idx) {
     line.forEach((f, k) => {
       const j = pixelToIndex(b.x + dx * (k + 1), b.y + dy * (k + 1), 1, state.cols, state.rows);
       if (j < 0) return;
-      // Lange Axt (Schwarzer Ritter): trifft nur Felder bis 2 weit vom eigenen Standort
-      if (UNITS[att.type].lineReach && geo.dist(from, j) > UNITS[att.type].lineReach) return;
       inLine.add(j);
       const o = state.units.find((x) => x.idx === j);
       if (o && o.owner !== att.owner) res.push({ unit: o, dmg: Math.ceil(dmg * f * (inAura(state, o) ? AURA.splash : 1) - 1e-9) });

@@ -1211,6 +1211,10 @@ function attackFx(ev, L, hit, ranged, f) {
     else if (kind === 'fire') R.sparks(def.idx, hit, { n: 12, colors: ['#fde047', '#fb923c', '#ef4444'] });
     else if (kind === 'gaze' || kind === 'bolt') R.sparks(def.idx, hit, { n: 12, colors: kind === 'gaze' ? ['#d9f99d', '#a3e635'] : ['#f5d0fe', '#c084fc'] });
     else R.sparks(def.idx, hit, { n: 6, colors: ['#e7e5e4', '#a8a29e'], speed: 0.6 });
+  } else if (t === 'blackknight') {
+    // Lange Axt: schwingt vom Ritter über das Ziel bis auf das Feld dahinter
+    R.axeSwing(att.idx, def.idx, hit - 160 * f, 260 * f);
+    R.sparks(def.idx, hit, { n: 14 });
   } else {
     const big = t === 'troll' || t === 'giant' || t === 'griffin';
     R.slash(def.idx, att.idx, hit - 40 * f, t === 'mage' ? '#e9d5ff' : '#fff7d6', big);

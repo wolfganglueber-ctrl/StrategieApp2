@@ -409,6 +409,52 @@ export class Renderer {
     }, delay);
   }
 
+  // Lange Axt (Schwarzer Ritter): Stiel und Klinge schwingen vom Angreifer über das Ziel bis aufs Feld dahinter
+  axeSwing(fromIdx, toIdx, delay, ms = 260) {
+    const a = this.center(fromIdx), b = this.center(toIdx);
+    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+    const len = Math.hypot(b.x - a.x, b.y - a.y) * 1.85;
+    const px = a.x, py = a.y - HEX * 0.45;
+    this.addAnim(ms + 140, null, (ctx, q) => {
+      const p = Math.min(1, q * (ms + 140) / ms), fade = q > ms / (ms + 140) ? 1 - (q * (ms + 140) - ms) / 140 : 1;
+      const e = easeInOut(p), a0 = ang - 1.2, th = a0 + 1.5 * e;
+      ctx.save();
+      ctx.globalAlpha = fade;
+      // Bewegungsspur der Klinge
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(254,226,226,0.5)';
+      ctx.shadowColor = '#ef4444';
+      ctx.shadowBlur = 10;
+      ctx.lineWidth = HEX * 0.22;
+      ctx.beginPath();
+      ctx.arc(px, py, len * 0.93, Math.max(a0, th - 0.9), th);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.translate(px, py);
+      ctx.rotate(th);
+      // Stiel
+      ctx.strokeStyle = '#1c1917';
+      ctx.lineWidth = HEX * 0.13;
+      ctx.beginPath(); ctx.moveTo(HEX * 0.15, 0); ctx.lineTo(len, 0); ctx.stroke();
+      ctx.strokeStyle = '#57534e';
+      ctx.lineWidth = HEX * 0.04;
+      ctx.stroke();
+      // Klinge (Halbmond) am Ende, Schneide in Schlagrichtung
+      ctx.fillStyle = '#d6d3d1';
+      ctx.strokeStyle = '#292524';
+      ctx.lineWidth = HEX * 0.035;
+      ctx.beginPath();
+      ctx.moveTo(len * 0.84, -HEX * 0.06);
+      ctx.quadraticCurveTo(len * 0.8, HEX * 0.62, len * 1.0, HEX * 0.72);
+      ctx.quadraticCurveTo(len * 1.08, HEX * 0.3, len * 0.99, -HEX * 0.06);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#7f1d1d';
+      ctx.beginPath(); ctx.arc(len * 0.91, HEX * 0.1, HEX * 0.06, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }, delay);
+  }
+
   // Funken/Splitter: kleine Teilchen fliegen auseinander und fallen
   sparks(idx, delay, { n = 14, colors = ['#fff7c2', '#fcd34d', '#fb923c'], speed = 1, size = 1, gravity = 1, ms = 420, up = 0.35 } = {}) {
     const c = this.center(idx);

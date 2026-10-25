@@ -232,9 +232,9 @@ const t0 = Date.now();
   s.players[0].res = { food: 999, wood: 999, ore: 999, mana: 99 };
   check(canRecruit(s, 0, ci, 'blackknight') === 'needs', 'Schwarzer Ritter braucht Taverne');
   const bk = { type: 'blackknight', owner: 0, rank: 1 };
-  check(statsOf(s, bk).hp === 35 && statsOf(s, bk).atk === 15 && statsOf(s, bk).pen === 30 && statsOf(s, bk).range === 2 && statsOf(s, bk).move === 3, 'Schwarzer Ritter 35/15, Durchschlag 30, Reichweite 2, Bewegung 3');
+  check(statsOf(s, bk).hp === 35 && statsOf(s, bk).atk === 15 && statsOf(s, bk).pen === 30 && statsOf(s, bk).range === 1 && statsOf(s, bk).move === 3, 'Schwarzer Ritter 35/15, Durchschlag 30, Nahkampf, Bewegung 3');
 }
-// Lange Axt: Doppeltreffer nur bis 2 Felder vom Standort
+// Lange Axt: Nahkampf, trifft zusätzlich den Gegner direkt dahinter
 {
   const s = createGame({ seed: 6, cols: 24, rows: 30, biome: 'plains', players: [{ ai: 3 }, { ai: 3 }] });
   const geo = getGeo(s.cols, s.rows);
@@ -249,8 +249,8 @@ const t0 = Date.now();
   const [e1, e2, e3] = [n1, n2, n3].map((j) => spawnUnit(s, 'warrior', 1, j, true));
   e1.hp = e2.hp = e3.hp = 99;
   const near = splashDamage(s, bk, n1, 5).map((h) => h.unit);
-  const far = splashDamage(s, bk, n2, 5).map((h) => h.unit);
-  check(near.includes(e2) && !far.includes(e3), `Axt: Doppeltreffer nur bis Feld 2 (${near.length}/${far.length})`);
+  check(near.length === 1 && near[0] === e2, `Axt: trifft den Gegner direkt hinter dem Ziel (${near.length})`);
+  check(!applyAction(s, { type: 'attack', unitId: bk.id, targetId: e2.id }), 'Schwarzer Ritter greift nur Nachbarn an');
 }
 // Regler „Städte auf der Karte“: Anteil der höchstmöglichen Städtezahl, Hauptstädte bleiben
 {
