@@ -7,6 +7,24 @@ import {
   hash, hexPath, mix, TILE, drawGrapes, drawPit, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, drawWallLink, FIG_BOX, drawCastle, drawCourt, CASTLE_BOX,
 } from './art.js';
 
+// Ältere Handy-Browser kennen ctx.roundRect nicht: einfacher Ersatz (Zahl oder Liste von Radien)
+if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r = 0) {
+    const rs = Array.isArray(r) ? r : [r];
+    const [tl, tr = tl, br = tl, bl = tr] = rs.map((v) => Math.max(0, Math.min(+v || 0, Math.abs(w) / 2, Math.abs(h) / 2)));
+    this.moveTo(x + tl, y);
+    this.lineTo(x + w - tr, y);
+    this.arcTo(x + w, y, x + w, y + tr, tr);
+    this.lineTo(x + w, y + h - br);
+    this.arcTo(x + w, y + h, x + w - br, y + h, br);
+    this.lineTo(x + bl, y + h);
+    this.arcTo(x, y + h, x, y + h - bl, bl);
+    this.lineTo(x, y + tl);
+    this.arcTo(x, y, x + tl, y, tl);
+    this.closePath();
+  };
+}
+
 export const HEX = 40;
 const DEPTH = HEX * 0.3;
 const MARGIN = HEX * 1.4;
@@ -1590,7 +1608,7 @@ export class Renderer {
   // Ertrag jeder Stadt über ihr: alle vier Rohstoffe als kleines 2×2-Raster (Nahrung, Holz / Erz, Mana), Werte aus main.js
   drawYields(ctx, fog, vr) {
     const s = this.state;
-    const fs = HEX * 0.26, isz = HEX * 0.28, pad = HEX * 0.07, gap = HEX * 0.08, rowH = isz + HEX * 0.02;
+    const fs = HEX * 0.32, isz = HEX * 0.34, pad = HEX * 0.08, gap = HEX * 0.09, rowH = isz + HEX * 0.02;
     ctx.save();
     ctx.font = `800 ${fs}px system-ui, sans-serif`;
     ctx.textBaseline = 'middle';

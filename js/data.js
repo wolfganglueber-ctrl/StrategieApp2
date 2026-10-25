@@ -69,7 +69,7 @@ export const UNITS = {
   knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 7, def: 0, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
   tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 4, def: 0, move: 0, range: 1, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
   mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5, mana: 3 }, upkeep: { food: 2, mana: 1 }, hp: 10, atk: 2, def: 0, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben +15 % Verteidigung, Flächenschaden halbiert. Heilt statt anzugreifen, bis 3 Felder weit. Kostet Mana und 1 Mana Unterhalt pro Runde. Höchstens einer pro Stadt.' },
-  blackknight: { name: 'Gepanzerter Schwarzer Ritter', cost: { food: 35, wood: 15, ore: 40 }, hp: 35, atk: 15, def: 0, pen: 30, move: 4, range: 2, line: [1], supply: 2, needs: 'tavern', desc: 'Riesiger Ritter zu Fuß in schwarzer Rüstung mit Teufelshörnern. Seine lange Axt reicht 2 Felder weit und trifft auch den Gegner direkt hinter dem Ziel. Durchschlag 30, robust gegen Nahkampf und Pfeile. Kommt aus der Taverne.' },
+  blackknight: { name: 'Gepanzerter Schwarzer Ritter', cost: { food: 35, wood: 15, ore: 40 }, hp: 35, atk: 15, def: 0, pen: 30, move: 3, range: 2, line: [1], lineReach: 2, supply: 2, needs: 'tavern', desc: 'Riesiger Ritter zu Fuß in schwarzer Rüstung mit Teufelshörnern. Seine lange Axt reicht 2 Felder weit: greift er einen direkten Nachbarn an, trifft er auch den Gegner dahinter. Durchschlag 30, robust gegen Nahkampf und Pfeile. Kommt aus der Taverne.' },
   troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 12, def: 0, move: 4, range: 1, supply: 3, perRealm: 5, counters: 3, needs: 'lair', desc: 'Ein Titan: viel Leben und harte Schläge. Braucht eine Trollhöhle, höchstens 5 pro Reich.' },
   giant: { name: 'Riesentroll', cost: { food: 90, wood: 50, ore: 100 }, hp: 350, atk: 20, def: 0, move: 3, range: 1, supply: 3, sweep: true, counters: 3, fused: true, desc: 'Aus 5 Trollen verschmolzen (50 Mana): Leben aller fünf zusammen. Sein Rundumschlag trifft alle Gegner auf den 6 Nachbarfeldern auf einmal. Zieht 1 Feld weniger als ein Troll.' },
   dragon: { name: 'Drache', cost: { food: 150, wood: 150, ore: 150 }, hp: 120, atk: 25, def: 0, move: 5, range: 1, supply: 3, perRealm: 1, flying: true, line: [0.75, 0.5], needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten. Sein Feueratem trifft auch die Gegner auf den 2 Feldern hinter dem Ziel (75 % und 50 %). Nur einer pro Reich.' },
@@ -100,7 +100,7 @@ for (const k of Object.keys(UNITS)) {
 }
 export const UNIT_ORDER = ['warrior', 'archer', 'rider', 'defender', 'knight', 'griffin', 'catapult', 'trebuchet', 'mage', 'basilisk', 'blackknight', 'troll', 'dragon'];
 // Höchste Zugweite bei voller Entwicklung (gilt auch für Sprünge über eigene Einheiten)
-export const MOVE_CAP = { catapult: 3, trebuchet: 3, rider: 6, knight: 6, griffin: 6, dragon: 6, blackknight: 5 };
+export const MOVE_CAP = { catapult: 3, trebuchet: 3, rider: 6, knight: 6, griffin: 6, dragon: 6, blackknight: 4 };
 export const MOVE_CAP_DEFAULT = 4;
 export function moveCap(type) {
   return MOVE_CAP[type] ?? MOVE_CAP_DEFAULT;
@@ -410,8 +410,8 @@ export const BUILDINGS = {
   sanctum: { art: 'einen', name: 'Turm der Weisen', icon: '🔮', cost: { wood: 6, ore: 6 }, desc: 'Zauberer möglich, +1 Mana' },
   press: { art: 'eine', name: 'Kelterei', icon: '🍇', eco: 'mana', cost: { food: 10, wood: 10 }, desc: 'Erschließt das Mana des äußeren Rings (Traubenhain)' },
   nest: { art: 'ein', name: 'Basiliskennest', icon: '🦎', cost: { food: 10, wood: 8, ore: 12 }, minLevel: 2, desc: 'Basilisk möglich (Stadt ab Stufe 2)' },
-  tavern: { art: 'eine', name: 'Taverne', icon: '🍺', cost: { food: 12, wood: 12, ore: 12 }, minLevel: 3, desc: 'Gepanzerter Schwarzer Ritter möglich (Stadt ab Stufe 3)' },
-  lair: { art: 'eine', name: 'Trollhöhle', icon: '🦴', cost: { food: 10, wood: 12, ore: 16 }, minLevel: 3, desc: 'Schwarzer Troll möglich (Stadt ab Stufe 3)' },
+  tavern: { art: 'eine', name: 'Taverne', icon: '🍺', cost: { food: 36, wood: 36, ore: 36 }, minLevel: 3, desc: 'Gepanzerter Schwarzer Ritter möglich (Stadt ab Stufe 3)' },
+  lair: { art: 'eine', name: 'Trollhöhle', icon: '🦴', cost: { food: 30, wood: 36, ore: 48 }, minLevel: 3, desc: 'Schwarzer Troll möglich (Stadt ab Stufe 3)' },
   market: { art: 'einen', name: 'Markt', icon: '⚖️', cost: { food: 16, wood: 16, ore: 8 }, perRealm: 1, desc: 'Erlaubt Handel (3:1, mit Handelsgilde 2:1), einer pro Reich' },
   dragonlair: { art: 'eine', name: 'Drachenhöhle', icon: '🐉', cost: { food: 20, wood: 20, ore: 30 }, perRealm: 1, desc: 'Drache möglich (nur eine im Reich)' },
 };

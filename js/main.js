@@ -34,6 +34,8 @@ const R = new Renderer(canvas);
 R.fx = store.settings().fx !== false;
 let S = null;
 let settings = store.settings();
+// 0.98: „Ertrag über den Städten“ war auf manchen Handys unsichtbar – einmalig wieder einschalten
+if (!settings.yieldsOn98) { settings.cityYields = true; settings.yieldsOn98 = true; store.saveSettings(settings); }
 if (settings.fogCampaign && settings.fog === false) { settings.fog = true; delete settings.fogCampaign; store.saveSettings(settings); }
 let sel = { unitId: null, cityIdx: null, infoIdx: null };
 let busy = false;
@@ -1610,7 +1612,7 @@ function updateHud() {
       class: 'pill' + (mana ? ' mana' : '') + (net < 0 ? ' short' : ''),
       title: mana ? `${info} – für Zauberer, Zauber, Feuersturm und magische Forschung, nicht handelbar` : `${info} – tippen zum Handeln`,
       onclick: () => (mana ? toast(`🍇 ${info}. Mana kommt aus Traubenhainen (Wiese bearbeiten) mit Kelterei und vom Turm der Weisen. Es lässt sich nicht handeln.`, 5000) : openTrade(k)),
-    }, icon(k), el('b', {}, human.res[k] || 0), el('small', {}, `+${gross[k]}`)));
+    }, icon(k), el('span', { class: 'rv' }, el('b', {}, human.res[k] || 0), el('small', {}, `+${gross[k]}`))));
   }
   // Testmodus: Vorrat und Reichsertrag der Gegner, dazu Armee und Städte (Stufen)
   const eb = $('enemyBar');

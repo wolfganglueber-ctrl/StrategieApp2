@@ -898,6 +898,8 @@ export function splashDamage(state, att, idx, dmg, from = att.idx) {
     line.forEach((f, k) => {
       const j = pixelToIndex(b.x + dx * (k + 1), b.y + dy * (k + 1), 1, state.cols, state.rows);
       if (j < 0) return;
+      // Lange Axt (Schwarzer Ritter): trifft nur Felder bis 2 weit vom eigenen Standort
+      if (UNITS[att.type].lineReach && geo.dist(from, j) > UNITS[att.type].lineReach) return;
       inLine.add(j);
       const o = state.units.find((x) => x.idx === j);
       if (o && o.owner !== att.owner) res.push({ unit: o, dmg: Math.ceil(dmg * f * (inAura(state, o) ? AURA.splash : 1) - 1e-9) });

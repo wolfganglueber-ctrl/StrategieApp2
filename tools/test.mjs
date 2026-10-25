@@ -1,5 +1,5 @@
 // Schnelltests: alle Kampagnenlevel erzeugen, Zufallsspiele in allen Größen ohne Fehler durchspielen.
-import { createGame, applyAction, cloneState, computeCombat, statsOf, spawnUnit, canRecruit, getBombTargets, migrateState, stormArea, canTerraform, incomeOf, realmYield, cityTiles, cityYield } from '../js/game.js';
+import { createGame, applyAction, cloneState, computeCombat, statsOf, spawnUnit, canRecruit, splashDamage, getBombTargets, migrateState, stormArea, canTerraform, incomeOf, realmYield, cityTiles, cityYield } from '../js/game.js';
 import { getGeo } from '../js/hex.js';
 import { planAction } from '../js/ai.js';
 import { getLevels } from '../js/levels.js';
@@ -231,7 +231,25 @@ const t0 = Date.now();
   s.players[0].res = { food: 999, wood: 999, ore: 999, mana: 99 };
   check(canRecruit(s, 0, ci, 'blackknight') === 'needs', 'Schwarzer Ritter braucht Taverne');
   const bk = { type: 'blackknight', owner: 0, rank: 1 };
-  check(statsOf(s, bk).hp === 35 && statsOf(s, bk).atk === 15 && statsOf(s, bk).pen === 30 && statsOf(s, bk).range === 2 && statsOf(s, bk).move === 4, 'Schwarzer Ritter 35/15, Durchschlag 30, Reichweite 2, Bewegung 4');
+  check(statsOf(s, bk).hp === 35 && statsOf(s, bk).atk === 15 && statsOf(s, bk).pen === 30 && statsOf(s, bk).range === 2 && statsOf(s, bk).move === 3, 'Schwarzer Ritter 35/15, Durchschlag 30, Reichweite 2, Bewegung 3');
+}
+// Lange Axt: Doppeltreffer nur bis 2 Felder vom Standort
+{
+  const s = createGame({ seed: 6, cols: 24, rows: 30, biome: 'plains', players: [{ ai: 3 }, { ai: 3 }] });
+  const geo = getGeo(s.cols, s.rows);
+  const c0 = [...s.terrain.keys()].find((i) => geo.within(i, 3).length === 37 && geo.within(i, 3).every((j) => s.cityAt[j] < 0));
+  for (const j of geo.within(c0, 3)) s.terrain[j] = 'plain';
+  s.units = s.units.filter((u) => geo.dist(u.idx, c0) > 4);
+  s.current = 0;
+  const bk = spawnUnit(s, 'blackknight', 0, c0, true);
+  // Linie: Nachbar n1, dahinter n2 (Abstand 2), dahinter n3 (Abstand 3)
+  const n1 = geo.nb[c0][0], n2 = geo.nb[n1].find((j) => geo.dist(c0, j) === 2 && geo.nb[c0].every((k) => k === n1 || geo.dist(k, j) > 1));
+  const n3 = geo.nb[n2].find((j) => geo.dist(c0, j) === 3 && geo.dist(n1, j) === 2);
+  const [e1, e2, e3] = [n1, n2, n3].map((j) => spawnUnit(s, 'warrior', 1, j, true));
+  e1.hp = e2.hp = e3.hp = 99;
+  const near = splashDamage(s, bk, n1, 5).map((h) => h.unit);
+  const far = splashDamage(s, bk, n2, 5).map((h) => h.unit);
+  check(near.includes(e2) && !far.includes(e3), `Axt: Doppeltreffer nur bis Feld 2 (${near.length}/${far.length})`);
 }
 // Riesentroll: 5 Trolle verschmelzen, Rundumschlag trifft alle Nachbarn
 {
