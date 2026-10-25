@@ -449,3 +449,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .tip { font-size: 10.5px; max-width: 180px; }
   .tip-title { font-size: 10.5px; }
 }
+/* Fenster Forschung, Entwicklung, Verbesserungen: Symbole halb so groß, damit mehr Einträge auf den Bildschirm passen */
+#modalBox .ticon { font-size: 20px; width: 26px; }
+#modalBox .tech-card { padding: 5px 8px; gap: 8px; }
+#modalBox .tech-card .done { font-size: 15px; padding: 0 4px; }
+#modalBox .up-card canvas.fig { width: 28px !important; height: 28px !important; }
+#modalBox .up-unit canvas.fig { width: 26px !important; height: 26px !important; }
+#modalBox .unit-card canvas.fig { width: 30px !important; height: 30px !important; }
+#modalBox .tchip .ico { width: 18px; height: 18px; }
+#modalBox .tech-card .cost { font-size: 11.5px; gap: 3px; }
+#modalBox .tech-card .cost .ico { width: 13px; height: 13px; }
+#modalBox .tech-card .btn.small { padding: 4px 6px; }
+#modalBox .tech-card .binfo { font-size: 13px; }
+#modalBox .tech-card .binfo span { font-size: 11.5px; }
