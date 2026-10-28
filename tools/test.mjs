@@ -252,11 +252,14 @@ const t0 = Date.now();
   check(near.length === 1 && near[0] === e2, `Axt: trifft den Gegner direkt hinter dem Ziel (${near.length})`);
   check(!applyAction(s, { type: 'attack', unitId: bk.id, targetId: e2.id }), 'Schwarzer Ritter greift nur Nachbarn an');
 }
-// Regler „Städte auf der Karte“: Anteil der höchstmöglichen Städtezahl, Hauptstädte bleiben
+// Regler „Siedlungsdichte“: 100 % = höchstmögliche Städtezahl (4 freie Felder Abstand), 0 % = 8 freie Felder, nach Fläche; Hauptstädte bleiben
 {
-  const n = (p) => generateMap({ seed: 4711, cols: MAP_SIZES.XL.cols, rows: MAP_SIZES.XL.rows, players: 2, villageDensity: 0, cityPct: p }).cities;
-  const full = n(1).length, low = n(0.2);
-  check(Math.abs(low.length - Math.round(full * 0.2)) <= 1 && low.filter((c) => c.capital).length === 2 && n(0.6).length > low.length, `Städte-Regler 20 % ${low.length} von ${full}`);
+  const geo = getGeo(MAP_SIZES.EPIC.cols, MAP_SIZES.EPIC.rows);
+  const n = (p) => generateMap({ seed: 4711, cols: MAP_SIZES.EPIC.cols, rows: MAP_SIZES.EPIC.rows, players: 2, villageDensity: 0, density: p }).cities;
+  const full = n(1), low = n(0), mid = n(0.5);
+  const minGap = (cs) => Math.min(...cs.flatMap((a, k) => cs.slice(k + 1).map((b) => geo.dist(a.idx, b.idx))));
+  check(low.length <= Math.round(full.length * (5 / 9) ** 2) && low.length >= full.length / 5 && low.filter((c) => c.capital).length === 2 && mid.length > low.length && full.length > mid.length, `Siedlungsdichte 0/50/100 %: ${low.length}/${mid.length}/${full.length}`);
+  check(minGap(low.filter((c) => !c.capital)) >= 9 && minGap(full) >= 5, `Siedlungsdichte: Abstand bei 0 % ${minGap(low.filter((c) => !c.capital))}`);
 }
 // Riesentroll: 5 Trolle verschmelzen, Rundumschlag trifft alle Nachbarn
 {

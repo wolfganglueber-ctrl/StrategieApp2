@@ -21,11 +21,11 @@ export function boostMax(state) {
 }
 
 /*
- config: { seed, cols, rows, biome, players: [{ human: bool, ai: 1..6, name? }], levelId?, villageDensity?, cityPct?, fog? }
+ config: { seed, cols, rows, biome, players: [{ human: bool, ai: 1..6, name? }], levelId?, villageDensity?, density?, fog? }
 */
 export function createGame(config) {
   const n = config.players.length;
-  const map = generateMap({ seed: config.seed, cols: config.cols, rows: config.rows, players: config.mapPlayers ?? n, biome: config.biome, villageDensity: config.villageDensity, cityPct: config.cityPct ?? 1 });
+  const map = generateMap({ seed: config.seed, cols: config.cols, rows: config.rows, players: config.mapPlayers ?? n, biome: config.biome, villageDensity: config.villageDensity, density: config.density ?? 1 });
   const geo = getGeo(map.cols, map.rows);
   const state = {
     v: STATE_VERSION,

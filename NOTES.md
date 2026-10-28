@@ -1,7 +1,7 @@
 # Stand
 Spiel-Link: https://claude.ai/artifact/DSHgsarxYi3z7aj65QHMEA (wird bei /fertig aktualisiert)
 
-Version 1.03 (Branch `ccr-8aa711c1-0bv1jz`), Name **KnightyKnight** (intern weiter `hexkrone`), spielbar im Browser/als PWA.
+Version 1.04 (Branch `ccr-8aa711c1-0bv1jz`), Name **KnightyKnight** (intern weiter `hexkrone`), spielbar im Browser/als PWA.
 - Hexkarte (Wiese, Wald, Hügel, Gebirge, See, Lehm), 4 Kartengrößen (Riesig, Gewaltig, Kolossal, Episch), 5 Landschaften, Karten-Code, Nebel; Städte immer mit ≥ 4 freien Feldern Abstand, Regler 20–100 % der möglichen Städte; Kampagne mit 50 Leveln, Freies Spiel, 10 Speicherplätze, Rückgängig.
 - Wirtschaft: Felder im inneren Ring liefern immer, äußerer Ring je Rohstoff mit Bauernhof/Holzfäller/Mine/Kelterei; 5 Stadtstufen (×1 … ×5, Ausbau 32/8/8 … 74/29/29, Bauplätze 2/3/4/5/6 – Mauer, Türme, Wirtschaft zählen nicht; Versorgung 3/5/7/9/11); Pflug/Sägewerk/Bergbau +50 %; Wiese bearbeiten; Mana aus Traubenhainen/Turm der Weisen.
 - Kampf ohne verborgene Formel: Schaden = Angriff × (100 % − Verteidigung je Angriffsart), unabhängig vom Leben; Durchschlag; feste Zuschläge (Stadt/Mauer/Burg, Rang, Aura); kein Flankenbonus mehr (0.95); Gegenschläge höchstens 2 pro Runde (Trolle 3); Heilung nur durch Zauberer und Einzel-Verbesserungen.
@@ -13,6 +13,7 @@ Version 1.03 (Branch `ccr-8aa711c1-0bv1jz`), Name **KnightyKnight** (intern weit
 - Spielmodus 🏰 Burgverteidigung: 30 Wellen aus Toren, fester Ertrag inkl. Mana + Beute, Kartenwahl nach jeder Welle (Schritt 1 fertig, Schritt 2 offen – siehe 0.89/0.90).
 
 Versionsverlauf (neueste zuerst):
+- 1.04 Regler „Siedlungsdichte“ (Freies Spiel, 0–100 % in 10er-Schritten, unabhängig von Schwierigkeit/Gegnern) statt „Städte auf der Karte“: steuert den Abstand zwischen Städten, 100 % = so viele wie möglich (4 freie Felder), 0 % = 8 freie Felder, dazwischen gleitend. Städtezahl nach Fläche (Höchstzahl × (5/Abstand)²), Dörfer zufällig (fest zum Code) auf allen erlaubten Feldern verteilt, nie enger als der abgerundete Abstand (`generateMap({ density })`, `cityLand`). Riesig etwa 4/6/9/14 Städte bei 0/50/80/100 %, Episch 28/40/74/108. `setup.density` (Standard 80 %, `citiesV` 4).
 - 1.03 Schwarzer Ritter kämpft als Nahkämpfer: Reichweite 1 (zieht wie die anderen bis an den Gegner), seine lange Axt trifft zusätzlich den Gegner direkt dahinter (volle Wucht, `line: [1]`, `lineReach` entfernt). Kein Geschoss mehr: neue Animation `R.axeSwing` – Stiel und Halbmondklinge schwingen vom Ritter über das Ziel bis aufs Feld dahinter.
 - 1.02 Handy und PC getrennt: alle Verkleinerungen (Leiste unten, Hinweise, Fenster-Symbole, zweizeilige Rohstoffleiste) nur noch mit `body.compact` (Faktor `--ui-zoom`); auf dem PC gelten wieder die Größen von 0.95. Neue Einstellung „Schriftgröße im Spiel“ (Auto/60–100 %, `settings.uiScale`; Auto = Handy 77 %, schmal 70 %, PC 100 %). Stadtmenü auf dem Handy 50 % höher (`.panel.city-open` 40 → 60 vh), Gebäudeliste ohne eigenen Bildlauf – nur noch ein Scroll im ganzen Fenster.
 - 1.01 Fenster Forschung, Einheiten-Entwicklung, Verbesserungen (`#modalBox`): Symbole halb so groß (`.ticon` 40 → 20 px, Figuren 52/46/48 → 28/26/30 px), Kosten-Kästchen kleiner (Symbole 13 px, Schrift 11,5 px), engere Karten – etwa 8 statt 5 Einträge pro Bildschirm.
