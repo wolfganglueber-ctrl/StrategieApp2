@@ -1,10 +1,10 @@
 // Schnelltests: alle Kampagnenlevel erzeugen, Zufallsspiele in allen Größen ohne Fehler durchspielen.
-import { createGame, applyAction, cloneState, computeCombat, statsOf, spawnUnit, canRecruit, splashDamage, getBombTargets, migrateState, stormArea, canTerraform, incomeOf, realmYield, cityTiles, cityYield } from '../js/game.js';
+import { createGame, applyAction, cloneState, computeCombat, statsOf, spawnUnit, canRecruit, splashDamage, getBombTargets, migrateState, stormArea, canTerraform, incomeOf, realmYield, cityTiles, cityYield, unitCost, unitName, startTurn, endTurn, computeTerritory } from '../js/game.js';
 import { getGeo } from '../js/hex.js';
 import { planAction } from '../js/ai.js';
 import { getLevels } from '../js/levels.js';
 import { generateMap } from '../js/mapgen.js';
-import { MAP_SIZES, BIOMES, UNITS, buildingYield, START_BONUS, citySlots } from '../js/data.js';
+import { MAP_SIZES, BIOMES, UNITS, buildingYield, START_BONUS, citySlots, FACTION_ORDER } from '../js/data.js';
 import { mulberry32 } from '../js/rng.js';
 import { createDefenseGame, waveUnits } from '../js/defense.js';
 import { BOTS, BOT_ORDER } from './bots.mjs';
@@ -203,7 +203,8 @@ const t0 = Date.now();
   check(!applyAction(s, { type: 'towerKind', unitId: tw.id, kind: 'cannon' }), 'Bauart erst ab Turmstufe 2');
   tw.level = 2;
   tw.hp = statsOf(s, tw).hp;
-  check(applyAction(s, { type: 'boost', unitId: tw.id, stat: 'hp' }) && statsOf(s, tw).hp === 22, `Turm Leben +4 (${statsOf(s, tw).hp})`);
+  const twHp = statsOf(s, tw).hp;
+  check(applyAction(s, { type: 'boost', unitId: tw.id, stat: 'hp' }) && statsOf(s, tw).hp === twHp + 4, `Turm Leben +4 (${twHp} → ${statsOf(s, tw).hp})`);
   check(!applyAction(s, { type: 'boost', unitId: tw.id, stat: 'pen' }), 'Turm ohne Durchschlag');
   check(applyAction(s, { type: 'towerKind', unitId: tw.id, kind: 'cannon' }) && tw.kind === 'cannon' && statsOf(s, tw).atk === 8, 'Kanonenturm +2 Angriff');
   check(!applyAction(s, { type: 'towerKind', unitId: tw.id, kind: 'fire' }), 'Bauart nur einmal');
@@ -227,7 +228,7 @@ const t0 = Date.now();
   s.players[0].tech.push('bow', 'warbow');
   check(statsOf(s, a).range === 4, `Schütze höchstens Reichweite 4 (${statsOf(s, a).range})`);
   check([1, 2, 3, 4, 5].map((level) => citySlots({ level })).join() === '2,3,4,5,6', 'Bauplätze 2/3/4/5/6');
-  check(statsOf(s, { type: 'barrier', owner: 0, rank: 1 }).hp === 25, 'Steinwall 25 Leben');
+  check(statsOf(s, { type: 'barrier', owner: 0, rank: 1 }).hp === 31, 'Steinwall 25 Leben (Königreich mit Bollwerk 31)');
   const ci = s.cities.findIndex((c) => c.owner === 0);
   s.players[0].res = { food: 999, wood: 999, ore: 999, mana: 99 };
   check(canRecruit(s, 0, ci, 'blackknight') === 'needs', 'Schwarzer Ritter braucht Taverne');
@@ -284,8 +285,55 @@ const t0 = Date.now();
   const ae = applyAction(s, { type: 'attack', unitId: g.id, targetId: foes[0].id })[0];
   check(ae.splash?.length === 2 && foes.every((f) => !s.units.includes(f) || f.hp < UNITS.warrior.hp), `Rundumschlag trifft alle (${ae.splash?.length})`);
 }
+// Völker: Namen, Kosten, Werte und Volks-Fähigkeiten
+{
+  const s = createGame({ seed: 21, cols: 16, rows: 21, biome: 'plains', players: FACTION_ORDER.map((f) => ({ ai: 3, faction: f })) });
+  const [K, V, W, D] = [0, 1, 2, 3];
+  const st = (pid, type, hp = 999) => statsOf(s, { type, owner: pid, rank: 1, hp });
+  check(unitName(s, K, 'warrior') === 'Krieger' && unitName(s, V, 'warrior') === 'Plünderer' && unitName(s, W, 'dragon') === 'Knochendrache' && unitName(s, D, 'knight') === 'Drachenritter', 'Völker: Namen');
+  check(unitCost(s, K, 'tower').wood < UNITS.tower.cost.wood && st(K, 'barrier').hp > st(V, 'barrier').hp, 'Königreich: Bollwerk (Türme/Wälle billiger und stärker)');
+  check(st(V, 'warrior').atk > st(K, 'warrior').atk && st(V, 'archer').atk < st(K, 'archer').atk && unitCost(s, V, 'warrior').food > unitCost(s, K, 'warrior').food, 'Wikinger: Nahkampf stärker, Fernkampf schwächer, mehr Nahrung');
+  check(st(V, 'warrior', 4).atk === st(V, 'warrior').atk + 3, 'Wikinger: Berserker unter halbem Leben');
+  check(unitCost(s, W, 'warrior').mana >= 1 && st(W, 'knight').atk < st(K, 'knight').atk, 'Hexer: Mana-Kosten, schwächerer Angriff');
+  check(st(D, 'warrior').hp === 12 && unitCost(s, D, 'knight').ore > unitCost(s, K, 'knight').ore, 'Drachenmenschen: mehr Leben, teurer');
+  // Kampfregeln auf freier Wiese
+  const geo = getGeo(s.cols, s.rows);
+  const c0 = [...s.terrain.keys()].find((i) => geo.within(i, 2).length === 19 && geo.within(i, 2).every((j) => s.cityAt[j] < 0 && !s.units.some((u) => u.idx === j)));
+  for (const j of geo.within(c0, 2)) s.terrain[j] = 'plain';
+  s.units = s.units.filter((u) => geo.dist(u.idx, c0) > 3);
+  const n1 = geo.nb[c0][0];
+  const wit = spawnUnit(s, 'warrior', W, c0, true), dra = spawnUnit(s, 'warrior', D, n1, true);
+  s.current = W;
+  const before = computeCombat(s, spawnUnit(s, 'warrior', W, geo.nb[c0][1], true), dra);
+  const e = applyAction(s, { type: 'attack', unitId: wit.id, targetId: dra.id })[0];
+  check(e.curse && dra.curse === W, 'Hexer: Fluch nach dem Angriff');
+  const after = computeCombat(s, unitById2(s, W, geo.nb[c0][1]), dra);
+  check(after.dmg >= before.dmg, `Hexer: Fluch senkt die Verteidigung (${before.dmg} → ${after.dmg})`);
+  // Feuerhaut: Heilung zu Beginn des eigenen Zuges; Fluch endet zu Beginn des nächsten Hexer-Zuges
+  const hp0 = dra.hp;
+  s.current = D;
+  startTurn(s);
+  check(dra.hp === Math.min(st(D, 'warrior').hp, hp0 + 2), `Drachenmenschen: Feuerhaut heilt (${hp0} → ${dra.hp})`);
+  s.current = W;
+  startTurn(s);
+  check(dra.curse == null, 'Hexer: Fluch endet');
+  // Hexer: Mana aus jeder Stadt
+  const terr = computeTerritory(s);
+  check(realmYield(s, W, terr).mana >= 1 && realmYield(s, K, terr).mana === 0, 'Hexer: Mana aus jeder Stadt');
+  // Wikinger: Plünderung beim Erobern
+  const vc = s.cities.find((c) => c.owner < 0);
+  const vu = spawnUnit(s, 'warrior', V, vc.idx, true);
+  const food0 = s.players[V].res.food;
+  s.current = V;
+  const tev = startTurn(s);
+  check(vc.owner === V && tev.some((x) => x.k === 'plunder') && s.players[V].res.food > food0, 'Wikinger: Plünderung beim Erobern');
+  check(vu && cloneState(s).players[V].faction === 'vikings', 'Völker: im Spielstand');
+}
+function unitById2(s, pid, idx) {
+  return s.units.find((u) => u.owner === pid && u.idx === idx);
+}
 for (const l of getLevels()) {
-  const s = createGame({ seed: l.seed, cols: l.cols, rows: l.rows, biome: l.biome, players: [{ human: true }, ...l.ais.map((ai) => ({ ai }))] });
+  const s = createGame({ seed: l.seed, cols: l.cols, rows: l.rows, biome: l.biome, players: [{ human: true }, ...l.ais.map((ai, k) => ({ ai, faction: l.factions[k] }))] });
   check(s.cities.filter((c) => c.capital).length === l.ais.length + 1, `Level ${l.id}: Hauptstädte`);
   check(s.cities.length >= (l.ais.length + 1) * 2, `Level ${l.id}: zu wenige Städte (${s.cities.length})`);
   const lg = getGeo(s.cols, s.rows);
@@ -341,7 +389,7 @@ for (const size of Object.keys(MAP_SIZES)) {
   for (const players of [2, 3, 4]) {
     for (const biome of size === 'EPIC' ? ['mixed'] : Object.keys(BIOMES)) {
       const seed = games * 977 + 13;
-      const s = createGame({ seed, cols: MAP_SIZES[size].cols, rows: MAP_SIZES[size].rows, biome, players: Array.from({ length: players }, (_, i) => ({ ai: 1 + ((i + games) % 5) })) });
+      const s = createGame({ seed, cols: MAP_SIZES[size].cols, rows: MAP_SIZES[size].rows, biome, players: Array.from({ length: players }, (_, i) => ({ ai: 1 + ((i + games) % 5), faction: FACTION_ORDER[(i + games) % 4] })) });
       playOut(s, mulberry32(seed), { EPIC: 12, XXXL: 20, XXL: 25, XL: 25 }[size] || 40);
       games++;
     }

@@ -158,6 +158,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .seg { display: flex; gap: 6px; flex-wrap: wrap; }
 .seg button { flex: 1 1 0; min-width: 64px; padding: 10px 6px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06); font-weight: 600; font-size: 14px; }
 .seg button.active { background: var(--primary); color: #1c1203; border-color: #fcd34d; }
+/* Volkswahl: zwei Knöpfe pro Zeile, damit „Drachenmenschen“ auch am Handy passt */
+#segFaction button, #campFaction button { flex: 1 1 40%; }
+/* Volkswahl in der Kampagne */
+.camp-faction { padding: 0 14px 8px; }
+.camp-faction label { display: block; font-size: 13px; color: var(--muted, #b8b2a6); margin-bottom: 4px; }
+.camp-faction .hint { margin: 6px 0 0; font-size: 12.5px; }
+/* Volk je Gegner: kleine Knöpfe mit Beschriftung davor */
+#enemyFactions { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.seg.seg-sm { align-items: center; flex-wrap: nowrap; }
+.seg.seg-sm .seg-label { flex: 0 0 74px; font-size: 13px; color: var(--muted, #b8b2a6); }
+.seg.seg-sm button { min-width: 0; padding: 6px 4px; font-size: 16px; }
 .hint { color: var(--muted); margin: 0; font-size: 13px; min-height: 18px; }
 .seedrow { display: flex; gap: 8px; }
 .seedrow input {

@@ -7,6 +7,7 @@ import {
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, terrainDefense,
   canBoost, boostMax, boostStats, canTowerKind, rankXpNeed, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, canStorm, canFuse, fuseGroup, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
+  unitName, unitCost, factionOf,
 } from './game.js';
 import { planAction } from './ai.js';
 import { createDefenseGame, DEFENSE, DEFENSE_DIFFS, wavesInfo } from './defense.js';
@@ -18,8 +19,9 @@ import {
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
   RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, MAX_SLOTS, CITY_SLOTS, buildingYield, ECO_TECH, ECO_TECH_PCT, PLANT_COST, plantCost, PLANT_KINDS, ECO_BUILDINGS, slotsUsed, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
   BOOST_ADD, AURA, defenseWords, counterMax, FUSE, TOWER_BOOST_ADD, TOWER_KINDS, TOWER_KIND_ORDER, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
+  FACTIONS, FACTION_ORDER, factionKey,
 } from './data.js';
-import { getLevels, getWorldNames, starsFor } from './levels.js';
+import { getLevels, getWorldNames, getWorldFactions, starsFor } from './levels.js';
 import { store } from './storage.js';
 import { randomSeedCode, seedFromCode } from './rng.js';
 import { sound } from './audio.js';
@@ -87,7 +89,7 @@ function showMenuBackdrop() {
 function levelConfig(level) {
   return {
     seed: level.seed, cols: level.cols, rows: level.rows, biome: level.biome, fog: !!settings.fog,
-    players: [{ human: true }, ...level.ais.map((ai) => ({ ai }))],
+    players: [{ human: true, faction: factionKey(settings.campaignFaction) }, ...level.ais.map((ai, k) => ({ ai, faction: level.factions[k] }))],
   };
 }
 
@@ -100,6 +102,13 @@ function startLevel(level) {
 
 // Regler „Siedlungsdichte“ 0–100 %: 100 % = so viele Städte wie möglich (4 freie Felder Abstand), 0 % = 8 freie Felder Abstand;
 // die Städtezahl richtet sich nach der Kartenfläche, verteilt wird zufällig (fest zum Karten-Code), unabhängig von der Schwierigkeit
+// Volk eines Gegners: fest gewählt oder Zufall (fest zum Karten-Code, damit derselbe Code dieselbe Partie ergibt)
+function enemyFaction(setup, i) {
+  const f = setup.enemyFactions?.[i];
+  if (FACTIONS[f]) return f;
+  return FACTION_ORDER[(seedFromCode(setup.code || 'A') + i * 7) % FACTION_ORDER.length];
+}
+
 function skirmishConfig(setup) {
   const size = MAP_SIZES[setup.size] || MAP_SIZES.XL;
   let biome = setup.biome;
@@ -112,7 +121,7 @@ function skirmishConfig(setup) {
     seed: seedFromCode(code), cols: size.cols, rows: size.rows, biome, fog: !!settings.fog,
     villageDensity: 0,
     density: (setup.density ?? 80) / 100,
-    players: [{ human: true }, ...Array.from({ length: setup.enemies }, () => ({ ai: setup.diff }))],
+    players: [{ human: true, faction: factionKey(setup.faction) }, ...Array.from({ length: setup.enemies }, (_, i) => ({ ai: setup.diff, faction: enemyFaction(setup, i) }))],
   };
 }
 
@@ -192,13 +201,18 @@ function toggleGroupMember(u) {
   refresh();
 }
 
+// Name einer Einheit im Volk ihres Besitzers
+function uName(u) {
+  return unitName(S, u.owner, u.type);
+}
+
 // Gruppe aus allen eigenen Einheiten in der Nähe bilden (optional nur gleicher Typ)
 function groupNearby(u, sameType) {
   clearSel();
   sel.group = [u.id];
   addNearbyToGroup(sameType ? u.type : null);
   const n = groupUnits().length;
-  if (n <= 1) toast(sameType ? `Keine weiteren ${UNITS[u.type].name} in der Nähe.` : 'Keine weiteren Einheiten in der Nähe.');
+  if (n <= 1) toast(sameType ? `Keine weiteren ${uName(u)} in der Nähe.` : 'Keine weiteren Einheiten in der Nähe.');
 }
 
 function addNearbyToGroup(onlyType = null) {
@@ -542,7 +556,7 @@ function onTap(sx, sy) {
       act({ type: 'tower', unitType: type, idx: i, city }, {
         after: () => {
           const ci = S.cityAt[city];
-          if (again != null && towersOfCity(S, ci, undefined, 'barrier') < structureLimit(S.cities[ci], 'barrier') && canAfford(S.players[S.current].res, UNITS.barrier.cost)) {
+          if (again != null && towersOfCity(S, ci, undefined, 'barrier') < structureLimit(S.cities[ci], 'barrier') && canAfford(S.players[S.current].res, unitCost(S, S.current, 'barrier'))) {
             clearSel();
             sel.placeTower = ci;
             sel.placeType = 'barrier';
@@ -716,13 +730,13 @@ function showCombatTip(x, y) {
   if (!tip) { tip = el('div', { id: 'combatTip', class: 'tip' }); document.body.append(tip); }
   tip.innerHTML = '';
   tip.append(
-    el('div', { class: 'tip-title' }, `⚔ ${UNITS[ct.a.type].name} → ${UNITS[ct.t.type].name}`),
+    el('div', { class: 'tip-title' }, `⚔ ${uName(ct.a)} → ${uName(ct.t)}`),
     el('div', { class: 'tip-grid' },
       el('div', {}, el('span', {}, 'Schaden'), el('b', { class: c.kill ? 'ok' : 'bad' }, c.kill ? `−${c.dmg} ✖ besiegt` : `−${c.dmg} (bleibt ${ct.t.hp - c.dmg})`)),
       el('div', {}, el('span', {}, 'Gegenschlag'), el('b', {}, c.kill ? '–' : c.lance ? '– (lange Lanze)' : c.counter ? `−${c.counter}${c.die ? ' ✖ fällt' : ''}` : c.noCounter ? '– (keine Gegenschläge mehr)' : '–')),
       c.sweepCounter ? el('div', {}, el('span', {}, 'Gegenschläge daneben'), el('b', {}, `−${c.sweepCounter}`)) : null,
       el('div', {}, el('span', {}, 'Rechnung'), el('b', {}, `${c.atkValue} Angriff × (100 % − ${c.defPct} %) = ${c.dmg}`)),
-      c.extra.length ? el('div', {}, el('span', {}, 'Mitgetroffen'), el('b', {}, c.extra.map((h) => `${UNITS[h.unit.type].name} −${h.dmg}`).join(', '))) : null),
+      c.extra.length ? el('div', {}, el('span', {}, 'Mitgetroffen'), el('b', {}, c.extra.map((h) => `${uName(h.unit)} −${h.dmg}`).join(', '))) : null),
     c.atkNotes.length ? el('div', { class: 'tip-desc' }, '⬆ ' + c.atkNotes.join(' · ')) : null,
     c.defNotes.length ? el('div', { class: 'tip-desc' }, '🛡 ' + c.defNotes.join(' · ')) : null);
   const w = 250;
@@ -871,7 +885,7 @@ function openBoost(u0) {
               : el('button', { class: 'btn small', disabled: !my || !canTowerKind(S, u, k), onclick: () => buy({ type: 'towerKind', unitId: u.id, kind: k }) }, costEl(K.cost, p.res))));
       }
     }
-    openClosable(el('h2', {}, `⬆ ${u.kind ? TOWER_KINDS[u.kind].name : UNITS[u.type].name} verbessern`),
+    openClosable(el('h2', {}, `⬆ ${u.kind ? TOWER_KINDS[u.kind].name : uName(u)} verbessern`),
       unitCard(u, u.type === 'tower' ? 'Gilt nur für diesen einen Turm' : 'Gilt nur für diese eine Einheit'),
       el('h3', {}, 'Werte'), list,
       ...(u.type === 'tower' ? [el('h3', {}, 'Bauart (einmalig wählbar)'), extra]
@@ -883,12 +897,12 @@ function openBoost(u0) {
 }
 
 async function doDisband(u) {
-  const ok = await confirmDialog(`${UNITS[u.type].name} entlassen?`, 'Die Einheit wird aufgelöst. Rohstoffe gibt es dafür nicht zurück.', 'Entlassen', 'Behalten');
+  const ok = await confirmDialog(`${uName(u)} entlassen?`, 'Die Einheit wird aufgelöst. Rohstoffe gibt es dafür nicht zurück.', 'Entlassen', 'Behalten');
   if (ok) act({ type: 'disband', unitId: u.id }, { after: () => clearSel() });
 }
 
 async function doRaze(u) {
-  const ok = await confirmDialog(`${UNITS[u.type].name} abreißen?`, 'Du bekommst die Hälfte der Baukosten zurück.', 'Abreißen', 'Behalten');
+  const ok = await confirmDialog(`${uName(u)} abreißen?`, 'Du bekommst die Hälfte der Baukosten zurück.', 'Abreißen', 'Behalten');
   if (ok) act({ type: 'raze', unitId: u.id }, { after: () => clearSel() });
 }
 
@@ -980,7 +994,7 @@ function unitUpView(types, pid, my, redraw) {
   const chips = el('div', { class: 'up-units' });
   for (const t of types) {
     chips.append(el('button', { class: 'up-unit' + (t === upUnit ? ' active' : ''), onclick: () => { upUnit = t; redraw(); } },
-      iconCanvas(t, pid, 46, 1, unitUpList(S, pid, t)), el('span', {}, UNITS[t].name), el('small', {}, `${unitUpList(S, pid, t).length}/5`)));
+      iconCanvas(t, pid, 46, 1, unitUpList(S, pid, t)), el('span', {}, unitName(S, pid, t)), el('small', {}, `${unitUpList(S, pid, t).length}/5`)));
   }
   const have = unitUpList(S, pid, upUnit);
   const box = el('div', { class: 'up-tree' });
@@ -1347,6 +1361,7 @@ async function playEvent(ev, f, isAI, pan = true) {
         if (ev.killed) R.ghost({ ...def, hp: 0 }, hit + 420 * f, hit / (hit + 420 * f), null, fall);
         else R.shake(def.id, def.idx, 300 * f, hit);
         R.floatText(def.idx, `−${ev.dmg}`, '#fecaca', 900 * f, hit);
+        if (ev.curse) R.floatText(def.idx, '🔮 verflucht', '#e9d5ff', 900 * f, hit + 250 * f);
         if (ev.stone) {
           R.floatText(def.idx, 'versteinert!', '#d6d3d1', 1200 * f, hit + 350 * f);
           sound.play('petrify', { pan: panOf(def.idx), vol: isAI === 'quiet' ? 0.6 : 1, delay: hit / 1000 + 0.1 });
@@ -1388,13 +1403,17 @@ async function playEvent(ev, f, isAI, pan = true) {
     case 'unitUp':
       if (S.players[ev.pid].human) {
         sound.play('fanfare', { vol: 0.7 });
-        toast(`⬆ ${UNITS[ev.unit].name}: ${UP_INDEX[ev.id].name}`);
+        toast(`⬆ ${unitName(S, ev.pid, ev.unit)}: ${UP_INDEX[ev.id].name}`);
         R.sprites = new Map(); // neues Aussehen
       }
       break;
     case 'research':
       if (S.players[ev.pid].human) sound.play('chime');
       if (S.players[ev.pid].human) toast(`Erforscht: ${TECHS[ev.tech].icon} ${TECHS[ev.tech].name}`);
+      break;
+    case 'plunder':
+      // Wikinger: Beute beim Erobern
+      if (f > 0) R.floatText(ev.idx, `🪓 Beute +${ev.loot.food}/${ev.loot.wood}/${ev.loot.ore}`, '#fde68a', 1300 * f, 500 * f);
       break;
     case 'capture': {
       R.invalidate(true, ev.idx);
@@ -1427,7 +1446,7 @@ async function playEvent(ev, f, isAI, pan = true) {
       if (f > 0) R.ring(ev.idx, '#fde047', 600 * f);
       if (f > 0) sound.play('sparkle', { pan: panOf(ev.idx), vol: isAI ? 0.5 : 1, delay: 0.25 * f });
       R.floatText(ev.idx, `★ ${RANK_NAMES[ev.rank]}`, '#fde047', 1200 * Math.max(f, 0.6), 250 * f);
-      if (unitById(S, ev.id)?.owner === humanId() && PERK_RANKS.includes(ev.rank)) toast(`★ ${UNITS[unitById(S, ev.id).type].name} ist jetzt ${RANK_NAMES[ev.rank]} – wähle eine Fähigkeit!`);
+      if (unitById(S, ev.id)?.owner === humanId() && PERK_RANKS.includes(ev.rank)) toast(`★ ${uName(unitById(S, ev.id))} ist jetzt ${RANK_NAMES[ev.rank]} – wähle eine Fähigkeit!`);
       await pause(isAI ? 200 : 100);
       break;
     case 'perk':
@@ -1439,7 +1458,7 @@ async function playEvent(ev, f, isAI, pan = true) {
     case 'demolish':
       R.invalidate(true, ev.idx);
       if (ev.snap) R.ghost({ ...ev.snap }, 500 * Math.max(f, 0.6), 0);
-      R.floatText(ev.idx, `${ev.building ? BUILDINGS[ev.building].name : UNITS[ev.unit].name} ${ev.disband ? 'entlassen' : 'abgerissen'}`, '#fca5a5', 1000 * Math.max(f, 0.6));
+      R.floatText(ev.idx, `${ev.building ? BUILDINGS[ev.building].name : ev.snap ? uName(ev.snap) : UNITS[ev.unit].name} ${ev.disband ? 'entlassen' : 'abgerissen'}`, '#fca5a5', 1000 * Math.max(f, 0.6));
       if (f > 0) sound.play('fall', { pan: panOf(ev.idx), vol: isAI ? 0.4 : 0.8 });
       break;
     case 'stone':
@@ -1713,7 +1732,7 @@ function rankText(u) {
 }
 
 function unitCard(u, subtitle) {
-  const name = u.type === 'tower' ? `${u.kind ? TOWER_KINDS[u.kind].name : 'Turm'} · Stufe ${u.level}` : UNITS[u.type].structure ? UNITS[u.type].name : `${UNITS[u.type].name} · ${rankText(u)}`;
+  const name = u.type === 'tower' ? `${u.kind ? TOWER_KINDS[u.kind].name : 'Turm'} · Stufe ${u.level}` : UNITS[u.type].structure ? UNITS[u.type].name : `${uName(u)} · ${rankText(u)}`;
   return el('div', { class: 'unit-card' },
     iconCanvas(u.type, u.owner, 48, u.level),
     el('div', { class: 'uc-main' },
@@ -1772,13 +1791,13 @@ function advice(occ) {
   const territory = computeTerritory(S);
   // 2. Fernkämpfer zuerst
   const shooter = canStill.find((u) => !UNITS[u.type].structure && statsOf(S, u).range > 1 && canAttack(u) && (unitTargets(u, occ).length || canMove(u) && [...getMoves(S, u, occ).keys()].some((f) => getTargets(S, u, f, occ).length)));
-  if (shooter) return { text: `Lass zuerst deinen ${UNITS[shooter.type].name} schießen: Fernkämpfer bekommen keinen Gegenschlag.`, unit: shooter.id };
+  if (shooter) return { text: `Lass zuerst deinen ${uName(shooter)} schießen: Fernkämpfer bekommen keinen Gegenschlag.`, unit: shooter.id };
   // 3. Dörfer besetzen
   const free = S.cities.filter((c) => c.owner !== pid && !occ[c.idx]);
   for (const u of canStill.filter(canMove)) {
     const moves = getMoves(S, u, occ);
     const c = free.find((c) => moves.has(c.idx));
-    if (c) return { text: `Dein ${UNITS[u.type].name} kann ${c.owner < 0 ? 'ein Dorf' : 'eine feindliche Stadt'} besetzen – bleibt er stehen, gehört ${c.owner < 0 ? 'es' : 'sie'} dir samt Gebiet.`, unit: u.id };
+    if (c) return { text: `Dein ${uName(u)} kann ${c.owner < 0 ? 'ein Dorf' : 'eine feindliche Stadt'} besetzen – bleibt er stehen, gehört ${c.owner < 0 ? 'es' : 'sie'} dir samt Gebiet.`, unit: u.id };
   }
   // 4. Bauen / Ausbauen
   const inc = incomeOf(S, pid, territory);
@@ -1855,12 +1874,12 @@ function renderCityPanel(panel, ci, occ) {
       const preview = { type: k, owner: p.id, hp: 1 };
       grid.append(el('button', {
         class: 'recruit', disabled: !!why, onclick: () => doRecruit(c.idx, k),
-        onmouseenter: () => { const n = $('recruitNote'); if (n) { n.dataset.base ??= n.textContent; n.textContent = `${T.name}: ${unitStatsText(preview, true)} – ${T.desc}`; } },
+        onmouseenter: () => { const n = $('recruitNote'); if (n) { n.dataset.base ??= n.textContent; n.textContent = `${unitName(S, p.id, k)}: ${unitStatsText(preview, true)} – ${T.desc}`; } },
         onmouseleave: () => { const n = $('recruitNote'); if (n && n.dataset.base != null) n.textContent = n.dataset.base; },
       },
         iconCanvas(k, p.id, 58),
-        el('div', { class: 'name' }, T.short || T.name),
-        why === 'needs' ? el('span', { class: 'lock' }, '🔒 ', BUILDINGS[T.needs].name) : why === 'tech' ? el('span', { class: 'lock' }, '🔬 ', TECHS[T.tech].name) : costEl(T.cost, p.res)));
+        el('div', { class: 'name' }, unitName(S, p.id, k, true)),
+        why === 'needs' ? el('span', { class: 'lock' }, '🔒 ', BUILDINGS[T.needs].name) : why === 'tech' ? el('span', { class: 'lock' }, '🔬 ', TECHS[T.tech].name) : costEl(unitCost(S, p.id, k), p.res)));
     }
     panel.append(grid);
     const ready = hasBuilding(c, 'barracks') ? ' Dank Kaserne können sie sofort ziehen.' : '';
@@ -1898,9 +1917,9 @@ function renderCityPanel(panel, ci, occ) {
           el('span', { class: 'bicon' }, iconCanvas(type, p.id, 34, 1)),
           el('div', { class: 'binfo' }, el('b', {}, `${UNITS[type].name} ${nt}/${max}`), el('span', { class: 'muted' }, text)),
           el('button', {
-            class: 'btn small', disabled: nt >= max || !canAfford(p.res, UNITS[type].cost),
+            class: 'btn small', disabled: nt >= max || !canAfford(p.res, unitCost(S, p.id, type)),
             onclick: () => { clearSel(); sel.placeTower = ci; sel.placeType = type; refresh(); },
-          }, costEl(UNITS[type].cost, p.res))));
+          }, costEl(unitCost(S, p.id, type), p.res))));
       }
     };
     // Felder bearbeiten: Wiese → Wald, Erzgrube oder Traubenhain; Wald → Wiese
@@ -2047,7 +2066,7 @@ function renderPanelContent(panel) {
       }
       const actions = el('div', { class: 'unit-actions' },
         el('button', { class: 'btn small', title: 'Alle eigenen Einheiten in der Nähe ziehen und greifen gemeinsam an', onclick: () => groupNearby(u, false) }, '👥 Alle in der Nähe'),
-        el('button', { class: 'btn small', title: `Alle ${UNITS[u.type].name} in der Nähe ziehen und greifen gemeinsam an`, onclick: () => groupNearby(u, true) }, `👥 Alle ${UNITS[u.type].name}`),
+        el('button', { class: 'btn small', title: `Alle ${uName(u)} in der Nähe ziehen und greifen gemeinsam an`, onclick: () => groupNearby(u, true) }, `👥 Alle ${uName(u)}`),
         el('button', { class: 'btn small' + (u.sentry ? ' active' : ''), onclick: () => act({ type: 'sentry', unitId: u.id }, { after: () => { if (unitById(S, u.id)?.sentry) clearSel(); } }) }, u.sentry ? '💤 Wache beenden' : '💤 Wache halten'));
       actions.append(el('button', { class: 'btn small raze', title: 'Einheit auflösen', onclick: () => doDisband(u) }, '🗑 Entlassen'));
       actions.append(el('button', { class: 'btn small primary', title: 'Angriff, Verteidigung, Leben und Fähigkeiten nur dieser Einheit verbessern', onclick: () => openBoost(u) }, '⬆ Verbessern'));
@@ -2390,6 +2409,14 @@ function renderLevels() {
     const locked = !isUnlocked(first, stars);
     tabs.append(el('button', { class: `tab ${wi === currentWorld ? 'active' : ''} ${locked ? 'locked' : ''}`, onclick: () => { currentWorld = wi; renderLevels(); } }, `${wi + 1}. ${name}`));
   });
+  // Eigenes Volk für die ganze Kampagne, Gegnervolk dieser Welt
+  const fbox = $('campFaction');
+  fbox.innerHTML = '';
+  for (const k of FACTION_ORDER) {
+    fbox.append(el('button', { class: factionKey(settings.campaignFaction) === k ? 'active' : '', onclick: () => { settings.campaignFaction = k; store.saveSettings(settings); renderLevels(); } }, `${FACTIONS[k].icon} ${FACTIONS[k].name}`));
+  }
+  const wf = getWorldFactions()[currentWorld];
+  $('campFactionInfo').textContent = `${FACTIONS[factionKey(settings.campaignFaction)].ability} · Gegner in dieser Welt: ${wf === 'mixed' ? 'alle Völker gemischt' : `${FACTIONS[wf].icon} ${FACTIONS[wf].name}`}`;
   const grid = $('levelGrid');
   grid.innerHTML = '';
   const nextId = levels.find((l) => !stars[l.id])?.id;
@@ -2403,13 +2430,13 @@ function renderLevels() {
     },
     el('span', { class: 'n' }, l.num),
     el('span', { class: 'st' }, '★'.repeat(st) + '☆'.repeat(3 - st)),
-    el('span', { class: 'meta' }, `${MAP_SIZES[l.size].name} · ${l.ais.length} Geg.`),
+    el('span', { class: 'meta' }, `${MAP_SIZES[l.size].name} · ${l.factions.map((f) => FACTIONS[f].icon).join('')}`),
     ));
   }
 }
 
 // ---------------------------------------------------------------- Freies Spiel
-const setup = Object.assign({ size: 'XL', biome: 'mixed', enemies: 1, diff: 3, fog: false, code: randomSeedCode() }, store.lastSetup() || {});
+const setup = Object.assign({ size: 'XL', biome: 'mixed', faction: 'kingdom', enemies: 1, diff: 3, fog: false, code: randomSeedCode() }, store.lastSetup() || {});
 if (!MAP_SIZES[setup.size]) setup.size = 'XL'; // alte Auswahl Klein/Mittel/Groß
 if (!(setup.density >= 0 && setup.density <= 100) || setup.citiesV !== 4) { setup.density = 80; setup.citiesV = 4; delete setup.cityPct; } // Siedlungsdichte (1.04), Standard 80 %
 
@@ -2423,7 +2450,22 @@ function renderSetup() {
   };
   seg('segSize', Object.entries(MAP_SIZES).map(([k, v]) => [k, v.name]), 'size');
   seg('segBiome', [...Object.entries(BIOMES).map(([k, v]) => [k, v.name]), ['random', 'Zufall']], 'biome');
+  seg('segFaction', FACTION_ORDER.map((k) => [k, `${FACTIONS[k].icon} ${FACTIONS[k].name}`]), 'faction');
+  const F = FACTIONS[factionKey(setup.faction)];
+  $('factionDesc').textContent = `${F.style}. ${F.ability}`;
   seg('segEnemies', [[1, '1'], [2, '2'], [3, '3']], 'enemies');
+  // Volk je Gegner: Zufall oder fest
+  const ef = $('enemyFactions');
+  ef.innerHTML = '';
+  setup.enemyFactions ||= [];
+  for (let i = 0; i < setup.enemies; i++) {
+    const box = el('div', { class: 'seg seg-sm' }, el('span', { class: 'seg-label' }, `Gegner ${i + 1}`));
+    for (const [v, label] of [['random', '🎲'], ...FACTION_ORDER.map((k) => [k, FACTIONS[k].icon])]) {
+      const cur = setup.enemyFactions[i] || 'random';
+      box.append(el('button', { class: cur === v ? 'active' : '', title: v === 'random' ? 'Zufall' : FACTIONS[v].name, onclick: () => { setup.enemyFactions[i] = v; renderSetup(); } }, label));
+    }
+    ef.append(box);
+  }
   seg('segDiff', DIFFICULTIES.map((d) => [d.level, String(d.level)]), 'diff');
   const d = DIFFICULTIES[setup.diff - 1];
   $('diffDesc').textContent = `${d.name}: ${d.desc}`;
@@ -2470,6 +2512,9 @@ function renderHelp() {
   $('helpContent').innerHTML = `
     <h3>Ziel</h3>
     <p>Erobere alle Städte deiner Gegner. Wer keine Stadt mehr hat, scheidet aus.</p>
+    <h3>Völker</h3>
+    <p>Vor dem Spiel wählst du dein Volk (Kampagne: einmal für alle Welten, jede Welt hat ein festes Gegnervolk). Alle Völker haben dieselben 13 Rollen (billig, Fernkampf, schnell, Verteidiger, Elite, Flieger, Belagerung, Magier, Bestie, Riese, Titan, Drache), aber eigene Namen, Kosten und Werte:</p>
+    ${FACTION_ORDER.map((k) => `<p><b>${FACTIONS[k].icon} ${FACTIONS[k].name}</b> – ${FACTIONS[k].style}. ${FACTIONS[k].ability}</p>`).join('')}
     <h3>🏰 Burgverteidigung</h3>
     <p>Eigener Spielmodus im Hauptmenü: Alle ${DEFENSE.every} Runden kommt eine Gegnerwelle aus 2–3 roten Toren am Kartenrand und will deine Burg. Hältst du ${DEFENSE.waves} Wellen durch, gewinnst du; fällt die Burg, ist die Partie vorbei. Auf Welle 10, 20 und 30 kommen Bosse. Du bekommst einen festen Ertrag pro Runde und für jeden besiegten Angreifer Beute (ein Drittel seines Preises). Nach jeder Welle wählst du eine von 3 Karten, die bis zum Ende der Partie gilt. Einzel-Verbesserungen gehen hier bis Stufe 5, Ränge kommen schneller, Unterhalt fällt weg und die Burg darf mehr Türme und Wälle tragen. Andere Städte plündern die Angreifer nur (sie werden neutral).</p>
     <h3>Rohstoffe</h3>

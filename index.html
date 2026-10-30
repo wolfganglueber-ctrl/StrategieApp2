@@ -185,7 +185,7 @@
       <button class="btn big" id="btnFog">🌫️ Nebel: Aus</button>
       <button class="btn big" id="btnHelp">Anleitung</button>
       <button class="btn ghost" id="btnSettings">Einstellungen</button>
-      <p class="version">Version 1.04</p>
+      <p class="version">Version 1.05</p>
     </div>
   </div>
 
@@ -195,6 +195,11 @@
       <button class="icon-btn" data-back>←</button>
       <h2>Kampagne</h2>
       <span class="stars-total" id="starsTotal"></span>
+    </div>
+    <div class="camp-faction">
+      <label>Dein Volk</label>
+      <div class="seg" id="campFaction"></div>
+      <p class="hint" id="campFactionInfo"></p>
     </div>
     <div class="tabs" id="worldTabs"></div>
     <div class="level-grid" id="levelGrid"></div>
@@ -212,8 +217,12 @@
       <div class="seg" id="segSize"></div>
       <label>Landschaft</label>
       <div class="seg" id="segBiome"></div>
+      <label>Dein Volk</label>
+      <div class="seg" id="segFaction"></div>
+      <p class="hint" id="factionDesc"></p>
       <label>Gegner</label>
       <div class="seg" id="segEnemies"></div>
+      <div id="enemyFactions"></div>
       <label>Schwierigkeit</label>
       <div class="seg" id="segDiff"></div>
       <p class="hint" id="diffDesc"></p>

@@ -1151,7 +1151,12 @@ export function drawCity(ctx, city, x, y, H, col) {
 
 // ------------------------------------------------------------------ Figuren
 
-const SKIN = '#f1c59a';
+const SKIN_DEF = '#f1c59a';
+// Hautfarbe je Volk (Drachenmenschen grün geschuppt, Hexer blass)
+const SKINS = { dragonkin: ['#d9f99d', '#4d7c0f', '#a3c45a'], witches: ['#f3eefa', '#9c8bb5', '#d8cce8'] };
+function skinOf() {
+  return SKINS[FIGST.faction]?.[2] || SKIN_DEF;
+}
 
 function grad(ctx, x0, x1, light, dark) {
   const g = ctx.createLinearGradient(x0, 0, x1, 0);
@@ -1170,7 +1175,7 @@ function outline(ctx, w = 1) {
 function steel(ctx, x0, x1, y0 = 0, y1 = 0) {
   const g = ctx.createLinearGradient(x0, y0, x1, y1);
   // Ab Entwicklungsstufe 4: geschwärzter Stahl
-  const c = FIGST.stage >= 4 ? ['#b4b8c0', '#5b606b', '#2b2e35', '#0b0c10'] : ['#f4f7fa', '#d5dbe2', '#8f99a4', '#4f5862'];
+  const c = FIGST.stage >= 4 ? ['#b4b8c0', '#5b606b', '#2b2e35', '#0b0c10'] : STEEL_LOOK[FIGST.faction] || ['#f4f7fa', '#d5dbe2', '#8f99a4', '#4f5862'];
   g.addColorStop(0, c[0]);
   g.addColorStop(0.3, c[1]);
   g.addColorStop(0.65, c[2]);
@@ -1178,8 +1183,62 @@ function steel(ctx, x0, x1, y0 = 0, y1 = 0) {
   return g;
 }
 
-// Aktuelle Entwicklung der gezeichneten Figur (Stufe 0–5 und gewählte Ausbauten)
+// Aktuelle Entwicklung der gezeichneten Figur (Stufe 0–5 und gewählte Ausbauten) und Volk (faction)
 let FIGST = { stage: 0, ups: new Set() };
+// Metall je Volk: Wikinger dunkles Eisen, Hexer violetter Stahl, Drachenmenschen Bronze
+const STEEL_LOOK = {
+  vikings: ['#d6d3cf', '#a8a29e', '#6b6560', '#36312c'],
+  witches: ['#e9dcf7', '#b9a3d6', '#6d5491', '#33244a'],
+  dragonkin: ['#fde3b0', '#e0a556', '#a4652a', '#5a3312'],
+};
+// Volks-Zubehör am Kopf: Wikinger Hörner, Hexer spitzer Hut, Drachenmenschen Hörner und Stachelkamm
+function factionHorns(ctx, x, y, big = 1) {
+  const bone = grad(ctx, x - 9, x + 9, '#fff7e6', '#c9b48a');
+  for (const sx of [-1, 1]) {
+    ctx.fillStyle = bone;
+    ctx.beginPath();
+    ctx.moveTo(x + sx * 3.8, y - 3);
+    ctx.quadraticCurveTo(x + sx * 9 * big, y - 4, x + sx * 8.5 * big, y - 10 * big);
+    ctx.quadraticCurveTo(x + sx * 6.5, y - 5.5, x + sx * 3.4, y - 5.2);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.6);
+  }
+}
+function witchHat(ctx, x, y) {
+  ctx.fillStyle = grad(ctx, x - 7, x + 7, '#5b3b86', '#1e1030');
+  ctx.beginPath();
+  ctx.ellipse(x, y - 3.2, 7.2, 1.7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  outline(ctx, 0.6);
+  ctx.beginPath();
+  ctx.moveTo(x - 4.2, y - 3.6);
+  ctx.quadraticCurveTo(x - 1, y - 9, x + 3.5, y - 15.5);
+  ctx.quadraticCurveTo(x + 2, y - 9, x + 4.2, y - 3.6);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.6);
+  ctx.fillStyle = '#c084fc';
+  ctx.fillRect(x - 4, y - 5.2, 8, 1.1);
+}
+function dragonCrest(ctx, x, y) {
+  ctx.fillStyle = grad(ctx, x - 4, x + 4, '#fb923c', '#9a3412');
+  for (let k = 0; k < 4; k++) {
+    const px = x - 3 + k * 1.9, py = y - 6.6 + Math.abs(k - 1.5) * 0.9;
+    ctx.beginPath();
+    ctx.moveTo(px - 1, py + 1);
+    ctx.lineTo(px + 0.2, py - 3.4);
+    ctx.lineTo(px + 1.2, py + 1);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+function factionHead(ctx, x, y, helmeted) {
+  const f = FIGST.faction;
+  if (f === 'vikings') factionHorns(ctx, x, y, helmeted ? 1.05 : 0.9);
+  else if (f === 'witches') witchHat(ctx, x, y + (helmeted ? -2 : 0));
+  else if (f === 'dragonkin') { dragonCrest(ctx, x, y + (helmeted ? -1 : 0)); if (!helmeted) factionHorns(ctx, x, y + 1, 0.7); }
+}
 const hasUp = (id) => FIGST.ups.has(id);
 
 // Haarschopf für Figuren ohne Helm
@@ -1259,7 +1318,7 @@ function pedestal(ctx, col, r = 15) {
   ctx.beginPath();
   ctx.ellipse(0, 6, r, 5.5 * k, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = '#f2d27a';
+  ctx.strokeStyle = RIM[FIGST.faction] || '#f2d27a';
   ctx.lineWidth = 1.3;
   ctx.stroke();
   ctx.strokeStyle = 'rgba(255,255,255,0.35)';
@@ -1267,6 +1326,32 @@ function pedestal(ctx, col, r = 15) {
   ctx.beginPath();
   ctx.ellipse(0, 6, r - 3, 5.5 * k - 1.2, 0, Math.PI * 1.05, Math.PI * 1.6);
   ctx.stroke();
+  factionEmblem(ctx, -r * 0.7, 8.6 * Math.min(1, k + 0.1));
+}
+// Sockelrand und Zeichen je Volk (Königreich: Gold ohne Zeichen)
+const RIM = { vikings: '#d6d3d1', witches: '#c084fc', dragonkin: '#fb923c' };
+function factionEmblem(ctx, x, y) {
+  const f = FIGST.faction;
+  if (!RIM[f]) return;
+  ctx.save();
+  ctx.fillStyle = 'rgba(15,10,20,0.75)';
+  ctx.beginPath();
+  ctx.arc(x, y, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = RIM[f];
+  ctx.fillStyle = RIM[f];
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+  ctx.beginPath();
+  if (f === 'vikings') { // Axt
+    ctx.moveTo(x - 1.4, y + 1.8); ctx.lineTo(x + 1, y - 1.6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + 0.3, y - 2); ctx.quadraticCurveTo(x + 2.4, y - 1.6, x + 1.8, y + 0.2); ctx.lineTo(x + 0.6, y - 0.8); ctx.fill();
+  } else if (f === 'witches') { // Mondsichel
+    ctx.arc(x, y, 2, Math.PI * 0.3, Math.PI * 1.7); ctx.arc(x + 0.9, y, 1.5, Math.PI * 1.6, Math.PI * 0.4, true); ctx.fill();
+  } else { // Flamme
+    ctx.moveTo(x, y - 2.2); ctx.quadraticCurveTo(x + 2, y, x, y + 2); ctx.quadraticCurveTo(x - 2, y, x, y - 2.2); ctx.fill();
+  }
+  ctx.restore();
 }
 
 // Beine mit Hose und Lederstiefeln
@@ -1456,7 +1541,7 @@ function arm(ctx, x0, y0, x1, y1, sleeve, armored = false) {
   ctx.strokeStyle = armored ? '#b9c1ca' : sleeve;
   ctx.lineWidth = 2.6;
   ctx.stroke();
-  ctx.fillStyle = armored ? '#8f99a4' : SKIN;
+  ctx.fillStyle = armored ? '#8f99a4' : skinOf();
   ctx.beginPath();
   ctx.arc(x1, y1, 1.6, 0, Math.PI * 2);
   ctx.fill();
@@ -1466,8 +1551,10 @@ function arm(ctx, x0, y0, x1, y1, sleeve, armored = false) {
 // Kopf mit Gesicht; beard: Bartfarbe oder null
 function face(ctx, x, y, beard = null) {
   const g = ctx.createRadialGradient(x - 1.5, y - 1.5, 0.5, x, y, 5);
-  g.addColorStop(0, '#ffe6cc');
-  g.addColorStop(1, '#cf9466');
+  const sk = SKINS[FIGST.faction] || ['#ffe6cc', '#cf9466'];
+  if (!beard && FIGST.faction === 'vikings') beard = '#d6a24a'; // Wikinger: blonder Bart
+  g.addColorStop(0, sk[0]);
+  g.addColorStop(1, sk[1]);
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.arc(x, y, 4.2, 0, Math.PI * 2);
@@ -1481,7 +1568,7 @@ function face(ctx, x, y, beard = null) {
     ctx.quadraticCurveTo(x, y + 2.5, x - 3.6, y + 0.5);
     ctx.fill();
   }
-  ctx.fillStyle = '#2a1a10';
+  ctx.fillStyle = FIGST.faction === 'dragonkin' ? '#facc15' : FIGST.faction === 'witches' ? '#a855f7' : '#2a1a10';
   ctx.beginPath();
   ctx.arc(x + 0.4, y - 0.4, 0.55, 0, Math.PI * 2);
   ctx.arc(x + 2.6, y - 0.4, 0.55, 0, Math.PI * 2);
@@ -1492,9 +1579,14 @@ function face(ctx, x, y, beard = null) {
   ctx.moveTo(x + 0.8, y + 2);
   ctx.lineTo(x + 2.4, y + 2);
   ctx.stroke();
+  factionHead(ctx, x, y, false);
 }
 
 function helmet(ctx, x, y, type, col) {
+  helmetInner(ctx, x, y, type, col);
+  factionHead(ctx, x, y, true);
+}
+function helmetInner(ctx, x, y, type, col) {
   if (type === 'kettle') {
     // Eisenhut mit breiter Krempe
     ctx.fillStyle = steel(ctx, x - 5, x + 5, y - 6, y);
@@ -2994,7 +3086,7 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       ctx.strokeStyle = col.main;
       ctx.lineWidth = 3;
       ctx.stroke();
-      ctx.fillStyle = SKIN;
+      ctx.fillStyle = skinOf();
       ctx.beginPath();
       ctx.arc(10, -12.2, 1.6, 0, Math.PI * 2);
       ctx.fill();

@@ -1100,13 +1100,14 @@ export class Renderer {
   sprite(type, owner, exhausted, level, stone = false, fly = false, kind = null) {
     // Aussehen je nach Einheiten-Entwicklung des Besitzers
     const ups = this.state?.players[owner]?.unitUps?.[type] || [];
+    const faction = this.state?.players[owner]?.faction || 'kingdom';
     const k0 = Math.max(0.5, Math.round(this.cam.z * this.dpr * 4) / 4) * (HEX / 40) * FIG;
     if (this.spriteScale !== k0) {
       this.sprites = new Map();
       this.spriteScale = k0;
     }
     const k = k0 * (BIG[type] || 1);
-    const key = type + owner + (exhausted ? 'x' : '') + (stone ? (stone === 'ice' ? 'i' : 's') : '') + (fly ? 'f' : '') + (level || '') + (kind || '') + ups.join('');
+    const key = type + owner + (exhausted ? 'x' : '') + (stone ? (stone === 'ice' ? 'i' : 's') : '') + (fly ? 'f' : '') + (level || '') + (kind || '') + ups.join('') + faction;
     let sp = this.sprites.get(key);
     if (sp) return sp;
     const base = PLAYER_COLORS[owner] || NEUTRAL_COLOR;
@@ -1120,7 +1121,7 @@ export class Renderer {
     raw.height = H;
     const rc = raw.getContext('2d');
     rc.setTransform(k, 0, 0, k, B.left * k, B.top * k);
-    drawFigure(rc, type, col, level, fly, { stage: ups.length, ups: new Set(ups), kind });
+    drawFigure(rc, type, col, level, fly, { stage: ups.length, ups: new Set(ups), kind, faction });
     // Plastische Beleuchtung: Licht von links oben, Schatten nach rechts unten
     rc.setTransform(1, 0, 0, 1, 0, 0);
     rc.globalCompositeOperation = 'source-atop';
@@ -1408,12 +1409,12 @@ export class Renderer {
   }
 
   // Vorschaubild einer Figur für Menüs/Panels
-  drawPreview(ctx, type, owner, cx, cy, size, level, ups = []) {
+  drawPreview(ctx, type, owner, cx, cy, size, level, ups = [], faction = this.state?.players[owner]?.faction) {
     const k = size / 60;
     ctx.save();
     ctx.translate(cx, cy + size * 0.22);
     ctx.scale(k, k);
-    drawFigure(ctx, type, PLAYER_COLORS[owner] || NEUTRAL_COLOR, level, false, { stage: ups.length, ups: new Set(ups) });
+    drawFigure(ctx, type, PLAYER_COLORS[owner] || NEUTRAL_COLOR, level, false, { stage: ups.length, ups: new Set(ups), faction });
     ctx.restore();
   }
 

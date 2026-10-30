@@ -107,6 +107,53 @@ export function moveCap(type) {
 }
 export const MELEE = ['warrior', 'rider', 'defender', 'knight', 'griffin', 'blackknight'];
 export const FOOT = ['warrior', 'archer', 'defender', 'mage'];
+
+// Völker: gleiche 13 Rollen (Einheiten-Typen bleiben intern gleich), eigene Namen, Kosten, Werte und eine Volks-Fähigkeit.
+// cost: Faktor je Rohstoff, manaCost: zusätzliches Mana = Rohstoffsumme × Faktor (mind. 1), atk/hp: Faktor je Angriffsart
+// (melee/ranged/siege/magic/all), structHp: Leben von Türmen und Wällen, structCost: Preis von Türmen und Wällen
+export const FACTIONS = {
+  kingdom: {
+    name: 'Königreich', icon: '🏰', style: 'Ausgewogen, stark in der Verteidigung',
+    ability: 'Bollwerk: Türme und Steinwälle 25 % billiger und mit 25 % mehr Leben.',
+    structCost: 0.75, structHp: 1.25,
+    names: {},
+  },
+  vikings: {
+    name: 'Wikinger', icon: '🪓', style: 'Angriff und Plündern, brauchen viel Nahrung, wenig Erz',
+    ability: 'Plünderung: Erobern einer Stadt bringt Beute. Berserker: unter halbem Leben +3 Angriff. Nahkämpfer +15 % Angriff, Fernkampf und Belagerung −15 %, Türme und Wälle −25 % Leben.',
+    cost: { food: 1.25, ore: 0.7 }, atk: { melee: 1.15, ranged: 0.85, siege: 0.85 }, structHp: 0.75,
+    plunder: true, berserk: 3,
+    names: {
+      warrior: 'Plünderer', archer: 'Axtwerfer', rider: 'Wolfsreiter', defender: 'Schildmaid', knight: 'Berserker', griffin: 'Walküre',
+      catapult: 'Steinschleuder', trebuchet: 'Großschleuder', mage: 'Runenmeister', basilisk: 'Fenriswolf', blackknight: 'Jarl',
+      troll: 'Frostriese', giant: 'Eisriesenkönig', dragon: 'Nidhögg',
+    },
+  },
+  witches: {
+    name: 'Hexer', icon: '🔮', style: 'Magie und Flüche, brauchen viel Mana (Trauben), schlagen schwächer zu',
+    ability: 'Fluch: Jeder Treffer senkt die Verteidigung des Ziels bis zum nächsten eigenen Zug um 15 %. Greifen mit Feuer/Magie an (außer Belagerung), Angriff −20 %. Mana-Ertrag +50 %, jede Stadt +1 Mana. Einheiten kosten zusätzlich Mana, dafür weniger Erz.',
+    cost: { ore: 0.7 }, manaCost: 0.06, atk: { all: 0.8 }, magic: true, curse: 15, manaMul: 1.5, manaPerCity: 1,
+    names: {
+      warrior: 'Kultist', archer: 'Irrlichtwerfer', rider: 'Nachtmahrreiter', defender: 'Lehmgolem', knight: 'Hexenritter', griffin: 'Besenhexe',
+      catapult: 'Fluchkessel', trebuchet: 'Seelenwerfer', mage: 'Hexenmeister', basilisk: 'Riesenkröte', blackknight: 'Todesritter',
+      troll: 'Fleischgolem', giant: 'Golemkoloss', dragon: 'Knochendrache',
+    },
+  },
+  dragonkin: {
+    name: 'Drachenmenschen', icon: '🐉', style: 'Wenige, sehr zähe Einheiten, brauchen viel Holz und Erz',
+    ability: 'Feuerhaut: Einheiten heilen 2 Leben pro Runde, Feuer/Magie trifft sie 25 % schwächer. Alle Einheiten +20 % Leben, dafür Holz und Erz +35 %.',
+    cost: { food: 0.9, wood: 1.35, ore: 1.35 }, hp: { all: 1.2 }, regen: 2, magicDef: 25,
+    names: {
+      warrior: 'Echsenkrieger', archer: 'Feuerspucker', rider: 'Raptorreiter', defender: 'Schuppenwächter', knight: 'Drachenritter', griffin: 'Wyvernreiter',
+      catapult: 'Lavaschleuder', trebuchet: 'Glutmörser', mage: 'Drachenpriester', basilisk: 'Salamander', blackknight: 'Drachenfürst',
+      troll: 'Erdwyrm', giant: 'Wyrmkönig', dragon: 'Großer Wyrm',
+    },
+  },
+};
+export const FACTION_ORDER = ['kingdom', 'vikings', 'witches', 'dragonkin'];
+export function factionKey(k) {
+  return FACTIONS[k] ? k : 'kingdom';
+}
 // Ränge: je 5 besiegte Gegner eine Stufe (höchstens 3), jede Stufe bringt eine Spezialisierung – überall, für alle Einheiten
 export const RANK_NAMES = ['', 'Rekrut', 'Veteran', 'Elite', 'Held'];
 export const RANK_XP = [0, 0, 5, 10, 15]; // Siege bis zur Stufe

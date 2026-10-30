@@ -8,6 +8,7 @@ import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, terrainDefense, hitDamage, unitRange, unitCap, canRecruit,
   spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, unitUpOptions, unitUpList, canBuild, canPetrify,
   canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage, canTerraform, cityTiles, cityYield, canFuse, sweepTargets, canTowerKind, atkKind,
+  factionOf, unitCost,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -134,8 +135,8 @@ function expectedDamage(state, ctx, u, idx, hp) {
   for (const e of list) {
     if (!ctx.alive.has(e)) continue;
     const A = ctx.st(e);
-    const kind = atkKind(e);
-    const pct = Math.max(0, Math.min(DEF_MAX, (DEF_TABLE[u.type]?.[kind] ?? 0) + D.def + (kind === 'siege' ? Math.round(terr / 2) : terr) - A.pen));
+    const kind = atkKind(e, state);
+    const pct = Math.max(0, Math.min(DEF_MAX, (DEF_TABLE[u.type]?.[kind] ?? 0) + (kind === 'magic' ? factionOf(state, u.owner).magicDef || 0 : 0) + D.def + (kind === 'siege' ? Math.round(terr / 2) : terr) - A.pen));
     sum += hitDamage(A.atk, pct);
   }
   return sum;

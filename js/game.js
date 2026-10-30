@@ -6,6 +6,7 @@ import {
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
   PERK_RANKS, CAVALRY, buildingYield, plantCost, START_BUILDINGS, slotsUsed, usesSlot, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_ADD, ATK_TYPE, DEF_TABLE, DEF_MAX, SKILLS, skillsFor, boostCost, skillCost,
   BASE_RES, MANA, ECO_TECH, ECO_TECH_PCT, ARCHER_MAX_RANGE, counterMax, FUSE, TOWER_BOOST_ADD, TOWER_KINDS, START_BONUS,
+  FACTIONS, factionKey,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -41,6 +42,7 @@ export function createGame(config) {
       name: p.name || (p.human ? 'Du' : PLAYER_COLORS[i].name),
       human: !!p.human,
       ai: p.ai || 3,
+      faction: factionKey(p.faction),
       res: { ...START_RES, ...startBonus(config, p) },
       incomeBonus: p.incomeBonus ?? (!p.human ? AI_INCOME_BONUS[p.ai] || 0 : 0),
       alive: true,
@@ -110,6 +112,36 @@ export function hasTech(state, pid, t) {
   return !!state.players[pid]?.tech?.includes(t);
 }
 
+// Volk eines Spielers (alte Spielstände und neutrale Einheiten: Königreich)
+export function factionOf(state, pid) {
+  return FACTIONS[factionKey(state.players[pid]?.faction)];
+}
+// Rolle einer Einheit für die Volkswerte: Belagerung (Katapult, Tribok), Fernkampf, Magie, sonst Nahkampf (auch Titanen)
+export function roleOf(type) {
+  if (type === 'catapult' || type === 'trebuchet') return 'siege';
+  if (type === 'archer') return 'ranged';
+  if (type === 'mage' || type === 'basilisk' || type === 'dragon') return 'magic';
+  return 'melee';
+}
+// Name einer Einheit im Volk ihres Besitzers
+export function unitName(state, pid, type, short = false) {
+  const n = factionOf(state, pid).names[type];
+  return n || (short && UNITS[type].short) || UNITS[type].name;
+}
+// Preis einer Einheit, eines Turms oder Steinwalls für dieses Volk
+export function unitCost(state, pid, type) {
+  const T = UNITS[type], F = factionOf(state, pid);
+  const out = {};
+  let sum = 0;
+  for (const [k, v] of Object.entries(T.cost)) {
+    const m = T.structure ? F.structCost ?? 1 : F.cost?.[k] ?? 1;
+    out[k] = Math.round(v * m);
+    sum += v;
+  }
+  if (!T.structure && F.manaCost) out.mana = (out.mana || 0) + Math.max(1, Math.round(sum * F.manaCost));
+  return out;
+}
+
 // Werte einer Einheit inkl. Turmstufe und Forschung
 export function statsOf(state, u) {
   const T = UNITS[u.type];
@@ -123,6 +155,15 @@ export function statsOf(state, u) {
     if (u.kind === 'bulwark') { st.hp += 10; st.def += 15; }
   }
   if (u.type === 'barrier' && hasTech(state, u.owner, 'battlements')) st.hp += 12;
+  // Volk: Faktoren auf die Grundwerte (Türme/Wälle nur Leben)
+  const F = factionOf(state, u.owner);
+  if (UNITS[u.type].structure) {
+    if (F.structHp) st.hp = Math.round(st.hp * F.structHp);
+  } else {
+    const am = (F.atk?.all ?? 1) * (F.atk?.[roleOf(u.type)] ?? 1), hm = (F.hp?.all ?? 1) * (F.hp?.[roleOf(u.type)] ?? 1);
+    if (am !== 1 && st.atk > 0) st.atk = Math.max(1, Math.round(st.atk * am));
+    if (hm !== 1) st.hp = Math.round(st.hp * hm);
+  }
   const techs = state.players[u.owner]?.tech;
   if (techs) {
     for (const t of techs) {
@@ -163,6 +204,8 @@ export function statsOf(state, u) {
   if (u.type === 'archer') st.range = Math.min(st.range, ARCHER_MAX_RANGE); // Schützen höchstens 4 Felder weit
   // Stellung halten: nicht gezogen → +10 % Verteidigung
   if (hasSkill(u, 'hold') && !u.walked) st.def += 10;
+  // Wikinger (Berserker): unter halbem Leben stärker
+  if (F.berserk && !UNITS[u.type].structure && u.hp * 2 < st.hp) st.atk += F.berserk;
   st.atk = Math.ceil(st.atk - 1e-9);
   st.def = Math.ceil(st.def - 1e-9);
   st.hp = Math.ceil(st.hp - 1e-9);
@@ -233,16 +276,20 @@ export function penetration(state, att, def, defIdx = def.idx) {
   return p;
 }
 // Angriffsart einer Einheit (Kanonenturm: Wucht, Feuerturm: Feuer/Magie)
-export function atkKind(u) {
+export function atkKind(u, state) {
   if (u.type === 'tower' && u.kind === 'cannon') return 'siege';
   if (u.type === 'tower' && u.kind === 'fire') return 'magic';
+  // Hexer: alle Einheiten außer Belagerung und Bauwerken greifen mit Feuer/Magie an
+  if (state && factionOf(state, u.owner).magic && !UNITS[u.type].structure && roleOf(u.type) !== 'siege') return 'magic';
   return ATK_TYPE[u.type] || 'melee';
 }
 // Verteidigung des Ziels gegen diesen Angreifer, aufgeschlüsselt
 export function defenseVs(state, att, def, defIdx = def.idx) {
-  const kind = atkKind(att);
-  const base = DEF_TABLE[def.type]?.[kind] ?? 0;
-  const bonus = statsOf(state, def).def;
+  const kind = atkKind(att, state);
+  // Drachenmenschen (Feuerhaut): robuster gegen Feuer/Magie
+  const base = (DEF_TABLE[def.type]?.[kind] ?? 0) + (kind === 'magic' && !isStructure(def) ? factionOf(state, def.owner).magicDef || 0 : 0);
+  // Fluch der Hexer: Verteidigung gesenkt
+  const bonus = statsOf(state, def).def - (def.curse != null ? factionOf(state, def.curse).curse || 0 : 0);
   const t = terrainDefense(state, defIdx);
   const terrain = kind === 'siege' ? Math.round(t / 2) : t; // Wucht: Mauern und Burg zählen nur halb
   const aura = inAura(state, def, defIdx) ? AURA.def : 0;
@@ -361,7 +408,7 @@ export function canBuildTower(state, pid, idx, territory = computeTerritory(stat
   if (state.cityAt[idx] >= 0 || !TERRAIN[state.terrain[idx]].pass) return 'tile';
   if (state.units.some((u) => u.idx === idx)) return 'occupied';
   if (towersOfCity(state, ci, territory, type) >= structureLimit(c, type)) return 'limit';
-  if (!canAfford(state.players[pid].res, UNITS[type].cost)) return 'cost';
+  if (!canAfford(state.players[pid].res, unitCost(state, pid, type))) return 'cost';
   return null;
 }
 
@@ -561,6 +608,10 @@ export function realmYield(state, pid, territory = computeTerritory(state)) {
     const y = cityYield(state, ci, territory);
     for (const k of RES) inc[k] += y[k];
   });
+  // Hexer: mehr Mana, jede Stadt liefert zusätzlich Mana
+  const F = factionOf(state, pid);
+  if (F.manaMul) inc.mana = Math.round(inc.mana * F.manaMul);
+  if (F.manaPerCity) inc.mana += F.manaPerCity * cityCount(state, pid);
   const bonus = state.players[pid].incomeBonus || 0;
   if (bonus) for (const k of RES) inc[k] = Math.round(inc[k] * (1 + bonus));
   return inc;
@@ -690,7 +741,7 @@ export function canRecruit(state, pid, ci, type) {
   if (T.needs && !hasBuilding(c, T.needs)) return 'needs';
   if (T.perRealm && realmCount(state, pid, type) >= T.perRealm) return 'unique';
   if (T.healer && state.units.filter((u) => u.owner === pid && u.type === type).length >= cityCount(state, pid)) return 'limit';
-  if (!canAfford(state.players[pid].res, T.cost)) return 'cost';
+  if (!canAfford(state.players[pid].res, unitCost(state, pid, type))) return 'cost';
   if (!spawnSpots(state, ci).length) return 'space';
   return null;
 }
@@ -737,6 +788,8 @@ export function startTurn(state) {
   const pid = state.current;
   const geo = geoOf(state);
   if (state.defense && modeHooks.turnStart) ev.push(...modeHooks.turnStart(state, pid));
+  // Fluch dieses Spielers endet
+  for (const u of state.units) if (u.curse === pid) delete u.curse;
   // Eroberung: Einheiten, die eine gegnerische Runde auf fremden Städten überstanden haben
   for (const u of state.units) {
     if (u.owner !== pid) continue;
@@ -746,6 +799,12 @@ export function startTurn(state) {
       const old = c.owner;
       c.owner = pid;
       ev.push({ k: 'capture', idx: c.idx, pid, from: old });
+      // Wikinger: Plünderung bringt Beute je Stadtstufe
+      if (factionOf(state, pid).plunder) {
+        const loot = { food: 8 * c.level, wood: 6 * c.level, ore: 4 * c.level };
+        for (const [k, v] of Object.entries(loot)) state.players[pid].res[k] = (state.players[pid].res[k] || 0) + v;
+        ev.push({ k: 'plunder', idx: c.idx, pid, loot });
+      }
       // Türme und Steinwälle im Gebiet der Stadt wechseln mit die Seite
       if (old >= 0) {
         const territory = computeTerritory(state), ci = state.cityAt[c.idx];
@@ -807,7 +866,8 @@ export function startTurn(state) {
   for (const u of state.units) {
     if (u.owner !== pid) continue;
     const max = statsOf(state, u).hp;
-    const always = (hasPerk(u, 'tough') ? 2 : 0) + (hasSkill(u, 'regen') ? Math.ceil(max / 10) : 0) + (u.kind === 'bulwark' ? 2 : 0);
+    const always = (hasPerk(u, 'tough') ? 2 : 0) + (hasSkill(u, 'regen') ? Math.ceil(max / 10) : 0) + (u.kind === 'bulwark' ? 2 : 0)
+      + (!isStructure(u) ? factionOf(state, pid).regen || 0 : 0); // Drachenmenschen: Feuerhaut
     if (always && u.hp < max) {
       const h = Math.min(max - u.hp, always);
       u.hp += h;
@@ -1042,6 +1102,8 @@ function applyActionCore(state, a) {
       }
       if (!sweep && (splashOf(u) || UNITS[u.type].line)) e.splash = applySplash(state, u, defSnap.idx, r.dmg, attSnap.idx);
       if (u.kind === 'fire' && !e.killed && state.units.includes(t)) { t.fire = 2; e.fire = true; } // Feuerturm: Ziel brennt
+      // Hexer: Fluch auf das Ziel bis zum nächsten eigenen Zug
+      if (factionOf(state, pid).curse && !isStructure(u) && !e.killed && !e.died && state.units.includes(t)) { t.curse = pid; e.curse = true; }
       ev.push(e);
       // Erfahrung: Angreifer +1 (+1 für einen Sieg), überlebender Verteidiger +1
       // Erfahrung = besiegte Gegner (auch durch Flächenschaden oder Gegenschlag)
@@ -1162,7 +1224,8 @@ function applyActionCore(state, a) {
       const T = UNITS[a.unitType];
       const c = state.cities[ci];
       const spot = spawnSpots(state, ci)[0];
-      for (const k of RES) player.res[k] -= T.cost[k] || 0;
+      const cost = unitCost(state, pid, a.unitType);
+      for (const k of RES) player.res[k] -= cost[k] || 0;
       const u = spawnUnit(state, a.unitType, pid, spot, hasBuilding(c, 'barracks'));
       ev.push({ k: 'recruit', id: u.id, idx: spot });
       break;
@@ -1200,7 +1263,8 @@ function applyActionCore(state, a) {
       const territory = computeTerritory(state);
       const ci = a.city != null ? state.cityAt[a.city] : territory[a.idx];
       if (ci == null || ci < 0 || canBuildTower(state, pid, a.idx, territory, type, ci)) return null;
-      for (const k of RES) player.res[k] -= UNITS[type].cost[k] || 0;
+      const cost = unitCost(state, pid, type);
+      for (const k of RES) player.res[k] -= cost[k] || 0;
       const u = spawnUnit(state, type, pid, a.idx, false);
       ev.push({ k: 'recruit', id: u.id, idx: a.idx });
       break;
@@ -1253,7 +1317,8 @@ function applyActionCore(state, a) {
       const u = unitById(state, a.unitId);
       if (!u || u.owner !== pid || !isStructure(u)) return null;
       state.units = state.units.filter((x) => x !== u);
-      for (const k of RES) player.res[k] += Math.floor((UNITS[u.type].cost[k] || 0) / 2);
+      const cost = unitCost(state, pid, u.type);
+      for (const k of RES) player.res[k] += Math.floor((cost[k] || 0) / 2);
       ev.push({ k: 'demolish', idx: u.idx, unit: u.type, snap: snapshotUnit(u) });
       break;
     }
