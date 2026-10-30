@@ -800,8 +800,9 @@ export function startTurn(state) {
       c.owner = pid;
       ev.push({ k: 'capture', idx: c.idx, pid, from: old });
       // Wikinger: Plünderung bringt Beute je Stadtstufe
-      if (factionOf(state, pid).plunder) {
-        const loot = { food: 8 * c.level, wood: 6 * c.level, ore: 4 * c.level };
+      const pl = factionOf(state, pid).plunder;
+      if (pl) {
+        const loot = { food: pl.food * c.level, wood: pl.wood * c.level, ore: pl.ore * c.level };
         for (const [k, v] of Object.entries(loot)) state.players[pid].res[k] = (state.players[pid].res[k] || 0) + v;
         ev.push({ k: 'plunder', idx: c.idx, pid, loot });
       }

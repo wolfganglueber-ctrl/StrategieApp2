@@ -330,6 +330,9 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
     dragon: 60,
   };
   for (const k of Object.keys(w)) w[k] /= 1 + mineCount(k) * 0.35;
+  // Volk: bevorzugte Einheiten (Wikinger Nahkampf, Hexer Magier, Drachenmenschen Elite)
+  const fw = factionOf(state, pid).aiUnits || {};
+  for (const k of Object.keys(fw)) if (w[k] != null) w[k] *= fw[k];
   return weightedPick(options, (k) => w[k], rng);
 }
 

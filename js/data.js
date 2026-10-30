@@ -114,15 +114,16 @@ export const FOOT = ['warrior', 'archer', 'defender', 'mage'];
 export const FACTIONS = {
   kingdom: {
     name: 'Königreich', icon: '🏰', style: 'Ausgewogen, stark in der Verteidigung',
-    ability: 'Bollwerk: Türme und Steinwälle 25 % billiger und mit 25 % mehr Leben.',
-    structCost: 0.75, structHp: 1.25,
+    ability: 'Bollwerk: Türme und Steinwälle 25 % billiger und mit 25 % mehr Leben. Gut organisiert: Einheiten 10 % billiger.',
+    cost: { food: 0.9, wood: 0.9, ore: 0.9 }, structCost: 0.75, structHp: 1.25,
     names: {},
   },
   vikings: {
     name: 'Wikinger', icon: '🪓', style: 'Angriff und Plündern, brauchen viel Nahrung, wenig Erz',
     ability: 'Plünderung: Erobern einer Stadt bringt Beute. Berserker: unter halbem Leben +3 Angriff. Nahkämpfer +15 % Angriff, Fernkampf und Belagerung −15 %, Türme und Wälle −25 % Leben.',
     cost: { food: 1.25, ore: 0.7 }, atk: { melee: 1.15, ranged: 0.85, siege: 0.85 }, structHp: 0.75,
-    plunder: true, berserk: 3,
+    plunder: { food: 5, wood: 4, ore: 3 }, berserk: 3,
+    aiUnits: { warrior: 1.3, knight: 1.3, blackknight: 1.3, archer: 0.7, catapult: 0.7, trebuchet: 0.7 }, // KI: Gewicht beim Ausbilden
     names: {
       warrior: 'Plünderer', archer: 'Axtwerfer', rider: 'Wolfsreiter', defender: 'Schildmaid', knight: 'Berserker', griffin: 'Walküre',
       catapult: 'Steinschleuder', trebuchet: 'Großschleuder', mage: 'Runenmeister', basilisk: 'Fenriswolf', blackknight: 'Jarl',
@@ -131,8 +132,9 @@ export const FACTIONS = {
   },
   witches: {
     name: 'Hexer', icon: '🔮', style: 'Magie und Flüche, brauchen viel Mana (Trauben), schlagen schwächer zu',
-    ability: 'Fluch: Jeder Treffer senkt die Verteidigung des Ziels bis zum nächsten eigenen Zug um 15 %. Greifen mit Feuer/Magie an (außer Belagerung), Angriff −20 %. Mana-Ertrag +50 %, jede Stadt +1 Mana. Einheiten kosten zusätzlich Mana, dafür weniger Erz.',
-    cost: { ore: 0.7 }, manaCost: 0.06, atk: { all: 0.8 }, magic: true, curse: 15, manaMul: 1.5, manaPerCity: 1,
+    ability: 'Fluch: Jeder Treffer senkt die Verteidigung des Ziels bis zum nächsten eigenen Zug um 15 %. Greifen mit Feuer/Magie an (außer Belagerung), Angriff −10 %. Mana-Ertrag +50 %, jede Stadt +1 Mana. Einheiten kosten zusätzlich Mana, dafür weniger Erz.',
+    cost: { ore: 0.7 }, manaCost: 0.04, atk: { all: 0.9 }, magic: true, curse: 15, manaMul: 1.5, manaPerCity: 1,
+    aiUnits: { mage: 1.8, archer: 1.3, basilisk: 1.3 },
     names: {
       warrior: 'Kultist', archer: 'Irrlichtwerfer', rider: 'Nachtmahrreiter', defender: 'Lehmgolem', knight: 'Hexenritter', griffin: 'Besenhexe',
       catapult: 'Fluchkessel', trebuchet: 'Seelenwerfer', mage: 'Hexenmeister', basilisk: 'Riesenkröte', blackknight: 'Todesritter',
@@ -141,8 +143,9 @@ export const FACTIONS = {
   },
   dragonkin: {
     name: 'Drachenmenschen', icon: '🐉', style: 'Wenige, sehr zähe Einheiten, brauchen viel Holz und Erz',
-    ability: 'Feuerhaut: Einheiten heilen 2 Leben pro Runde, Feuer/Magie trifft sie 25 % schwächer. Alle Einheiten +20 % Leben, dafür Holz und Erz +35 %.',
-    cost: { food: 0.9, wood: 1.35, ore: 1.35 }, hp: { all: 1.2 }, regen: 2, magicDef: 25,
+    ability: 'Feuerhaut: Einheiten heilen 2 Leben pro Runde, Feuer/Magie trifft sie 15 % schwächer. Alle Einheiten +20 % Leben, dafür Holz und Erz +40 %.',
+    cost: { food: 1, wood: 1.4, ore: 1.4 }, hp: { all: 1.2 }, regen: 2, magicDef: 15,
+    aiUnits: { warrior: 0.8, knight: 1.2, griffin: 1.2 },
     names: {
       warrior: 'Echsenkrieger', archer: 'Feuerspucker', rider: 'Raptorreiter', defender: 'Schuppenwächter', knight: 'Drachenritter', griffin: 'Wyvernreiter',
       catapult: 'Lavaschleuder', trebuchet: 'Glutmörser', mage: 'Drachenpriester', basilisk: 'Salamander', blackknight: 'Drachenfürst',
