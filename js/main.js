@@ -1219,7 +1219,9 @@ function attackFx(ev, L, hit, ranged, f) {
     R.quake(5, 300 * f, hit);
   } else if (ranged || t === 'tower') {
     const fire = hasPerk(att, 'fire') || att.skills?.includes('firearrow');
-    const kind = t === 'catapult' || t === 'trebuchet' ? 'stone' : t === 'basilisk' ? 'gaze' : t === 'mage' ? 'bolt' : fire ? 'fire' : 'arrow';
+    // Fernkampf je Volk: Feuerspucker speien Feuer, Irrlichtwerfer werfen Zauberkugeln
+    const fac = S.players[att.owner]?.faction;
+    const kind = t === 'catapult' || t === 'trebuchet' ? 'stone' : t === 'basilisk' ? 'gaze' : t === 'mage' ? 'bolt' : fire || (t === 'archer' && fac === 'dragonkin') ? 'fire' : t === 'archer' && fac === 'witches' ? 'bolt' : 'arrow';
     R.projectile(att.idx, def.idx, kind === 'stone' ? flight * 1.3 : flight, kind === 'stone' ? start - flight * 0.3 : start, kind);
     if (kind === 'stone') { R.explosion(def.idx, hit, t === 'trebuchet' ? 1.2 : 1); R.quake(4, 260 * f, hit); }
     else if (kind === 'fire') R.sparks(def.idx, hit, { n: 12, colors: ['#fde047', '#fb923c', '#ef4444'] });
