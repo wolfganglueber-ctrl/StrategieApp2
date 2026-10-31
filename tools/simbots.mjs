@@ -1,9 +1,10 @@
 // Abstimmung der KI-Stufen mit Spieler-Bots: jeder Bot spielt 1 gegen 1 gegen jede KI-Stufe.
-// Aufruf: node tools/simbots.mjs [Partien je Paarung=20] [Stufen=1-6] [Bots=beginner,casual,pro] [Größe=XL]
+// Aufruf: node tools/simbots.mjs [Partien je Paarung=20] [Stufen=1-6] [Bots=beginner,casual,pro] [Größe=XL] [voelker]
+// Mit „voelker“ spielt die KI reihum alle vier Völker (wie Zufall im Freien Spiel), der Bot bleibt beim Königreich.
 // Beispiel: node tools/simbots.mjs 10 1-3 beginner
 import { createGame, applyAction } from '../js/game.js';
 import { planAction } from '../js/ai.js';
-import { MAP_SIZES, UNIT_ORDER } from '../js/data.js';
+import { MAP_SIZES, UNIT_ORDER, FACTION_ORDER } from '../js/data.js';
 import { mulberry32 } from '../js/rng.js';
 import { BOTS, BOT_ORDER } from './bots.mjs';
 
@@ -14,6 +15,7 @@ const bots = (process.argv[4] || BOT_ORDER.join(',')).split(',');
 const size = MAP_SIZES[process.argv[5] || 'XL'];
 const biomes = ['mixed', 'forest', 'mountains', 'islands', 'plains'];
 const MAX_TURNS = 100;
+const mixed = process.argv[6] === 'voelker';
 
 function play(botKey, level, g) {
   const state = createGame({
@@ -21,7 +23,7 @@ function play(botKey, level, g) {
     cols: size.cols,
     rows: size.rows,
     biome: biomes[g % biomes.length],
-    players: [{ human: true, name: BOTS[botKey].name }, { ai: level }],
+    players: [{ human: true, name: BOTS[botKey].name }, { ai: level, faction: mixed ? FACTION_ORDER[g % FACTION_ORDER.length] : 'kingdom' }],
   });
   state.players[0].params = BOTS[botKey].params;
   const rng = mulberry32(g * 13 + level + 1);
@@ -63,7 +65,7 @@ for (const level of levels) {
   rows.push(row);
 }
 
-console.log(`\nSpieler-Bots gegen KI-Stufen (je ${games} Partien 1 gegen 1, ${process.argv[5] || 'XL'}, höchstens ${MAX_TURNS} Runden, ${((Date.now() - t0) / 60000).toFixed(1)} Min.)`);
+console.log(`\nSpieler-Bots gegen KI-Stufen${mixed ? ' (KI reihum alle Völker)' : ''} (je ${games} Partien 1 gegen 1, ${process.argv[5] || 'XL'}, höchstens ${MAX_TURNS} Runden, ${((Date.now() - t0) / 60000).toFixed(1)} Min.)`);
 console.log('Je Feld: Siege des Bots:Niederlagen (offen) · Ø Runden · Ø verlorene Städte des Bots');
 console.log(['KI-Stufe', ...bots.map((b) => BOTS[b].name)].join(' | '));
 for (const r of rows) console.log([r.level, ...bots.map((b) => { const x = r[b]; return `${x.win}:${x.loss} (${x.open}) · ${x.turns.toFixed(0)} R · ${x.lost.toFixed(1)} St.`; })].join(' | '));
