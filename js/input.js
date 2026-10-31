@@ -31,7 +31,7 @@ export function attachInput(canvas, renderer, onTap, onHold, onHover) {
   canvas.addEventListener('pointermove', (e) => {
     if (onHover && e.pointerType === 'mouse' && !e.buttons) onHover(e.clientX, e.clientY);
   });
-  canvas.addEventListener('pointerleave', () => onHover && onHover(-1, -1));
+  canvas.addEventListener('pointerleave', (e) => onHover && onHover(-1, -1, e.relatedTarget));
 
   canvas.addEventListener('pointermove', (e) => {
     if (!pts.has(e.pointerId)) return;

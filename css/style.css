@@ -96,7 +96,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .cost { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 12px; }
 .cost > span { display: inline-flex; align-items: center; gap: 1px; }
 .cost .ico { width: 20px; height: 20px; }
-.cost .short { color: #fca5a5; }
+.cost .short { color: #fff; background: #b91c1c; border-radius: 6px; padding: 0 4px 0 1px; text-shadow: none; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35); }
+/* Zu teuer: Knopf nur leicht abgedunkelt, damit die Kosten lesbar bleiben */
+.btn:disabled:has(.cost) { opacity: 0.85; filter: saturate(0.55) brightness(0.85); }
 .panel .title { font-weight: 750; font-size: 16px; }
 .panel .muted { color: var(--muted); font-size: 13px; }
 .panel .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -112,6 +114,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .recruit .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
 .recruit .cost { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; }
 .recruit:disabled { opacity: 0.35; }
+.recruit:disabled:has(.short) { opacity: 0.7; }
 .recruit:active { transform: scale(0.95); }
 .upgrade-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
 .actionbar { display: flex; gap: 8px; }
@@ -128,9 +131,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #scrMenu { display: grid; place-items: center; background: linear-gradient(180deg, rgba(8, 16, 28, 0.35), rgba(8, 16, 28, 0.8)); }
 .menu-box { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 10px; }
 .logo { text-align: center; margin-bottom: 18px; }
-.logo-hex { width: 96px; height: 96px; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.5)); }
-.logo-hex polygon { fill: #1e3a5f; stroke: #fbbf24; stroke-width: 4; }
-.logo-hex path { fill: #fbbf24; }
+.logo-img { width: 150px; height: 150px; filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.55)); }
 .logo h1 { margin: 6px 0 0; font-size: 40px; letter-spacing: 1px; text-shadow: 0 3px 12px rgba(0, 0, 0, 0.6); }
 .logo .sub { margin: 4px 0 0; color: #cbd5e1; }
 .version { text-align: center; color: var(--muted); font-size: 12px; margin: 6px 0 0; }
@@ -157,6 +158,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .seg { display: flex; gap: 6px; flex-wrap: wrap; }
 .seg button { flex: 1 1 0; min-width: 64px; padding: 10px 6px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06); font-weight: 600; font-size: 14px; }
 .seg button.active { background: var(--primary); color: #1c1203; border-color: #fcd34d; }
+/* Volkswahl: zwei Knöpfe pro Zeile, damit „Drachenmenschen“ auch am Handy passt */
+#segFaction button, #campFaction button { flex: 1 1 40%; }
+/* Volkswahl in der Kampagne */
+.camp-faction { padding: 0 14px 8px; }
+.camp-faction label { display: block; font-size: 13px; color: var(--muted, #b8b2a6); margin-bottom: 4px; }
+.camp-faction .hint { margin: 6px 0 0; font-size: 12.5px; }
+/* Volk je Gegner: kleine Knöpfe mit Beschriftung davor */
+#enemyFactions { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.seg.seg-sm { align-items: center; flex-wrap: nowrap; }
+.seg.seg-sm .seg-label { flex: 0 0 74px; font-size: 13px; color: var(--muted, #b8b2a6); }
+.seg.seg-sm button { min-width: 0; padding: 6px 4px; font-size: 16px; }
 .hint { color: var(--muted); margin: 0; font-size: 13px; min-height: 18px; }
 .seedrow { display: flex; gap: 8px; }
 .seedrow input {
@@ -197,6 +209,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .build-list { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; max-height: 34vh; overflow-y: auto; }
 .build-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
 .build-row.built { background: rgba(34, 197, 94, 0.12); }
+.build-row.realm { opacity: 0.45; }
 .bicon { font-size: 20px; width: 28px; text-align: center; flex: none; }
 .binfo { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 13px; line-height: 1.25; }
 .binfo .muted { font-size: 11.5px; }
@@ -289,3 +302,173 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .group-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; max-height: 96px; overflow-y: auto; }
 .group-row .gm { border: 1px solid rgba(125, 211, 252, 0.5); background: rgba(125, 211, 252, 0.1); border-radius: 10px; padding: 0; }
 .group-btns { display: inline-flex; gap: 6px; }
+
+/* Einheiten: Aktionen, Fähigkeiten */
+.unit-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.unit-actions .btn.active { background: #334155; }
+.perk-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; margin-top: 6px; }
+.btn.perk { display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 2px; padding: 8px; height: auto; white-space: normal; }
+.btn.perk .muted { font-size: 11.5px; font-weight: 400; }
+.group-btns { flex-wrap: wrap; justify-content: flex-end; }
+.group-btns .btn.active { background: rgba(251, 191, 36, 0.2); border-color: #fcd34d; }
+.unit-actions .btn.merge { border-color: rgba(192, 132, 252, 0.7); background: rgba(168, 85, 247, 0.18); }
+.built-actions { display: inline-flex; align-items: center; gap: 4px; }
+.btn.raze { padding: 5px 8px; background: rgba(239, 68, 68, 0.12); border-color: rgba(248, 113, 113, 0.45); }
+
+.pill small.neg { color: #f87171; }
+.slot-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.slot-list .build-row.empty { opacity: 0.6; }
+
+/* Bedienfeld-Größe (Einstellung oder automatisch nach Gerät) */
+.panel-small .panel { max-height: 40vh; }
+.panel-medium .panel { max-height: 45vh; }
+.panel-large .panel { max-height: 62vh; }
+.panel-small .recruit-grid { grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.panel-small .recruit { font-size: 10.5px; padding: 2px 2px 3px; gap: 0; }
+.panel-small .recruit .name { font-size: 11px; }
+.panel-small .recruit canvas { width: 32px !important; height: 32px !important; margin: -3px 0 -3px; }
+.panel-small .recruit .cost { font-size: 11px; gap: 3px; }
+.panel-small .recruit .cost .ico { width: 13px; height: 13px; }
+.panel-small .build-row { padding: 4px 6px; }
+.panel-small .binfo { font-size: 12.5px; }
+.panel-small .bicon { font-size: 19px; width: 26px; }
+.panel-small .bicon canvas { width: 34px !important; height: 34px !important; }
+.panel-small .city-head .title { font-size: 14px; }
+.panel-small .yield .ico { width: 18px; height: 18px; }
+.panel-small .ptabs button { padding: 5px 6px; font-size: 13px; }
+.panel-small .panel { padding: 8px 9px; }
+.panel-small .panel .note { font-size: 12px; }
+.panel-wrap { position: relative; }
+.panel-x {
+  position: absolute; top: -20px; right: -4px; z-index: 2; width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35); background: #1e3350; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  font-size: 15px; font-weight: 800; display: grid; place-items: center;
+}
+.panel-x.hidden { display: none; }
+.panel-x:active { transform: scale(0.94); }
+.panel-small .recruit { min-width: 0; overflow: hidden; }
+.panel-small .recruit .cost { flex-wrap: wrap; justify-content: center; row-gap: 0; }
+.panel-small .recruit .lock { font-size: 10px; white-space: normal; }
+.panel > .city-head:first-child { padding-right: 18px; }
+.group-bar { display: flex; align-items: center; gap: 6px; }
+.group-bar .title { flex: none; margin-right: 2px; }
+.group-bar .btn { flex: 1; padding: 6px 4px; }
+
+/* Im Spiel: Fenster beginnen unter der Rohstoffleiste, das Bedienfeld unten reicht nie bis dorthin */
+.modal.ingame { top: var(--hud-top, 0px); padding-top: 8px; align-items: start; }
+.modal.ingame .modal-box { max-height: calc(100vh - var(--hud-top, 0px) - 24px); max-height: calc(100dvh - var(--hud-top, 0px) - 24px); }
+.panel-small .panel { max-height: min(40vh, calc(100vh - var(--hud-top, 110px) - 120px)); }
+.panel-medium .panel { max-height: min(45vh, calc(100vh - var(--hud-top, 110px) - 120px)); }
+.panel-large .panel { max-height: min(62vh, calc(100vh - var(--hud-top, 110px) - 120px)); }
+.pill.units .upkeep { color: #fca5a5; font-size: 0.85em; margin-left: 4px; white-space: nowrap; }
+.pill.units .upkeep b { color: #fca5a5; }
+
+/* HUD: Rohstoffe, Forschung und Armee auf einer Höhe */
+.resrow { display: flex; align-items: stretch; gap: 6px; min-width: 0; }
+.resrow .resbar { flex: 1; min-width: 0; }
+.resrow .pill.tech, .resrow .pill.units { flex: none; }
+.resrow .pill.tech { font-size: 22px; padding: 2px 9px; }
+.pill.units { flex-direction: column; justify-content: center; gap: 0; padding: 2px 9px; line-height: 1.15; font-size: 14px; }
+.pill.units .upkeep { margin-left: 0; }
+@media (max-width: 500px) {
+  .resrow { gap: 4px; }
+  .resrow .pill.tech { font-size: 17px; padding: 2px 6px; }
+  .resrow .pill.tech b { font-size: 13px; }
+  .pill.units { font-size: 12px; padding: 2px 6px; }
+  .resbar { gap: 4px; }
+  .resbar .pill { font-size: 13px; padding: 3px 4px; gap: 2px; }
+  .resbar .ico { width: 20px; height: 20px; }
+  .resbar .pill small { font-size: 10px; }
+}
+/* Stadtmenü: Kauf-Kacheln immer kompakt, auf breiten Bildschirmen mehr pro Zeile */
+.recruit-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 4px; }
+.recruit { font-size: 10.5px; padding: 2px 2px 3px; gap: 0; min-width: 0; overflow: hidden; }
+.recruit .name { font-size: 11.5px; }
+.recruit canvas { width: 34px !important; height: 34px !important; margin: -3px 0 -3px; }
+.recruit .cost { font-size: 11px; gap: 3px; flex-wrap: wrap; justify-content: center; row-gap: 0; }
+.recruit .cost .ico { width: 14px; height: 14px; }
+.recruit .lock { font-size: 10px; white-space: normal; }
+.panel-small .recruit-grid { grid-template-columns: repeat(4, 1fr); }
+.tower-row .binfo { font-size: 12px; line-height: 1.2; }
+.tower-row .binfo .muted { font-size: 11.5px; }
+.tower-row .bicon { font-size: 18px; width: 34px; }
+.tiles-note { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.tiles-note .ico { width: 18px; height: 18px; }
+/* Forschung: Reiter umbrechen, Einheiten-Entwicklung */
+.tech-tabs { flex-wrap: wrap; }
+.tech-tabs button { flex: 1 1 30%; min-width: 0; }
+.tech-tabs .up-tab { background: rgba(168, 85, 247, 0.1); }
+.tech-tabs .up-tab.active { background: rgba(168, 85, 247, 0.28); border-color: #c084fc; color: #f3e8ff; }
+.up-units { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 5px; margin: 8px 0; }
+.up-unit { display: flex; flex-direction: column; align-items: center; gap: 0; padding: 3px 2px 4px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05); color: inherit; font: inherit; font-size: 12px; }
+.up-unit.active { background: rgba(251, 191, 36, 0.18); border-color: #fcd34d; color: #fde68a; }
+.up-unit small { color: var(--muted); font-size: 10.5px; }
+.up-tree { display: flex; flex-direction: column; gap: 6px; }
+.up-row { display: flex; flex-direction: column; gap: 6px; }
+.up-row.choice { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; position: relative; }
+.up-row.choice .up-card { flex-direction: column; align-items: stretch; text-align: center; }
+.up-row.choice .up-card canvas { align-self: center; }
+.up-card .binfo span { font-size: 12px; }
+.up-card.lost { opacity: 0.35; }
+.up-row.choice .up-card { min-width: 0; padding: 6px; gap: 4px; }
+.up-row.choice .up-card .btn { align-self: center; max-width: 100%; }
+.up-row.choice .up-card .cost { flex-wrap: wrap; justify-content: center; }
+.tip b.ok { color: #86efac; }
+.tip b.bad { color: #fca5a5; }
+.tip-grid span { color: var(--muted); }
+#unitText.over { color: #f87171; }
+
+/* Gebäude-Menü: Wirtschaft und Einheiten (breit nebeneinander, Handy: erst Gruppe wählen) */
+.build-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.build-col { min-width: 0; }
+.build-col-head { margin-top: 8px; font-weight: 750; color: #fde68a; display: flex; align-items: center; gap: 8px; }
+.build-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.build-group { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 14px 8px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06); font-size: 15px; }
+.build-group .bg-icon { font-size: 28px; }
+.terra-btns { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.terra-row { align-items: flex-start; }
+.resbar .pill.short { border-color: rgba(248, 113, 113, 0.85); box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.5); }
+/* Testmodus: Rohstoffe der Gegner unter den eigenen */
+.enemybar { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.enemy-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: 11.5px; background: rgba(13, 34, 56, 0.72); border: 1px solid var(--line); border-radius: 8px; padding: 2px 7px; width: fit-content; max-width: 100%; }
+.enemy-row .dot { width: 9px; height: 9px; border-radius: 50%; }
+.enemy-row .er { display: inline-flex; align-items: center; gap: 2px; }
+.enemy-row .er.short { color: #fca5a5; }
+.enemy-row .ico { width: 14px; height: 14px; vertical-align: -2px; }
+.enemy-row small { color: var(--ok); font-weight: 700; margin-left: 1px; }
+@media (max-width: 500px) {
+  .enemy-row { font-size: 10.5px; gap: 4px; flex-wrap: nowrap; padding: 1px 5px; }
+  .enemy-row b { display: none; }
+  .enemy-row .ico { width: 12px; height: 12px; }
+}
+.range { width: 100%; accent-color: #fbbf24; margin: 4px 0 2px; }
+
+/* Kompakte Anzeige (Handy automatisch oder Einstellung „Schriftgröße im Spiel“ unter 100 %): body.compact, Faktor --ui-zoom.
+   Auf dem PC (100 %) gelten die Größen wie bis 0.95. */
+/* Rohstoffleiste: Vorrat groß, Ertrag pro Runde klein darunter (auch vierstellig lesbar) */
+body.compact .resbar .pill .rv { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.05; }
+body.compact .resbar .pill .rv b { font-size: 15px; }
+body.compact .resbar .pill .rv small { font-size: 11px; }
+/* Leiste unten (Einheiten-/Stadtfenster, Zug beenden …) als Ganzes verkleinert, Hinweisfenster mit kleinerer Schrift */
+body.compact .bottom { zoom: var(--ui-zoom, 1); }
+body.compact .tip { max-width: 200px; padding: 7px 9px; font-size: calc(15px * var(--ui-zoom, 1)); border-radius: 9px; }
+body.compact .tip-title { font-size: calc(15px * var(--ui-zoom, 1)); margin-bottom: 4px; }
+body.compact .tip-grid { gap: 2px 9px; }
+body.compact .tip-desc { margin-top: 4px; }
+/* Fenster Forschung, Entwicklung, Verbesserungen: Symbole halb so groß, damit mehr Einträge auf den Bildschirm passen */
+body.compact #modalBox .ticon { font-size: 20px; width: 26px; }
+body.compact #modalBox .tech-card { padding: 5px 8px; gap: 8px; }
+body.compact #modalBox .tech-card .done { font-size: 15px; padding: 0 4px; }
+body.compact #modalBox .up-card canvas.fig { width: 28px !important; height: 28px !important; }
+body.compact #modalBox .up-unit canvas.fig { width: 26px !important; height: 26px !important; }
+body.compact #modalBox .unit-card canvas.fig { width: 30px !important; height: 30px !important; }
+body.compact #modalBox .tchip .ico { width: 18px; height: 18px; }
+body.compact #modalBox .tech-card .cost { font-size: 11.5px; gap: 3px; }
+body.compact #modalBox .tech-card .cost .ico { width: 13px; height: 13px; }
+body.compact #modalBox .tech-card .btn.small { padding: 4px 6px; }
+body.compact #modalBox .tech-card .binfo { font-size: 13px; }
+body.compact #modalBox .tech-card .binfo span { font-size: 11.5px; }
+/* Stadtmenü auf dem Handy 50 % höher (40 → 60 % der Bildschirmhöhe vor dem Verkleinern) */
+.panel-small .panel.city-open { max-height: min(60vh, calc(100vh - var(--hud-top, 110px) - 90px)); }
+/* Nur ein Bildlauf im Bedienfeld: die Gebäudeliste scrollt nicht mehr extra */
+.panel .build-list { max-height: none; overflow: visible; }

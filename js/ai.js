@@ -1,26 +1,44 @@
 // Computergegner. Bewertet für jede Einheit alle Züge (Bewegung + Angriff) und wählt den besten.
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
 import {
-  UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY,
+  UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, BASE_RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY, structureLimit,
+  costTotal, ATK_TYPE, DEF_TABLE, DEF_MAX, UNIT_UPS, unitUpCost, boostCost, skillCost, plantCost, slotsUsed, usesSlot,
 } from './data.js';
 import {
-  geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, defenseMult, unitRange, unitCap, canRecruit,
-  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity,
+  geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, terrainDefense, hitDamage, unitRange, unitCap, canRecruit,
+  spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, unitUpOptions, unitUpList, canBuild, canPetrify,
+  canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage, canTerraform, cityTiles, cityYield, canFuse, sweepTargets, canTowerKind, atkKind,
+  factionOf, unitCost,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
+// Jede Eigenschaft steigt von Stufe 1 bis 6 gleichmäßig an:
+// Eroberung – calm: so viele Runden greift die KI Menschen nicht an (außer bei Gefahr für eigene Städte), maxCities, expand (Gier auf Dörfer)
+// Kampf – mistake, idle, noise (Fehler, Leerlauf, Rauschen), risk/lossW (Vorsicht), aggr, commit (Entschlossenheit gegen Stadtverteidiger)
+// Ausbau – upgrade (Gebäude/Stadtausbau), cityMax (höchste Stadtstufe), tech/maxTech (Forschung)
+// Einheiten – units (erlaubte Typen), unitUp (Einheiten-Entwicklung), boost (Einzel-Verbesserungen, auch Türme), armyCap (Armeegröße)
+const U1 = ['warrior', 'archer', 'rider', 'defender'];
+const U2 = [...U1, 'knight', 'catapult'];
+const U3 = [...U2, 'griffin', 'mage', 'trebuchet'];
+const U4 = [...U3, 'basilisk', 'blackknight', 'troll'];
 export const AI_PARAMS = {
-  1: { noise: 6, mistake: 0.35, risk: 0, lossW: 0.3, smart: false, upgrade: 0, guard: 0, idle: 0.25 },
-  2: { noise: 3, mistake: 0.12, risk: 0.3, lossW: 0.6, smart: false, upgrade: 0.25, guard: 0.5, idle: 0.05 },
-  3: { noise: 2, mistake: 0.07, risk: 0.6, lossW: 0.9, smart: true, upgrade: 0.4, guard: 0.8, idle: 0 },
-  4: { noise: 0.25, mistake: 0, risk: 1, lossW: 1, smart: true, upgrade: 1, guard: 1, idle: 0 },
-  5: { noise: 0.1, mistake: 0, risk: 1, lossW: 1, smart: true, upgrade: 1, guard: 1, idle: 0 },
+  1: { noise: 6, mistake: 0.5, risk: 0, lossW: 0.3, smart: false, upgrade: 0.1, cityMax: 2, guard: 0.3, idle: 0.5, calm: 30, expand: 0.3, tech: 0.1, maxTech: 1, armyCap: 0.5, aggr: 0.5, commit: 0.4, maxCities: 2, units: U1, unitUp: 0, boost: 0 },
+  2: { noise: 3.5, mistake: 0.3, risk: 0.3, lossW: 0.6, smart: false, upgrade: 0.25, cityMax: 2, guard: 0.3, idle: 0.25, calm: 25, expand: 0.55, tech: 0.3, maxTech: 3, armyCap: 0.6, aggr: 0.5, commit: 0.7, maxCities: 4, units: U2, unitUp: 0.1, boost: 0 },
+  3: { noise: 2, mistake: 0.15, risk: 0.6, lossW: 0.9, smart: true, upgrade: 0.45, guard: 0.8, idle: 0.1, calm: 10, expand: 0.8, tech: 0.55, maxTech: 7, armyCap: 0.9, aggr: 1, commit: 1, maxCities: 7, units: U3, unitUp: 0.3, boost: 0.1 },
+  4: { noise: 0.8, mistake: 0.03, risk: 0.85, lossW: 1, smart: true, upgrade: 0.75, guard: 0.95, idle: 0.03, calm: 5, expand: 1.05, tech: 0.8, maxTech: 12, armyCap: 1.2, aggr: 1.3, commit: 1.2, maxCities: 10, units: U4, unitUp: 0.6, boost: 0.25, saveTech: true },
+  5: { noise: 0.4, mistake: 0.02, risk: 0.95, lossW: 1, smart: true, upgrade: 0.9, guard: 1, idle: 0, calm: 2, expand: 1.2, tech: 0.9, armyCap: 1.45, aggr: 1.6, commit: 1.4, unitUp: 0.7, boost: 0.5, saveTech: true },
+  6: { noise: 0.4, mistake: 0, risk: 0.95, lossW: 1, smart: true, upgrade: 1, guard: 1, idle: 0, calm: 0, expand: 1.3, tech: 0.95, armyCap: 1.7, aggr: 1.8, commit: 1.5, unitUp: 0.8, boost: 0.8, saveTech: true },
 };
 
 const memory = { key: '', done: new Set() };
 
+// Wert einer Einheit: Kosten, Rang und Gesundheit
+function baseValue(u) {
+  const b = u.boost ? (u.boost.atk || 0) + (u.boost.def || 0) + (u.boost.hp || 0) + (u.boost.pen || 0) : 0;
+  return UNITS[u.type].value * (1 + 0.25 * ((u.rank || 1) - 1) + 0.2 * b + 0.15 * (u.skills?.length || 0));
+}
 function unitValue(u, maxHp) {
-  return UNITS[u.type].value * (0.4 + 0.6 * (u.hp / maxHp)) + 1;
+  return baseValue(u) * (0.4 + 0.6 * (u.hp / maxHp)) + 1;
 }
 
 function buildContext(state, pid, P) {
@@ -34,15 +52,21 @@ function buildContext(state, pid, P) {
   };
   // Kartennebel: die KI kennt nur Gegner, die sie sieht
   const vis = state.fog ? visibility(state, pid) : null;
-  const enemies = state.units.filter((u) => u.owner !== pid && (!vis || vis[u.idx]));
   const mine = state.units.filter((u) => u.owner === pid);
-  const targetCities = [];
-  const ownCities = [];
-  for (const c of state.cities) (c.owner === pid ? ownCities : targetCities).push(c);
+  const ownCities = state.cities.filter((c) => c.owner === pid);
+  // Schonfrist auf niedrigen Stufen: Menschen werden anfangs nicht angegriffen (nur wer eigenen Städten zu nahe kommt)
+  const calm = !state.defense && state.turn <= (P.calm || 0);
+  const spared = (owner) => calm && owner >= 0 && state.players[owner]?.human;
+  const nearOwn = (idx) => ownCities.some((c) => geo.dist(c.idx, idx) <= 2);
+  const enemies = state.units.filter((u) => u.owner !== pid && (!vis || vis[u.idx]) && (!spared(u.owner) || nearOwn(u.idx)));
+  // Leichte Stufen sammeln nur bis zu einer Obergrenze neutrale Dörfer ein (Gegner greifen sie nach der Schonfrist trotzdem an)
+  const full = ownCities.length >= (P.maxCities ?? 99);
+  // Burgverteidigung: die Angreifer wollen nur die Städte des Spielers (vor allem die Burg)
+  const targetCities = state.defense && pid === 1 ? state.cities.filter((c) => c.owner === 0) : state.cities.filter((c) => c.owner !== pid && !spared(c.owner) && !(full && c.owner < 0));
 
   // Teure Felder nur einmal pro Zug berechnen
-  if (memory.ctxKey !== memory.key) {
-    memory.ctxKey = memory.key;
+  if (memory.ctxKey !== memory.key + (calm ? 'c' : '') + (full ? 'f' : '')) {
+    memory.ctxKey = memory.key + (calm ? 'c' : '') + (full ? 'f' : '');
     memory.distCity = bfsDistances(geo, state.terrain, targetCities.map((c) => c.idx));
     memory.distEnemy = bfsDistances(geo, state.terrain, enemies.map((u) => u.idx));
     const threat = new Array(geo.n);
@@ -94,37 +118,41 @@ function buildContext(state, pid, P) {
   const ratio = myArmy / Math.max(4, enemyArmy);
   let aggr = Math.min(2.5, Math.max(0.6, ratio));
   if (P.smart) aggr *= 1 + Math.min(0.8, Math.max(0, state.turn - 25) * 0.02);
+  aggr *= P.aggr || 1;
   const territory = memory.territory;
   const alive = new Set(state.units);
-  return { geo, occ, enemies, mine, distCity, distEnemy, threat, cityDanger, ownCities, targetCities, armyValue, myArmy, enemyArmy, aggr, territory, st, alive };
+  const splashThreat = enemies.some((e) => UNITS[e.type].splash);
+  const enemySet = new Set(enemies);
+  return { enemySet, splashThreat, geo, occ, enemies, mine, distCity, distEnemy, threat, cityDanger, ownCities, targetCities, armyValue, myArmy, enemyArmy, aggr, territory, st, alive };
 }
 
 function expectedDamage(state, ctx, u, idx, hp) {
   const list = ctx.threat[idx];
   if (!list) return 0;
   const D = ctx.st(u);
-  const dF = D.def * (hp / D.hp) * defenseMult(state, idx);
+  const terr = terrainDefense(state, idx);
   let sum = 0;
   for (const e of list) {
     if (!ctx.alive.has(e)) continue;
     const A = ctx.st(e);
-    const aF = A.atk * (e.hp / A.hp);
-    sum += (aF / (aF + dF)) * A.atk * 4.5;
+    const kind = atkKind(e, state);
+    const pct = Math.max(0, Math.min(DEF_MAX, (DEF_TABLE[u.type]?.[kind] ?? 0) + (kind === 'magic' ? factionOf(state, u.owner).magicDef || 0 : 0) + D.def + (kind === 'siege' ? Math.round(terr / 2) : terr) - A.pen));
+    sum += hitDamage(A.atk, pct);
   }
   return sum;
 }
 
 function positionScore(state, ctx, P, u, idx, hp, pid) {
   const T = ctx.st(u);
-  const value = UNITS[u.type].value;
+  const value = baseValue(u);
   let s = 0;
   const dc = ctx.distCity[idx], de = ctx.distEnemy[idx];
   const near = Math.min(dc < 0 ? 99 : dc, de < 0 ? 99 : de + 1);
-  s -= near * 0.6 * (ctx.aggr > 1.2 ? 1.6 : 1);
+  s -= near * 0.6 * (ctx.aggr > 1.2 ? 1.6 : 1) * Math.min(1, P.expand ?? 1);
 
   const c = cityOn(state, idx);
-  if (c && c.owner !== pid) {
-    s += c.owner < 0 ? 5 + c.level : 7 + c.level * 2 + (c.capital ? 4 : 0);
+  if (c && c.owner !== pid && ctx.targetCities.includes(c)) {
+    s += c.owner < 0 ? (5 + c.level) * (P.expand ?? 1) : 7 + c.level * 2 + (c.capital ? 4 : 0);
   }
   if (c && c.owner === pid) {
     const danger = ctx.cityDanger.get(idx) || 0;
@@ -134,37 +162,69 @@ function positionScore(state, ctx, P, u, idx, hp, pid) {
   if (P.risk > 0) {
     const risk = P.risk / ctx.aggr;
     const exp = expectedDamage(state, ctx, u, idx, hp);
-    if (exp >= hp) s -= risk * unitValue({ type: u.type, hp }, T.hp) * 1.1;
+    if (exp >= hp) s -= risk * unitValue({ type: u.type, rank: u.rank, hp }, T.hp) * 1.1;
     else s -= risk * (exp / T.hp) * value * 0.6;
+  }
+  // Gegen Katapulte nicht zusammenballen (Flächenschaden)
+  if (P.smart && ctx.splashThreat && ctx.threat[idx]?.some((e) => UNITS[e.type].splash)) {
+    let n = 0;
+    for (const j of ctx.geo.nb[idx]) { const o = ctx.occ[j]; if (o && o.owner === pid && o !== u) n++; }
+    s -= n * 0.35;
+  }
+  // Zauberer stehen gern bei eigenen Truppen (Schutzaura), aber nicht an vorderster Front
+  if (UNITS[u.type].healer) {
+    let n = 0;
+    for (const j of ctx.geo.nb[idx]) { const o = ctx.occ[j]; if (o && o.owner === pid && o !== u && o.type !== 'tower') n++; }
+    s += Math.min(3, n) * 0.6;
+    if (de === 1) s -= 1.5;
   }
   // Fernkämpfer bleiben gern auf Distanz
   if (T.range > 1 && de === 1) s -= 1.5 * (P.smart ? 1 : 0);
   // Gelände-Bonus
-  s += (defenseMult(state, idx) - 1) * 1.2;
+  s += terrainDefense(state, idx) * 0.03;
   return s;
 }
 
 function attackScore(state, ctx, P, u, t, from) {
   const r = computeCombat(state, u, t, from);
   const DT = ctx.st(t), UT = ctx.st(u);
-  const dv = UNITS[t.type].value, uv = UNITS[u.type].value;
+  const dv = baseValue(t), uv = baseValue(u);
   let gain = (Math.min(r.dmg, t.hp) / DT.hp) * dv * 1.2;
-  // Fernkampf zuerst: erschütterte Ziele sind für Nahkämpfer leichte Beute
-  if (UT.range > 1 && !r.kill && !t.shaken) gain += 1.5;
+  if (UNITS[u.type].petrify && !r.kill && canPetrify(t)) gain += Math.min(baseValue(t) * 0.3, 8);
   if (r.kill) gain += dv + 3;
   const tc = cityOn(state, t.idx);
+  // Verteidiger einer Zielstadt: jeder Treffer bringt die Eroberung näher (sonst umkreist die KI starke Wächter nur)
+  if (tc && ctx.targetCities.includes(tc)) {
+    const cityVal = 6 + tc.level * 2 + (tc.capital ? 6 : 0);
+    gain += (1 + (Math.min(r.dmg, t.hp) / DT.hp) * cityVal + (r.kill ? cityVal * 0.5 : 0)) * (P.commit ?? 1);
+  }
   if (tc && tc.owner === u.owner) gain += r.kill ? 8 : 3; // Besetzer aus eigener Stadt werfen
   if (tc && tc.capital && tc.owner === u.owner) gain += r.kill ? 6 : 2;
-  let loss = (Math.min(r.counter, u.hp) / UT.hp) * uv;
-  if (r.die) loss += uv + 2;
+  if (UNITS[u.type].splash || UNITS[u.type].line) {
+    for (const h of splashDamage(state, u, t.idx, r.dmg, from)) {
+      const hv = baseValue(h.unit);
+      gain += (Math.min(h.dmg, h.unit.hp) / ctx.st(h.unit).hp) * hv * 1.2 + (h.dmg >= h.unit.hp ? hv + 3 : 0);
+    }
+  }
+  // Rundumschlag: alle Gegner daneben zählen mit, ihre Gegenschläge auch
+  let counter = r.counter;
+  if (UNITS[u.type].sweep) {
+    for (const o of sweepTargets(state, u, t, from)) {
+      const ro = computeCombat(state, u, o, from);
+      const ov = baseValue(o);
+      gain += (Math.min(ro.dmg, o.hp) / ctx.st(o).hp) * ov * 1.2 + (ro.kill ? ov + 3 : 0);
+      counter += ro.counter;
+    }
+  }
+  let loss = (Math.min(counter, u.hp) / UT.hp) * uv;
+  if (r.die || counter >= u.hp) loss += uv + 2;
   return { score: gain - loss * P.lossW, r };
 }
 
 function evaluateUnit(state, ctx, P, u, pid, rng) {
   const options = [];
   const stayBase = positionScore(state, ctx, P, u, u.idx, u.hp, pid);
-  const healBonus = canMove(u) && u.hp < ctx.st(u).hp ? 0.6 : 0;
-  options.push({ score: stayBase + healBonus, actions: [] });
+  options.push({ score: stayBase, actions: [] }); // Stehenbleiben heilt nicht mehr
 
   const froms = [];
   if (canAttack(u)) froms.push(u.idx);
@@ -176,6 +236,7 @@ function evaluateUnit(state, ctx, P, u, pid, rng) {
   if (canAttack(u)) {
     for (const f of froms) {
       for (const t of getTargets(state, u, f, ctx.occ)) {
+        if (!ctx.enemySet.has(t)) continue; // Schonfrist oder im Nebel
         const { score, r } = attackScore(state, ctx, P, u, t, f);
         if (r.die) {
           options.push({ score: score, actions: actionsFor(u, f, t) });
@@ -185,6 +246,41 @@ function evaluateUnit(state, ctx, P, u, pid, rng) {
         const hpAfter = u.hp - r.counter;
         const pos = positionScore(state, ctx, P, u, endIdx, hpAfter, pid);
         options.push({ score: score + pos, actions: actionsFor(u, f, t) });
+      }
+    }
+  }
+  // Drache: Feuersturm über die Schneise mit der meisten Beute
+  if (canStorm(state, u)) {
+    for (const to of ctx.geo.nb[u.idx]) {
+      const { area } = stormArea(state, u.idx, to);
+      let gain = 0, n = 0;
+      for (const t of ctx.enemies) {
+        if (!area.includes(t.idx)) continue;
+        const d = stormDamage(state, u, t), hv = baseValue(t);
+        gain += (Math.min(d, t.hp) / ctx.st(t).hp) * hv * 1.2 + (d >= t.hp ? hv + 3 : 0);
+        n++;
+      }
+      if (n >= 2 && gain > 8) options.push({ score: stayBase + gain, actions: [{ type: 'storm', unitId: u.id, toward: to }] });
+    }
+  }
+  if (UNITS[u.type].healer && canAttack(u)) {
+    const hf = [u.idx, ...moves.keys()];
+    for (const f of hf) {
+      for (const t of getHealTargets(state, u, f)) {
+        const max = ctx.st(t).hp;
+        const h = Math.min(max - t.hp, healAmount(state, u));
+        const gain = (h / max) * baseValue(t) * 1.4 + 0.3;
+        const acts = f !== u.idx ? [{ type: 'move', unitId: u.id, to: f }] : [];
+        acts.push({ type: 'heal', unitId: u.id, targetId: t.id });
+        options.push({ score: gain + positionScore(state, ctx, P, u, f, u.hp, pid), actions: acts });
+      }
+      // Vereisen: gefährliche Gegner eine Runde ausschalten
+      for (const t of getFreezeTargets(state, u, f)) {
+        if (!ctx.enemySet.has(t)) continue;
+        const gain = Math.min(baseValue(t) * 0.3, 8) + (ctx.geo.dist(t.idx, f) <= 2 ? 0.5 : 0);
+        const acts = f !== u.idx ? [{ type: 'move', unitId: u.id, to: f }] : [];
+        acts.push({ type: 'freeze', unitId: u.id, targetId: t.id });
+        options.push({ score: gain + positionScore(state, ctx, P, u, f, u.hp, pid), actions: acts });
       }
     }
   }
@@ -201,10 +297,12 @@ function actionsFor(u, from, t) {
 
 function chooseRecruit(state, ctx, P, pid, ci, rng) {
   const city = state.cities[ci];
-  const options = UNIT_ORDER.filter((k) => !canRecruit(state, pid, ci, k));
+  const options = UNIT_ORDER.filter((k) => (!P.units || P.units.includes(k)) && !canRecruit(state, pid, ci, k));
   if (!options.length) return null;
   if (!P.smart) {
-    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, catapult: 0.5 };
+    const walls = ctx.enemies.filter((e) => e.type === 'defender' || UNITS[e.type].structure).length;
+    const w = { warrior: 5, archer: 2, rider: 2, defender: 1, knight: 1, griffin: 0.5, blackknight: 1, catapult: 0.5 + Math.min(walls, 4) * 0.6, trebuchet: 0.5, mage: 0.5, basilisk: 1, troll: 3, dragon: 3 };
+    if (ctx.mine.filter((u) => u.type === 'catapult' || u.type === 'trebuchet').length >= Math.max(1, Math.floor(ctx.mine.filter((u) => !UNITS[u.type].structure).length / 4))) w.catapult = w.trebuchet = 0;
     return weightedPick(options, (k) => w[k], rng);
   }
   const danger = ctx.cityDanger.get(city.idx) || 0;
@@ -213,22 +311,35 @@ function chooseRecruit(state, ctx, P, pid, ci, rng) {
   const mineCount = (t) => ctx.mine.filter((u) => u.type === t).length;
   const melee = ctx.mine.filter((u) => UNITS[u.type].range === 1 && u.type !== 'tower').length;
   const ranged = ctx.mine.length - melee;
+  // Belagerungsgerät (Katapult, Tribok) höchstens jede vierte Einheit
+  const siegeFull = mineCount('catapult') + mineCount('trebuchet') >= Math.max(1, Math.floor(ctx.mine.filter((u) => !UNITS[u.type].structure).length / 4));
   const w = {
     warrior: 3,
     archer: 2.5 + (danger > 0 ? 1.5 : 0) + (ranged * 2 < melee ? 2 : 0),
-    rider: neutralLeft > 0 ? 3.5 : 1.2,
+    rider: neutralLeft > 0 ? 3.5 * (P.expand ?? 1) : 1.2,
     defender: danger > 4 ? 3 : 0.6,
     knight: 4,
-    catapult: 1.5 + enemyDef * 0.8,
+    griffin: 2.5,
+    // Belagerungsgerät nur als Beimischung (siegeFull)
+    catapult: siegeFull ? 0 : 1.5 + Math.min(enemyDef, 4) * 0.4,
+    trebuchet: siegeFull ? 0 : 2,
+    mage: ctx.mine.length >= 4 ? 3 : 0.5,
+    basilisk: ctx.mine.length >= 5 ? 3 : 0.6,
+    blackknight: 3.5,
+    troll: 50,
+    dragon: 60,
   };
   for (const k of Object.keys(w)) w[k] /= 1 + mineCount(k) * 0.35;
+  // Volk: bevorzugte Einheiten (Wikinger Nahkampf, Hexer Magier, Drachenmenschen Elite)
+  const fw = factionOf(state, pid).aiUnits || {};
+  for (const k of Object.keys(fw)) if (w[k] != null) w[k] *= fw[k];
   return weightedPick(options, (k) => w[k], rng);
 }
 
 function weightedPick(list, wf, rng) {
   let tot = 0;
   for (const k of list) tot += Math.max(0, wf(k));
-  if (tot <= 0) return list[0];
+  if (tot <= 0) return null; // nichts Gewolltes bezahlbar: lieber sparen
   let r = rng() * tot;
   for (const k of list) {
     r -= Math.max(0, wf(k));
@@ -237,29 +348,38 @@ function weightedPick(list, wf, rng) {
   return list[list.length - 1];
 }
 
+function cityIdxOf(state, c) {
+  return state.cityAt[c.idx];
+}
+
+function cityYieldSum(state, ci, territory) {
+  const y = cityYield(state, ci, territory);
+  return y.food + y.wood + y.ore;
+}
+
 function chooseBuilding(state, ctx, pid, ci, inc) {
   const c = state.cities[ci];
-  if (c.buildings.length >= citySlots(c)) return null;
-  const res = state.players[pid].res;
-  const territory = ctx.territory;
-  let forests = 0, rocks = 0;
-  for (let i = 0; i < territory.length; i++) {
-    if (territory[i] !== ci) continue;
-    if (state.terrain[i] === 'forest') forests++;
-    if (state.terrain[i] === 'hill' || state.terrain[i] === 'mountain') rocks++;
-  }
+  const full = slotsUsed(c) >= citySlots(c);
+  const t = cityTiles(state, ci, ctx.territory, 'outer');
+  // Wirtschaftsgebäude nur mit passenden Feldern im äußeren Ring (sie belegen keinen Bauplatz)
   const score = {
-    farm: inc.food < 6 ? 3 : 1,
-    lumber: 1 + forests * 1.2 - (inc.wood > inc.ore + 4 ? 1 : 0),
-    mine: 1 + rocks * 2.4 + (inc.ore < inc.wood ? 1 : 0),
+    farm: t.food ? 2 + t.food * 0.6 + (inc.food < 6 ? 2 : 0) : 0,
+    lumber: t.wood ? 1.5 + t.wood * 1.2 - (inc.wood > inc.ore + 4 ? 1 : 0) : 0,
+    mine: t.ore ? 1.5 + t.ore * 2 + (inc.ore < inc.wood ? 1 : 0) : 0,
     barracks: c.capital || ctx.ownCities.length >= 3 ? 2.2 : 0.3,
     workshop: ctx.ownCities.length >= 4 && ctx.ownCities.some((x) => hasBuilding(x, 'barracks')) ? 1.4 : 0.2,
+    dragonlair: c.level >= 3 && ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.6 : 0, // KI baut sie spät
+    lair: c.level >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'lair')) ? 2.5 : 0,
+    tavern: c.level >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'tavern')) ? 2 : 0,
+    nest: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'nest')) ? 1.3 : 0.1,
+    sanctum: ctx.ownCities.length >= 3 && !ctx.ownCities.some((x) => hasBuilding(x, 'sanctum')) ? 1.5 : 0.3,
     wall: (ctx.cityDanger.get(c.idx) || 0) > 3 ? 3 : 0.4,
-    market: ctx.ownCities.some((x) => hasBuilding(x, 'market')) ? 0 : 1.2,
+    market: ctx.ownCities.some((x) => hasBuilding(x, 'market')) ? 0 : ctx.ownCities.length >= 3 ? 2 : 1,
+    press: t.mana ? 1.5 + t.mana : 0, // Kelterei nur bei Traubenhainen im Stadtkreis
   };
   let best = null;
   for (const [b, v] of Object.entries(score)) {
-    if (hasBuilding(c, b) || v <= 0.5 || !canAfford(res, BUILDINGS[b].cost)) continue;
+    if (v <= 0.5 || (full && usesSlot(b)) || canBuild(state, pid, c, b)) continue;
     if (!best || v > best.v) best = { b, v };
   }
   return best && best.b;
@@ -268,9 +388,15 @@ function chooseBuilding(state, ctx, pid, ci, inc) {
 function tradeAction(state, pid) {
   const res = state.players[pid].res;
   const rate = tradeRate(state, pid);
-  const sorted = RES.slice().sort((a, b) => res[a] - res[b]);
+  if (!rate) return null;
+  const sorted = BASE_RES.slice().sort((a, b) => res[a] - res[b]);
   const low = sorted[0], high = sorted[2];
   if (res[low] < 4 && res[high] >= rate + 8) return { type: 'trade', give: high, get: low };
+  // Großer Überschuss: einen Teil auf einmal tauschen, statt Rohstoffe zu horten
+  if (res[high] > 80 && res[low] * 3 < res[high]) {
+    const count = Math.floor((res[high] - res[low]) / (2 * (rate + 1)));
+    if (count >= 2) return { type: 'trade', give: high, get: low, count };
+  }
   return null;
 }
 
@@ -284,58 +410,159 @@ function economyAction(state, ctx, P, pid, rng) {
     maxEnemyArmy = Math.max(maxEnemyArmy, ctx.armyValue(ctx.enemies.filter((e) => e.owner === p.id)));
   }
   const totalDanger = [...ctx.cityDanger.values()].reduce((a, b) => a + b, 0);
-  const capped = ctx.mine.length >= unitCap(state, pid);
+  // Spieler haben kein Einheitenlimit; die KI hält sich an ein weiches Maß (Versorgung der Städte), bei Gefahr etwas mehr
+  const incNow = incomeOf(state, pid, ctx.territory);
+  // Keine weiteren Einheiten, wenn die Nahrung schon jetzt kaum für den Unterhalt reicht (außer bei Gefahr)
+  const starving = incNow.food < 2 && totalDanger <= 6 && ctx.mine.length >= ctx.ownCities.length;
+  // Für den Stadtausbau sparen: genug Armee da, keine Gefahr, Holz und Erz reichen schon fast → keine neuen Einheiten
+  const upCity = P.upgrade >= 0.45 && totalDanger <= 6 && ctx.mine.length >= ctx.ownCities.length + 1
+    ? ctx.ownCities.filter((c) => c.level < CITY_MAX_LEVEL && (ctx.cityDanger.get(c.idx) || 0) < 4).sort((x, y) => x.level - y.level)[0] : null;
+  const upCost = upCity && upgradeCostOf(state, upCity);
+  const saveUp = !!upCost && res.wood >= upCost.wood * 0.7 && res.ore >= upCost.ore * 0.7 && res.food < upCost.food;
+  // Schwere Stufen investieren, sobald ihre Armee mithalten kann: erst Stadtausbau, dann Wirtschaftsforschung
+  const invest = P.saveTech && totalDanger <= 10 && myArmy >= maxEnemyArmy * 0.9 && ctx.mine.length >= ctx.ownCities.length + 1;
+  const nextEco = invest && ctx.ownCities.length >= 2 ? ['plough', 'mining', 'saw'].find((t) => techAvailable(state, pid, t)) : null;
+  const investUp = invest ? ctx.ownCities.filter((c) => c.level < CITY_MAX_LEVEL && (ctx.cityDanger.get(c.idx) || 0) < 4)
+    .sort((x, y) => x.level - y.level || cityYieldSum(state, cityIdxOf(state, y), ctx.territory) - cityYieldSum(state, cityIdxOf(state, x), ctx.territory))[0] : null;
+  if (investUp && canAfford(res, upgradeCostOf(state, investUp))) { memory.ctxKey = ''; return { type: 'upgrade', idx: investUp.idx }; }
+  if (nextEco && canAfford(res, TECHS[nextEco].cost)) return { type: 'research', tech: nextEco };
+  const saveTech = !!(investUp || nextEco);
+  const capped = starving || saveUp || saveTech || unitCount(state, pid) >= unitCap(state, pid) * (P.armyCap || 1) + (totalDanger > 6 ? 2 : 0);
   const wantArmy = !capped && (ctx.mine.length < ctx.ownCities.length + 2 || myArmy < maxEnemyArmy * 0.9 || totalDanger > 6);
   const cityIdx = (c) => state.cityAt[c.idx];
 
+  // Fähigkeit wählen (alle Stufen, sonst blieben die Ränge ungenutzt)
+  for (const u of ctx.mine) {
+    const opts = perkOptions(u);
+    if (opts.length) return { type: 'perk', unitId: u.id, perk: opts[Math.floor(rng() * opts.length)] };
+  }
+  // Troll: wer eine Trollhöhle hat, spart darauf
+  // Titanen (Drache, Troll): wer die Höhle hat, spart darauf
+  let saveTroll = false;
+  if (P.smart && totalDanger < 8 && ctx.mine.length >= ctx.ownCities.length) {
+    for (const [type, b, want] of [['dragon', 'dragonlair', 1], ['troll', 'lair', 2]]) {
+      const home = ctx.ownCities.find((c) => hasBuilding(c, b));
+      if (!home || (P.units && !P.units.includes(type)) || ctx.mine.filter((u) => u.type === type).length >= want) continue;
+      if (!canRecruit(state, pid, cityIdx(home), type)) return { type: 'recruit', idx: home.idx, unitType: type };
+      if (type === 'dragon') continue; // viel zu teuer zum gezielten Sparen
+      saveTroll = true;
+      break;
+    }
+  }
+  // Wiesen bearbeiten (abseits der Gegner): Wald bei Holzmangel, Grube bei Erzmangel, Traubenhain für Zauberer
+  if (P.smart && rng() < 0.3 && canAfford(res, plantCost('forest')) && (state.plants || []).filter((p) => p.pid === pid).length < ctx.ownCities.length) {
+    const inc = incNow;
+    const sanctum = ctx.ownCities.some((x) => hasBuilding(x, 'sanctum'));
+    // Wiesen nur umwandeln, wenn genug Nahrung übrig bleibt; das knappere von Holz und Erz zuerst
+    const to = inc.food < 6 ? null : sanctum && inc.mana < 3 ? 'vine' : Math.min(inc.wood, inc.ore) < 4 + ctx.ownCities.length * 2 ? (inc.wood <= inc.ore ? 'forest' : 'pit') : null;
+    const need = { forest: 'lumber', pit: 'mine', vine: 'press' }[to];
+    if (to && canAfford(res, plantCost(to))) {
+      for (let i = 0; i < ctx.territory.length; i++) {
+        const c = state.cities[ctx.territory[i]];
+        if (!c || (to !== 'vine' && !hasBuilding(c, need))) continue;
+        if ((ctx.distEnemy[i] < 0 || ctx.distEnemy[i] > 4) && canTerraform(state, pid, i, ctx.territory) === 'plant') return { type: 'plant', idx: i, to };
+      }
+    }
+  }
   if (P.smart) {
     const t = tradeAction(state, pid);
     if (t && rng() < 0.8) return t;
   }
 
   // Wirtschaft: Gebäude und Ausbau, wenn keine akute Gefahr
-  if (P.upgrade > 0 && (!wantArmy || capped || rng() < 0.3) && rng() < P.upgrade) {
-    const inc = incomeOf(state, pid, ctx.territory);
+  // Wirtschaft zuerst: Bauernhof, Holzfäller, Mine, Kelterei überall, wo passende Felder liegen (belegen keinen Bauplatz)
+  if (P.upgrade > 0) {
+    for (const c of ctx.ownCities) {
+      const t = cityTiles(state, cityIdx(c), ctx.territory, 'outer');
+      for (const b of ['farm', 'lumber', 'mine', 'press']) {
+        if (t[BUILDINGS[b].eco] && !canBuild(state, pid, c, b)) return { type: 'build', idx: c.idx, building: b };
+      }
+    }
+  }
+  if (P.upgrade > 0 && !saveTroll && (!wantArmy || capped || rng() < 0.3) && rng() < P.upgrade) {
     const safe = ctx.ownCities.filter((c) => (ctx.cityDanger.get(c.idx) || 0) < 4);
+    // Stadtausbau vor neuen Gebäuden: verdoppelt bzw. verdreifacht den Ertrag (Städte mit viel Ertrag zuerst)
+    const ups = safe
+      .filter((c) => c.level < (P.cityMax ?? CITY_MAX_LEVEL) && canAfford(res, upgradeCostOf(state, c)))
+      .sort((a, b) => (a.level - b.level) || (cityYieldSum(state, cityIdx(b), ctx.territory) - cityYieldSum(state, cityIdx(a), ctx.territory)));
+    if (ups.length) {
+      memory.ctxKey = ''; // Ausbau verschiebt Gebietsgrenzen: Karte neu berechnen
+      return { type: 'upgrade', idx: ups[0].idx };
+    }
     for (const c of safe.sort((a, b) => (b.capital - a.capital) || (b.level - a.level))) {
-      const b = chooseBuilding(state, ctx, pid, cityIdx(c), inc);
+      const b = chooseBuilding(state, ctx, pid, cityIdx(c), incNow);
       if (b) return { type: 'build', idx: c.idx, building: b };
     }
-    const ups = safe
-      .filter((c) => c.level < CITY_MAX_LEVEL && c.buildings.length >= citySlots(c) - 1 && canAfford(res, upgradeCostOf(state, c)))
-      .sort((a, b) => (b.capital - a.capital) || (a.level - b.level));
-    if (ups.length) return { type: 'upgrade', idx: ups[0].idx };
   }
   // Türme in bedrohten Städten
-  if (P.smart) {
+  if (P.smart && !P.noTowers) {
     for (const c of ctx.ownCities) {
       const danger = ctx.cityDanger.get(c.idx) || 0;
       if (danger < 6) continue;
       const ci = cityIdx(c);
       const tower = state.units.find((u) => u.type === 'tower' && u.owner === pid && ctx.territory[u.idx] === ci);
       if (tower && tower.level < 3 && canAfford(res, TOWER_UPGRADE[tower.level]) && rng() < 0.5) return { type: 'towerUp', unitId: tower.id };
-      if (towersOfCity(state, ci, ctx.territory) < TOWERS_PER_CITY && rng() < 0.5) {
+      if (towersOfCity(state, ci, ctx.territory) < structureLimit(c, 'tower') && rng() < 0.5) {
         let best = null;
         for (const j of ctx.geo.within(c.idx, 1)) {
-          if (canBuildTower(state, pid, j, ctx.territory)) continue;
+          if (canBuildTower(state, pid, j, ctx.territory, 'tower', ci)) continue;
           const d = ctx.distEnemy[j] < 0 ? 99 : ctx.distEnemy[j];
           if (!best || d < best.d) best = { j, d };
         }
-        if (best) return { type: 'tower', idx: best.j };
+        if (best) return { type: 'tower', idx: best.j, city: c.idx };
+      }
+      // Steinwälle am Rand des Gebiets, dort wo der Gegner herkommt
+      if (P.upgrade >= 1 && towersOfCity(state, ci, ctx.territory, 'barrier') < (c.castle ? 8 : 4) && rng() < 0.25) {
+        let best = null;
+        for (const j of ctx.geo.within(c.idx, 2)) {
+          if (ctx.geo.dist(j, c.idx) < 2 || canBuildTower(state, pid, j, ctx.territory, 'barrier', ci)) continue;
+          const d = ctx.distEnemy[j] < 0 ? 99 : ctx.distEnemy[j];
+          if (d < 2) continue;
+          if (!best || d < best.d) best = { j, d };
+        }
+        if (best && best.d <= 4) return { type: 'tower', unitType: 'barrier', idx: best.j, city: c.idx };
       }
     }
   }
-  // Forschung, wenn Rohstoffe übrig sind
-  if (P.upgrade > 0 && rng() < P.upgrade) {
+  // Forschung, wenn Rohstoffe übrig sind (Eifer je nach Stufe)
+  if ((P.tech ?? P.upgrade) > 0 && !saveTroll && player.tech.length < (P.maxTech ?? 99) && rng() < (P.tech ?? P.upgrade)) {
     const resSum = res.food + res.wood + res.ore;
-    const prio = ['mining', 'bow', 'smith', 'horse', 'plough', 'saw', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'medic', 'guild'];
+    // Wirtschaftsforschung (+50 % aufs Reich) lohnt sich erst mit mehreren Städten
+    const eco = ctx.ownCities.length >= 3 ? ['plough', 'mining', 'saw'] : [];
+    const prio = [...eco, 'bow', 'smith', 'horse', 'armor', 'masonry', 'oxcart', 'ballistics', 'roads', 'stonework', 'towers2', 'plough', 'mining', 'saw', 'stirrups', 'keep', 'warbow', 'granary', 'counterweight', 'siegecart', 'battlements', 'medic', 'enlight', 'blessing', 'guild'].filter((t) => t !== 'guild' || tradeRate(state, pid));
     if (resSum > (wantArmy ? 70 : 35)) {
+      // Einheiten-Entwicklung: die meistgenutzten Einheiten gezielt verbessern (abwechselnd mit normaler Forschung)
+      if (rng() < (P.unitUp ?? 0)) {
+        const counts = {};
+        for (const u of ctx.mine) if (UNIT_UPS[u.type]) counts[u.type] = (counts[u.type] || 0) + 1;
+        for (const [type] of Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 2)) {
+          const opts = unitUpOptions(state, pid, type);
+          if (opts.length && canAfford(res, unitUpCost(type, unitUpList(state, pid, type).length))) return { type: 'unitUp', unit: type, id: opts[Math.floor(rng() * opts.length)].id };
+        }
+      }
       for (const t of prio) {
         if (techAvailable(state, pid, t) && canAfford(res, TECHS[t].cost)) return { type: 'research', tech: t };
       }
+      // Einzel-Verbesserungen (ab Stufe 3, mit der Stufe häufiger): die wertvollsten Einheiten und Türme gezielt stärken
+      if (P.boost && resSum > (wantArmy ? 120 : 60) && rng() < P.boost) {
+        // Türme ab Stufe 2 bekommen eine Bauart (meist Kanone oder Bollwerk)
+        const tw = ctx.mine.find((u) => u.type === 'tower' && (u.level || 1) >= 2 && !u.kind);
+        if (tw && rng() < 0.5) {
+          const kind = ['cannon', 'bulwark', 'ballista', 'cannon'][Math.floor(rng() * 4)];
+          if (canTowerKind(state, tw, kind)) return { type: 'towerKind', unitId: tw.id, kind };
+        }
+        const pick = ctx.mine.filter((u) => canBoost(u) && u.type !== 'tower').sort((a, b) => baseValue(b) - baseValue(a)).slice(0, 3);
+        for (const u of pick) {
+          const sk = skillOptions(u).filter((k) => k !== 'bomb');
+          if (sk.length && rng() < 0.4 && canAfford(res, skillCost(u.type))) return { type: 'skill', unitId: u.id, skill: sk[0] };
+          const stat = ['atk', 'hp', 'def', 'pen'][Math.floor(rng() * 4)];
+          const lvl = u.boost?.[stat] || 0;
+          if (lvl < 3 && canAfford(res, boostCost(u.type, lvl))) return { type: 'boost', unitId: u.id, stat };
+        }
+      }
     }
   }
-  if (capped) return null;
+  if (capped || (saveTroll && !wantArmy)) return null;
   // Rekrutieren: gefährdete Städte zuerst, sonst nahe an Zielen
   const cities = ctx.ownCities
     .filter((c) => spawnSpots(state, cityIdx(c), ctx.occ, ctx.territory).length)
@@ -350,7 +577,8 @@ function economyAction(state, ctx, P, pid, rng) {
 // Liefert die nächste Aktion für den aktuellen KI-Spieler.
 export function planAction(state, rng = Math.random) {
   const pid = state.current;
-  const P = AI_PARAMS[state.players[pid].ai] || AI_PARAMS[3];
+  // Spieler-Bots für die Abstimmung (tools/simbots.mjs) bringen eigene Werte mit
+  const P = state.players[pid].params || AI_PARAMS[state.players[pid].ai] || AI_PARAMS[3];
   const key = state.gameId + ':' + state.turn + ':' + pid;
   if (memory.key !== key) {
     memory.key = key;
@@ -359,6 +587,9 @@ export function planAction(state, rng = Math.random) {
     memory.econ = 0;
   }
   const ctx = buildContext(state, pid, P);
+
+  // 5 Trolle beisammen und 50 Mana: zum Riesentroll verschmelzen
+  for (const u of ctx.mine) if (u.type === 'troll' && canFuse(state, u)) return { type: 'fuse', unitId: u.id };
 
   let best = null;
   for (const u of ctx.mine) {
@@ -384,7 +615,7 @@ export function planAction(state, rng = Math.random) {
     if (!best || gain > best.gain) best = { gain, action: top.actions[0], u };
   }
   if (best) {
-    if (best.action.type === 'attack') memory.done.add(best.u.id);
+    if (best.action.type === 'attack' || best.action.type === 'heal' || best.action.type === 'freeze' || best.action.type === 'storm') memory.done.add(best.u.id);
     return best.action;
   }
   if (memory.econ++ < 40) {

@@ -79,6 +79,12 @@ function generateTerrain(rng, cols, rows, biome) {
     else if (elev[i] >= hT) terrain[i] = 'hill';
     else rest.push(i);
   }
+  // Gebirgspässe: geschlossene Bergketten an einigen Stellen zu Hügeln abflachen
+  for (const i of land) {
+    if (terrain[i] !== 'mountain') continue;
+    const mNb = geo.nb[i].filter((j) => terrain[j] === 'mountain').length;
+    if (mNb >= 2 && rng.float() < 0.3) terrain[i] = 'hill';
+  }
   const fT = quantile(rest.map((i) => moist[i]), 1 - biome.forest / Math.max(0.01, rest.length / geo.n));
   for (const i of rest) if (moist[i] >= fT) terrain[i] = 'forest';
 
@@ -103,7 +109,11 @@ function generateTerrain(rng, cols, rows, biome) {
   return { terrain, landCount: bestSize };
 }
 
-function placeCities(rng, geo, terrain, players, villageDensity) {
+// Mindestabstand zwischen zwei Städten (4 freie Felder dazwischen)
+export const CITY_GAP = 5;
+
+// Felder, auf denen eine Stadt stehen darf: begehbar, nicht am Rand, mindestens 3 begehbare Nachbarn
+function cityLand(geo, terrain) {
   const land = [];
   for (let i = 0; i < geo.n; i++) {
     if (!passable(terrain[i])) continue;
@@ -112,35 +122,62 @@ function placeCities(rng, geo, terrain, players, villageDensity) {
     for (const j of geo.nb[i]) if (passable(terrain[j])) pn++;
     if (pn >= 3 && c > 0 && r > 0 && c < geo.cols - 1 && r < geo.rows - 1) land.push(i);
   }
+  return land;
+}
+
+function placeCities(rng, geo, terrain, players, villageDensity) {
+  const land = cityLand(geo, terrain);
   if (land.length < players * 4) return null;
 
-  // Hauptstädte: möglichst großer Mindestabstand
-  let caps = null, capScore = -1;
-  for (let t = 0; t < 250; t++) {
+  // Hauptstädte: möglichst großer Mindestabstand, mindestens 2 Felder vom Kartenrand (volles Gebiet mit 2 Ringen)
+  const inner = land.filter((i) => { const c = geo.col(i), r = geo.row(i); return c > 1 && r > 1 && c < geo.cols - 2 && r < geo.rows - 2; });
+  const minCapDist = Math.max(CITY_GAP, Math.floor(Math.sqrt(geo.n) * (players === 2 ? 0.75 : 0.55)));
+  // Wertung: alle Hauptstädte innen (volles Gebiet) mit Abstand ≥ 5 (Gebiete überlappen nicht) geht vor dem großen Mindestabstand,
+  // danach möglichst weit auseinander
+  const isInner = new Set(inner);
+  let caps = null, capScore = -1, capDistMin = 0;
+  for (let t = 0; t < 400; t++) {
     const pick = [];
     for (let k = 0; k < players; k++) pick.push(rng.pick(land));
     let md = Infinity;
     for (let a = 0; a < players; a++) for (let b = a + 1; b < players; b++) md = Math.min(md, geo.dist(pick[a], pick[b]));
-    const s = md + rng.float() * 0.5;
-    if (s > capScore) { capScore = s; caps = pick; }
+    const nIn = pick.filter((i) => isInner.has(i)).length;
+    const s = (md >= minCapDist ? 100 : md >= CITY_GAP ? 60 : 0) + (nIn === players ? 60 : nIn * 5) + Math.min(md, CITY_GAP) * 4 + md * 0.3 + rng.float() * 0.5;
+    if (s > capScore) { capScore = s; caps = pick; capDistMin = md; }
   }
-  const minCapDist = Math.max(4, Math.floor(Math.sqrt(geo.n) * (players === 2 ? 0.75 : 0.55)));
-  if (capScore < minCapDist) return null;
+  if (capDistMin < Math.min(minCapDist, CITY_GAP)) return null;
 
   const cities = caps.map((idx) => ({ idx, owner: -1, level: 1, capital: true }));
   const capDist = caps.map((c) => bfsDistances(geo, terrain, [c]));
 
-  const target = Math.max(players * 2, Math.round(land.length / villageDensity));
-  const cand = rng.shuffle(land.slice());
-  for (const minD of [3, 2]) {
-    for (const i of cand) {
-      if (cities.length >= target + players) break;
-      if (cities.some((c) => geo.dist(c.idx, i) < minD)) continue;
-      // nicht direkt neben eine Hauptstadt quetschen
-      if (caps.some((c) => geo.dist(c, i) < 2)) continue;
-      cities.push({ idx: i, owner: -1, level: 1, capital: false });
+  const target = villageDensity <= 0 ? Infinity : Math.max(players, Math.round(land.length / villageDensity));
+  // Städte haben 2 Felder Gebiet: zwischen zwei Städten liegen immer mindestens 4 freie Felder (Abstand 5), Gebiete überlappen nie.
+  // Zufällige Reihenfolge wie bisher, aber mehrere Durchgänge: der mit den meisten Dörfern (bis zum Ziel) gewinnt
+  let bestV = [];
+  // „Voll“: Dörfer zuerst auf ein dichtestes Gitter (Abstand genau 5, die Gebiete mit 2 Ringen kacheln die Ebene lückenlos),
+  // die passende Verschiebung des Gitters wird gesucht; danach Lücken zufällig auffüllen
+  // villageDensity 0 = voll (Gitter + Lücken füllen), −1 = nur Gitter
+  if (villageDensity <= 0) {
+    const lat = (i) => (((geo.cq[i] + 8 * geo.cr[i]) % 19) + 19) % 19;
+    const ok = (i, list) => !cities.some((c) => geo.dist(c.idx, i) < CITY_GAP) && !list.some((c) => geo.dist(c.idx, i) < CITY_GAP);
+    for (let o = 0; o < 19; o++) {
+      const vs = [];
+      for (const i of land) if (lat(i) === o && ok(i, vs)) vs.push({ idx: i, owner: -1, level: 1, capital: false });
+      if (villageDensity === 0) for (const i of rng.shuffle(land.slice())) if (ok(i, vs)) vs.push({ idx: i, owner: -1, level: 1, capital: false });
+      if (vs.length > bestV.length) bestV = vs;
     }
   }
+  for (let pass = 0; pass < 24 && bestV.length < target; pass++) {
+    const cand = rng.shuffle(land.slice());
+    const vs = [];
+    for (const i of cand) {
+      if (vs.length >= target) break;
+      if (cities.some((c) => geo.dist(c.idx, i) < CITY_GAP) || vs.some((c) => geo.dist(c.idx, i) < CITY_GAP)) continue;
+      vs.push({ idx: i, owner: -1, level: 1, capital: false });
+    }
+    if (vs.length > bestV.length) bestV = vs;
+  }
+  cities.push(...bestV);
 
   // Fairness: Dörfer pro Spieler nach Wegdistanz zur Hauptstadt
   const share = new Array(players).fill(0);
@@ -157,10 +194,12 @@ function placeCities(rng, geo, terrain, players, villageDensity) {
     }
   }
   const imbalance = Math.max(...share) - Math.min(...share) + (Math.max(...near) - Math.min(...near)) * 1.5;
-  return { cities, imbalance };
+  return { cities, imbalance, missing: Number.isFinite(target) ? Math.max(0, target - bestV.length) : -bestV.length }; // voll: mehr Dörfer = besser
 }
 
-export function generateMap({ seed, cols, rows, players, biome = 'mixed', villageDensity = 10 }) {
+// density (0–1, Siedlungsdichte, nur mit villageDensity 0): 1 = so viele Städte wie möglich (4 freie Felder Abstand),
+// 0 = 8 freie Felder Abstand; dazwischen gleitend
+export function generateMap({ seed, cols, rows, players, biome = 'mixed', villageDensity = 18, density = 1 }) {
   const bio = BIOMES[biome] || BIOMES.mixed;
   const geo = getGeo(cols, rows);
   let best = null;
@@ -170,16 +209,39 @@ export function generateMap({ seed, cols, rows, players, biome = 'mixed', villag
     if (landCount < geo.n * 0.45) continue;
     const placed = placeCities(rng, geo, terrain, players, villageDensity);
     if (!placed) continue;
-    if (!best || placed.imbalance < best.imbalance) best = { terrain, cities: placed.cities, imbalance: placed.imbalance };
-    if (placed.imbalance <= 1) break;
+    // Jedes Dorf unter dem Ziel zählt als Nachteil (sonst gewinnen Karten mit fast keinen Dörfern, weil sie „fair“ sind)
+    const score = placed.imbalance + placed.missing * 0.8;
+    if (!best || score < best.imbalance) best = { terrain, cities: placed.cities, imbalance: score };
+    if ((score <= 1 && villageDensity > 0) || (best && attempt >= 11)) break; // 12 Versuche reichen (sonst dauert das Erzeugen am Handy spürbar)
   }
   if (!best) throw new Error('Karte konnte nicht erzeugt werden');
+  // Siedlungsdichte: gewünschter Abstand gap (5 = 4 freie Felder … 9 = 8 freie Felder). Die Städtezahl richtet sich nach der Fläche
+  // (pro Stadt gebrauchte Fläche wächst mit gap²), verteilt werden die Dörfer zufällig (fest zum Code), nie enger als dieser Abstand (abgerundet).
+  // Hauptstädte bleiben immer.
+  if (density < 1) {
+    const gap = CITY_GAP + 4 * (1 - Math.max(0, density));
+    const caps = best.cities.filter((c) => c.capital);
+    const target = Math.max(0, Math.round(best.cities.length * (CITY_GAP / gap) ** 2) - caps.length);
+    const cand = new Rng((seed ^ 0x2545f491) >>> 0).shuffle(cityLand(geo, best.terrain));
+    const kept = [];
+    for (let d = Math.ceil(gap - 1e-9); d >= Math.floor(gap) && kept.length < target; d--) {
+      for (const i of cand) {
+        if (kept.length >= target) break;
+        if ([...caps, ...kept].some((c) => geo.dist(c.idx, i) < d)) continue;
+        kept.push({ idx: i, owner: -1, level: 1, capital: false });
+      }
+    }
+    best.cities = [...caps, ...kept];
+  }
   for (const c of best.cities) best.terrain[c.idx] = 'plain';
   // Jede Hauptstadt bekommt einen fairen Rohstoff-Mix in ihrem Gebiet
   const isCity = new Set(best.cities.map((c) => c.idx));
   const rng = new Rng(seed ^ 0x5bd1e995);
   for (const c of best.cities.filter((x) => x.capital)) {
-    const nb = geo.nb[c.idx].filter((j) => !isCity.has(j));
+    // Burg: die 6 Nachbarfelder werden zum Burghof (begehbare Wiese)
+    for (const j of geo.nb[c.idx]) if (!isCity.has(j)) best.terrain[j] = 'plain';
+    // Rohstoffe liegen im Ring direkt um die Burg
+    const nb = geo.within(c.idx, 2).filter((j) => geo.dist(c.idx, j) === 2 && !isCity.has(j));
     const count = (t) => nb.filter((j) => best.terrain[j] === t).length;
     const want = [['forest', 1], ['hill', 1], ['plain', 2]];
     for (const [t, n] of want) {
@@ -193,6 +255,13 @@ export function generateMap({ seed, cols, rows, players, biome = 'mixed', villag
         have++;
       }
     }
+  }
+  // Jede Stadt (auch Dörfer) hat mindestens ein Erzfeld (Hügel) in ihrem Gebiet
+  for (const c of best.cities) {
+    const area = geo.within(c.idx, 2).filter((j) => j !== c.idx && !isCity.has(j));
+    if (area.some((j) => best.terrain[j] === 'hill' || best.terrain[j] === 'mountain')) continue;
+    const pool = rng.shuffle(area.filter((j) => best.terrain[j] === 'plain' || best.terrain[j] === 'forest'));
+    if (pool.length) best.terrain[pool[0]] = 'hill';
   }
   return { cols, rows, terrain: best.terrain, cities: best.cities };
 }
