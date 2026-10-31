@@ -387,7 +387,8 @@ const UP_COST = [[20, 15, 20], [30, 25, 30], [45, 35, 45], [60, 50, 60], [85, 70
 export function unitUpCost(type, tier) {
   const w = type === 'dragon' ? 2.5 : type === 'troll' || type === 'basilisk' || type === 'blackknight' ? 1.5 : 1;
   const [f, wd, o] = UP_COST[tier];
-  return { food: Math.round(f * w), wood: Math.round(wd * w), ore: Math.round(o * w) };
+  // 1.07: ein Drittel der früheren Kosten, aufgerundet
+  return { food: Math.ceil(Math.round(f * w) / 3), wood: Math.ceil(Math.round(wd * w) / 3), ore: Math.ceil(Math.round(o * w) / 3) };
 }
 
 // Einzel-Verbesserungen: gelten nur für die eine ausgewählte Einheit (Kauf im Einheiten-Fenster).
@@ -425,7 +426,8 @@ export function skillsFor(type) {
 const TOWER_BOOST_BASE = { wood: 18, ore: 18 };
 function pctCost(type, pct) {
   const c = {};
-  for (const [k, v] of Object.entries(type === 'tower' ? TOWER_BOOST_BASE : UNITS[type].cost)) c[k] = Math.ceil((v * pct) / 100);
+  // 1.07: ein Drittel der früheren Kosten, aufgerundet
+  for (const [k, v] of Object.entries(type === 'tower' ? TOWER_BOOST_BASE : UNITS[type].cost)) c[k] = Math.ceil(Math.ceil((v * pct) / 100) / 3);
   return c;
 }
 // Kosten der nächsten Stufe (lvl = 0..2) bzw. einer Fähigkeit
