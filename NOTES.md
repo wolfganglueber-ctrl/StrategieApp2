@@ -128,6 +128,7 @@ Startwerte und Kampfformel (Commit e094f32, 16.10.) stammen aus dem Vorbild *The
 - Spielregeln/Zahlen sind i. d. R. nicht urheberrechtlich geschützt; vor kommerziellem Start trotzdem kurz prüfen lassen (siehe Erinnerungsliste).
 
 # Arbeitsweise (Wunsch von Wolfgang)
+- Push-Nachricht aufs Handy bei offener Frage und wenn eine Aufgabe fertig ist (steht auch in CLAUDE.md).
 - **Immer erst fragen, bevor Code geschrieben oder Simulationen (sim) gestartet werden.** Kurz sagen, was geplant ist und was es kostet (Tests, Build, Veröffentlichen), dann auf Freigabe warten.
 - **Rückfragen immer als Auswahl:** Fragen an Wolfgang stellen mit dem Auswahl-Dialog (AskUserQuestion), je Frage eine eigene Abfrage mit 2–4 Optionen samt kurzer Erklärung, empfohlene Option zuerst mit „(Empfohlen)“, „Sonstiges“ für freie Antworten kommt automatisch. Vergleiche und Zahlen davor als Tabelle zeigen. Keine offenen Fragen als Fließtext.
 - Tipps zum sparsamen Nutzen des Nutzungslimits:
