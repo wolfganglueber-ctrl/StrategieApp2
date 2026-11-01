@@ -19,7 +19,7 @@ import {
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
   RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, MAX_SLOTS, CITY_SLOTS, buildingYield, ECO_TECH, ECO_TECH_PCT, PLANT_COST, plantCost, PLANT_KINDS, ECO_BUILDINGS, slotsUsed, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
   BOOST_ADD, AURA, defenseWords, counterMax, FUSE, TOWER_BOOST_ADD, TOWER_KINDS, TOWER_KIND_ORDER, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
-  FACTIONS, FACTION_ORDER, factionKey,
+  FACTIONS, FACTION_ORDER, factionKey, buildingName, buildingDesc, buildingIcon, upText,
 } from './data.js';
 import { getLevels, getWorldNames, getWorldFactions, starsFor } from './levels.js';
 import { store } from './storage.js';
@@ -205,6 +205,10 @@ function toggleGroupMember(u) {
 function uName(u) {
   return unitName(S, u.owner, u.type);
 }
+// Name eines Gebäudes im Volk des Spielers
+function bName(pid, b) {
+  return buildingName(S.players[pid]?.faction, b);
+}
 
 // Gruppe aus allen eigenen Einheiten in der Nähe bilden (optional nur gleicher Typ)
 function groupNearby(u, sameType) {
@@ -250,7 +254,7 @@ function attackSpot(u, target, occ) {
   const geo = getGeoOf();
   const rng = statsOf(S, u).range;
   if (geo.dist(u.idx, target.idx) <= rng) return u.idx;
-  if (!groupApproach || !canMove(u) || UNITS[u.type].noMoveAttack) return null;
+  if (!groupApproach || !canMove(u)) return null;
   let best = null;
   for (const d of getMoves(S, u, occ).keys()) {
     const dd = geo.dist(d, target.idx);
@@ -374,7 +378,7 @@ function unitTargets(u, occ) {
 
 // Gegner, die die Einheit erst nach einem Zug erreicht (bestes Angriffsfeld je Gegner)
 function reachTargets(u, occ) {
-  if (!canMove(u) || !canAttack(u) || UNITS[u.type].noMoveAttack || isStructure(u)) return new Map();
+  if (!canMove(u) || !canAttack(u) || isStructure(u)) return new Map();
   const geo = getGeoOf();
   const rng = statsOf(S, u).range;
   const spots = [...getMoves(S, u, occ).keys()];
@@ -806,8 +810,7 @@ function doHeal(u, t) {
 }
 
 async function doDemolish(idx, building) {
-  const B = BUILDINGS[building];
-  const ok = await confirmDialog(`${B.name} abreißen?`, `Der Bauplatz wird frei, du bekommst die Hälfte der Baukosten zurück.`, 'Abreißen', 'Behalten');
+  const ok = await confirmDialog(`${bName(cityOn(S, idx)?.owner, building)} abreißen?`, `Der Bauplatz wird frei, du bekommst die Hälfte der Baukosten zurück.`, 'Abreißen', 'Behalten');
   if (ok) quickAct({ type: 'demolish', idx, building });
 }
 
@@ -1009,7 +1012,7 @@ function unitUpView(types, pid, my, redraw) {
       const preview = [...have.slice(0, i), o.id];
       row.append(el('div', { class: 'tech-card up-card' + (done ? ' done' : lost ? ' lost' : next ? '' : ' locked') },
         iconCanvas(upUnit, pid, 52, 1, preview),
-        el('div', { class: 'binfo' }, el('b', {}, `${i + 1}. ${o.name}`), el('span', {}, o.desc)),
+        el('div', { class: 'binfo' }, el('b', {}, `${i + 1}. ${upText(p.faction, o.id).name}`), el('span', {}, upText(p.faction, o.id).desc)),
         done ? el('span', { class: 'done' }, '✓')
           : lost ? el('span', { class: 'lock' }, '—')
           : el('button', {
@@ -1392,7 +1395,7 @@ async function playEvent(ev, f, isAI, pan = true) {
       R.invalidate(true, ev.idx);
       R.ring(ev.idx, '#7dd3fc', 600 * f);
       if (f > 0) sound.play('hammer', { pan: panOf(ev.idx), vol: isAI ? 0.5 : 1 });
-      R.floatText(ev.idx, BUILDINGS[ev.building].name, '#bae6fd', 1100 * f);
+      R.floatText(ev.idx, bName(cityOn(S, ev.idx)?.owner, ev.building), '#bae6fd', 1100 * f);
       await pause(isAI ? 250 : 120);
       break;
     case 'upgrade':
@@ -1405,7 +1408,7 @@ async function playEvent(ev, f, isAI, pan = true) {
     case 'unitUp':
       if (S.players[ev.pid].human) {
         sound.play('fanfare', { vol: 0.7 });
-        toast(`⬆ ${unitName(S, ev.pid, ev.unit)}: ${UP_INDEX[ev.id].name}`);
+        toast(`⬆ ${unitName(S, ev.pid, ev.unit)}: ${upText(S.players[ev.pid].faction, ev.id).name}`);
         R.sprites = new Map(); // neues Aussehen
       }
       break;
@@ -1460,7 +1463,7 @@ async function playEvent(ev, f, isAI, pan = true) {
     case 'demolish':
       R.invalidate(true, ev.idx);
       if (ev.snap) R.ghost({ ...ev.snap }, 500 * Math.max(f, 0.6), 0);
-      R.floatText(ev.idx, `${ev.building ? BUILDINGS[ev.building].name : ev.snap ? uName(ev.snap) : UNITS[ev.unit].name} ${ev.disband ? 'entlassen' : 'abgerissen'}`, '#fca5a5', 1000 * Math.max(f, 0.6));
+      R.floatText(ev.idx, `${ev.building ? bName(cityOn(S, ev.idx)?.owner, ev.building) : ev.snap ? uName(ev.snap) : UNITS[ev.unit].name} ${ev.disband ? 'entlassen' : 'abgerissen'}`, '#fca5a5', 1000 * Math.max(f, 0.6));
       if (f > 0) sound.play('fall', { pan: panOf(ev.idx), vol: isAI ? 0.4 : 0.8 });
       break;
     case 'stone':
@@ -1774,7 +1777,7 @@ function tileInfo(i) {
 let cityTab = 'units';
 let buildGroup = null; // Handy: gewählte Gebäudegruppe ('eco' oder 'mil')
 const RECRUIT_BLOCK = {
-  needs: (T) => `braucht ${BUILDINGS[T.needs].name}`,
+  needs: (T, pid) => `braucht ${bName(pid, T.needs)}`,
   tech: (T) => `braucht ${TECHS[T.tech].name}`,
   cap: () => 'Versorgung voll',
   limit: () => 'höchstens einer pro Stadt',
@@ -1813,7 +1816,7 @@ function advice(occ) {
       : !hasBuilding(c, 'press') && t.mana ? 'press'
       : free && !hasBuilding(c, 'barracks') && c.capital ? 'barracks' : null;
     if (pick && canAfford(p.res, BUILDINGS[pick].cost)) {
-      return { text: `${BUILDINGS[pick].eco ? 'Wirtschaft' : 'Freier Bauplatz'}: Baue in deiner ${c.capital ? 'Hauptstadt' : CITY_NAMES[c.level]} ${BUILDINGS[pick].art} ${BUILDINGS[pick].name} (${BUILDINGS[pick].desc}).`, city: c.idx, tab: 'build' };
+      return { text: `${BUILDINGS[pick].eco ? 'Wirtschaft' : 'Freier Bauplatz'}: Baue in deiner ${c.capital ? 'Hauptstadt' : CITY_NAMES[c.level]}: ${bName(p.id, pick)} (${buildingDesc(S.players[p.id].faction, pick)}).`, city: c.idx, tab: 'build' };
     }
   }
   const up = S.cities.find((c) => c.owner === pid && c.level < CITY_MAX_LEVEL && canAfford(p.res, upgradeCost(c)));
@@ -1871,7 +1874,7 @@ function renderCityPanel(panel, ci, occ) {
     for (const k of UNIT_ORDER) {
       const T = UNITS[k];
       const why = canRecruit(S, p.id, ci, k);
-      const label = why && RECRUIT_BLOCK[why] ? RECRUIT_BLOCK[why](T) : null;
+      const label = why && RECRUIT_BLOCK[why] ? RECRUIT_BLOCK[why](T, p.id) : null;
       if (why === 'cap' || why === 'space' || why === 'limit' || why === 'unique') note = label;
       const preview = { type: k, owner: p.id, hp: 1 };
       grid.append(el('button', {
@@ -1881,7 +1884,7 @@ function renderCityPanel(panel, ci, occ) {
       },
         iconCanvas(k, p.id, 58),
         el('div', { class: 'name' }, unitName(S, p.id, k, true)),
-        why === 'needs' ? el('span', { class: 'lock' }, '🔒 ', BUILDINGS[T.needs].name) : why === 'tech' ? el('span', { class: 'lock' }, '🔬 ', TECHS[T.tech].name) : costEl(unitCost(S, p.id, k), p.res)));
+        why === 'needs' ? el('span', { class: 'lock' }, '🔒 ', bName(p.id, T.needs)) : why === 'tech' ? el('span', { class: 'lock' }, '🔬 ', TECHS[T.tech].name) : costEl(unitCost(S, p.id, k), p.res)));
     }
     panel.append(grid);
     const ready = hasBuilding(c, 'barracks') ? ' Dank Kaserne können sie sofort ziehen.' : '';
@@ -1903,8 +1906,8 @@ function renderCityPanel(panel, ci, occ) {
       const built = hasBuilding(c, b);
       const realm = !built && canBuild(S, p.id, c, b) === 'realm';
       list.append(el('div', { class: 'build-row' + (built ? ' built' : realm ? ' realm' : '') },
-        el('span', { class: 'bicon' }, B.icon),
-        el('div', { class: 'binfo' }, el('b', {}, B.name), el('span', { class: 'muted' }, ecoDesc[b] || B.desc)),
+        el('span', { class: 'bicon' }, buildingIcon(p.faction, b)),
+        el('div', { class: 'binfo' }, el('b', {}, bName(p.id, b)), el('span', { class: 'muted' }, ecoDesc[b] || buildingDesc(p.faction, b))),
         built ? el('span', { class: 'built-actions' }, el('span', { class: 'done' }, '✓'),
           el('button', { class: 'btn small raze', title: 'Abreißen (halbe Kosten zurück)', onclick: () => doDemolish(c.idx, b) }, '🗑'))
           : canBuild(S, p.id, c, b) === 'tech' ? el('span', { class: 'lock' }, `🔬 ${TECHS[B.tech].name}`)
@@ -2577,7 +2580,7 @@ function renderHelp() {
     <p>Einheiten heilen nicht von selbst – auch nicht in Städten. Leben zurück gibt es nur durch <b>Zauberer</b> (4 Leben, Heilkunde und Segen je +2, Großheiler +3) und durch Verbesserungen einzelner Einheiten: 💚 Selbstheilung (10 % pro Runde) und die Spezialisierung 💪 Zäh (2 pro Runde).</p>
     <h3>Einheiten</h3>
     <table><tr><th>Einheit</th><th>❤</th><th>Angr.</th><th>Bew.</th><th>Reichw.</th></tr>${rows}</table>
-    <p>Ritter und Greifenreiter brauchen eine Kaserne, Katapulte und Triboks eine Werkstatt, Zauberer einen Turm der Weisen, der Basilisk ein Basiliskennest, der Gepanzerte Schwarze Ritter eine Taverne (Stadt ab Stufe 3), der Schwarze Troll eine Trollhöhle, der Drache eine Drachenhöhle. Das Katapult kann nicht im selben Zug ziehen und angreifen.</p>
+    <p>Ritter und Greifenreiter brauchen eine Kaserne, Katapulte und Triboks eine Werkstatt, Zauberer einen Turm der Weisen, der Basilisk ein Basiliskennest, der Gepanzerte Schwarze Ritter eine Taverne (Stadt ab Stufe 3), der Schwarze Troll eine Trollhöhle, der Drache eine Drachenhöhle. Alle Einheiten dürfen erst ziehen und danach angreifen oder handeln.</p>
     <h3>Zugweite</h3>
     <p>Auch voll entwickelt ziehen Fußtruppen höchstens 4 Felder, Katapulte 3, Reiter, Ritter und Greifenreiter 6 – auch wenn sie über eigene Einheiten springen.</p>
     <h3>Ränge und Fähigkeiten ★</h3>

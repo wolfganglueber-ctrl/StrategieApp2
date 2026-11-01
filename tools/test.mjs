@@ -1,10 +1,10 @@
 // Schnelltests: alle Kampagnenlevel erzeugen, Zufallsspiele in allen Größen ohne Fehler durchspielen.
-import { createGame, applyAction, cloneState, computeCombat, statsOf, spawnUnit, canRecruit, splashDamage, getBombTargets, migrateState, stormArea, canTerraform, incomeOf, realmYield, cityTiles, cityYield, unitCost, unitName, startTurn, endTurn, computeTerritory } from '../js/game.js';
+import { createGame, applyAction, cloneState, computeCombat, statsOf, spawnUnit, canRecruit, splashDamage, getBombTargets, migrateState, stormArea, canTerraform, incomeOf, realmYield, cityTiles, cityYield, unitCost, unitName, startTurn, endTurn, computeTerritory, canAttack } from '../js/game.js';
 import { getGeo } from '../js/hex.js';
 import { planAction } from '../js/ai.js';
 import { getLevels } from '../js/levels.js';
 import { generateMap } from '../js/mapgen.js';
-import { MAP_SIZES, BIOMES, UNITS, buildingYield, START_BONUS, citySlots, FACTION_ORDER } from '../js/data.js';
+import { MAP_SIZES, BIOMES, UNITS, buildingYield, START_BONUS, citySlots, FACTION_ORDER, buildingName, buildingDesc, upText } from '../js/data.js';
 import { mulberry32 } from '../js/rng.js';
 import { createDefenseGame, waveUnits } from '../js/defense.js';
 import { BOTS, BOT_ORDER } from './bots.mjs';
@@ -328,6 +328,15 @@ const t0 = Date.now();
   const tev = startTurn(s);
   check(vc.owner === V && tev.some((x) => x.k === 'plunder') && s.players[V].res.food > food0, 'Wikinger: Plünderung beim Erobern');
   check(vu && cloneState(s).players[V].faction === 'vikings', 'Völker: im Spielstand');
+}
+// 1.08: alle Einheiten dürfen nach dem Ziehen angreifen; Gebäude und Entwicklung heißen je Volk anders
+{
+  const s = createGame({ seed: 21, cols: 16, rows: 21, biome: 'plains', players: [{ ai: 3, faction: 'vikings' }, { ai: 3 }] });
+  const cat = spawnUnit(s, 'catapult', 0, s.units.find((u) => u.owner === 0).idx, true);
+  cat.moved = true;
+  check(canAttack(cat), 'Katapult greift nach dem Ziehen an');
+  check(buildingName('vikings', 'nest') === 'Wolfsbau' && buildingDesc('vikings', 'nest').startsWith('Fenriswolf möglich') && buildingName('kingdom', 'nest') === 'Basiliskennest', 'Gebäude je Volk');
+  check(upText('witches', 'w3a').name === 'Zwei Sicheln' && upText('kingdom', 'w3a').name === 'Beidhändig', 'Entwicklung je Volk');
 }
 function unitById2(s, pid, idx) {
   return s.units.find((u) => u.owner === pid && u.idx === idx);

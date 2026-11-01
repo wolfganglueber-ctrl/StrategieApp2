@@ -82,7 +82,6 @@ function buildContext(state, pid, P) {
         const seen = new Set();
         const r = st(e).range;
         for (const f of froms) {
-          if (UNITS[e.type].noMoveAttack && f !== e.idx) continue;
           for (const t of geo.within(f, r)) {
             if (seen.has(t)) continue;
             seen.add(t);
@@ -231,7 +230,7 @@ function evaluateUnit(state, ctx, P, u, pid, rng) {
   const moves = canMove(u) ? getMoves(state, u, ctx.occ) : new Map();
   for (const d of moves.keys()) {
     options.push({ score: positionScore(state, ctx, P, u, d, u.hp, pid), actions: [{ type: 'move', unitId: u.id, to: d }] });
-    if (!UNITS[u.type].noMoveAttack) froms.push(d);
+    froms.push(d);
   }
   if (canAttack(u)) {
     for (const f of froms) {

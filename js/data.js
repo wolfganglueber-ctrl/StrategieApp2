@@ -75,8 +75,8 @@ export const UNITS = {
   dragon: { name: 'Drache', cost: { food: 150, wood: 150, ore: 150 }, hp: 120, atk: 25, def: 0, move: 5, range: 1, supply: 3, perRealm: 1, flying: true, line: [0.75, 0.5], needs: 'dragonlair', desc: 'Fliegt über Berge, Seen und eigene Einheiten. Sein Feueratem trifft auch die Gegner auf den 2 Feldern hinter dem Ziel (75 % und 50 %). Nur einer pro Reich.' },
   barrier: { name: 'Steinwall', cost: { wood: 6, ore: 14 }, hp: 25, atk: 0, def: 0, move: 0, range: 0, structure: true, desc: 'Stabiles Wallstück, blockiert den Weg. Im Stadtgebiet setzen; benachbarte Wallstücke verbinden sich zu einer Mauer und lenken den Gegner.' },
   basilisk: { name: 'Basilisk', cost: { food: 18, wood: 8, ore: 16 }, hp: 28, atk: 6, def: 0, move: 3, range: 2, supply: 2, perRealm: 2, petrify: true, needs: 'nest', desc: 'Versteinernder Blick aus 2 Feldern: Das Ziel setzt seinen nächsten Zug aus und schlägt nicht zurück (Troll und Drache sind immun). Höchstens 2 pro Reich.' },
-  trebuchet: { name: 'Tribok', cost: { food: 4, wood: 24, ore: 16 }, hp: 14, atk: 10, def: 0, move: 1, range: 5, minRange: 2, noMoveAttack: true, upkeep: { food: 2, wood: 1 }, needs: 'workshop', tech: 'counterweight', desc: 'Schwere Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einziges Feld (kein Flächenschaden), aber nicht direkt daneben und nicht nach Bewegung. Braucht Werkstatt und die Forschung Gegengewicht.' },
-  catapult: { name: 'Katapult', cost: { wood: 12, ore: 10 }, hp: 12, atk: 8, def: 0, move: 2, range: 3, noMoveAttack: true, splash: 0.5, upkeep: { food: 2, wood: 1 }, needs: 'workshop', desc: 'Belagerungswaffe mit Reichweite 3, nicht nach Bewegung. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Unterhalt 2 Nahrung + 1 Holz. Braucht eine Werkstatt.' },
+  trebuchet: { name: 'Tribok', cost: { food: 4, wood: 24, ore: 16 }, hp: 14, atk: 10, def: 0, move: 1, range: 5, minRange: 2, upkeep: { food: 2, wood: 1 }, needs: 'workshop', tech: 'counterweight', desc: 'Schwere Wurfmaschine: trifft aus bis zu 5 Feldern präzise ein einziges Feld (kein Flächenschaden), aber nicht direkt daneben. Braucht Werkstatt und die Forschung Gegengewicht.' },
+  catapult: { name: 'Katapult', cost: { wood: 12, ore: 10 }, hp: 12, atk: 8, def: 0, move: 2, range: 3, splash: 0.5, upkeep: { food: 2, wood: 1 }, needs: 'workshop', desc: 'Belagerungswaffe mit Reichweite 3. Flächenschaden: Gegner neben dem Ziel bekommen die Hälfte. Unterhalt 2 Nahrung + 1 Holz. Braucht eine Werkstatt.' },
 };
 // Wert einer Einheit für die KI (Rohstoffsumme / 2), danach Kaufpreise verdoppeln:
 // Einheiten sollen im Verhältnis zum Ertrag teuer sein (halb so viele wie früher)
@@ -129,6 +129,23 @@ export const FACTIONS = {
       catapult: 'Steinschleuder', trebuchet: 'Großschleuder', mage: 'Runenmeister', basilisk: 'Fenriswolf', blackknight: 'Jarl',
       troll: 'Frostriese', giant: 'Eisriesenkönig', dragon: 'Nidhögg',
     },
+    icons: { nest: '🐺', lair: '❄️', sanctum: '🪨', workshop: '🪓' },
+    buildings: { barracks: 'Langhaus', workshop: 'Zimmerei', sanctum: 'Runenstein', nest: 'Wolfsbau', tavern: 'Methalle', lair: 'Eishöhle', dragonlair: 'Wurmhort' },
+    ups: {
+      w1: 'Gefütterter Wams', w2: ['Hörnerhelm', '+5 % Verteidigung, trägt jetzt Hörnerhelm'], w3a: ['Zwei Äxte', 'Zweite Axt statt Schild: +2 Angriff'], w3b: ['Großer Rundschild', 'Großer Schild: +10 % Verteidigung, +2 Leben'], w4: 'Kettenhemd', w5: ['Axtmeister', 'Dunkles Eisen: +2 Angriff, +1 Bewegung'],
+      r1: 'Wolfsgeschirr', r2: 'Rundschild', r3a: ['Axtreiter', 'Reiteraxt: +2 Angriff, Sturmangriff'], r3b: 'Speerwerfer', r4: 'Kettenpanzer', r5: ['Rudelführer', 'Dunkles Eisen, weißer Wolf: +1 Angriff, +1 Bewegung'],
+      d1: ['Großer Rundschild', 'Großer Schild: +5 % Verteidigung'], d2: 'Speeraxt', d3a: 'Schildburg', d3b: ['Langspeer', 'Langer Speer: Durchschlag +20 gegen Reiter, Ritter, Greifenreiter, Trolle, Drachen'], d4: 'Eisenschuppen', d5: ['Schildjungfrau', 'Helm und dunkles Eisen: +10 % Verteidigung, +1 Bewegung'],
+      k1: ['Doppelaxt', 'Doppelaxt: +2 Angriff'], k2: ['Bärenfell', 'Kettenhemd unter dem Bärenfell: +10 % Verteidigung, +3 Leben'], k3a: ['Rasender', 'Zweite Axt: Nahkämpfer schlagen nicht zurück, +1 Angriff'], k3b: 'Schildberserker', k4: 'Blutrausch', k5: 'Ulfhednar',
+      f1: 'Flügelgeschirr', f2: 'Walkürenspeer', f3a: 'Sturzflug', f3b: 'Gepanzertes Ross', f4: 'Weite Schwingen', f5: 'Odins Schildmaid',
+      a1: 'Wurfriemen', a2: 'Fährtenleser', a3a: ['Weitwerfer', 'Starker Wurfarm: +1 Reichweite'], a3b: 'Brandäxte', a4: 'Gehärtete Klingen', a5: 'Meisterwerfer',
+      m1: 'Fellstiefel', m2: 'Runenstab', m3a: ['Feuerrunen', 'Feuerrunen: +4 Angriff, +1 Reichweite'], m3b: ['Schutzrunen', 'Runenkreis: Schutzaura 1 Feld weiter'], m4: 'Met der Götter', m5: 'Allvaters Seher',
+      x1: 'Zwergenstahl', x2: 'Bärenpanzer', x3a: 'Doppelaxt des Jarls', x3b: 'Schildwall des Jarls', x4: 'Seefahrerschritt', x5: 'Hochkönig',
+      b1: 'Dickes Fell', b2: 'Reißzähne', b3a: ['Heulen', 'Lähmendes Heulen: +1 Reichweite'], b3b: 'Eisenhalsband', b4: 'Schnelle Läufe', b5: 'Weltenwolf',
+      c1: 'Spannseile', c2: 'Eisenbeschlag', c3a: 'Zielwurf', c3b: 'Steinhagel', c4: 'Feldwagen', c5: 'Schnellladung',
+      t1: 'Eichenarm', t2: 'Schildwand', t3a: 'Brandtöpfe', t3b: 'Felsbrocken', t4: 'Steingegengewicht', t5: 'Belagerungsjarl',
+      o1: 'Frostbemalung', o2: 'Eisketten', o3a: 'Eissturm', o3b: 'Gletscherhaut', o4: 'Frostblut', o5: 'Frostkönig',
+      g1: 'Wurmschuppen', g2: 'Giftatem', g3a: 'Giftschwall', g3b: 'Wurmpanzer', g4: 'Sturmflügel', g5: 'Urwurm',
+    },
   },
   witches: {
     name: 'Hexer', icon: '🔮', style: 'Magie und Flüche, brauchen viel Mana (Trauben), schlagen schwächer zu',
@@ -139,6 +156,23 @@ export const FACTIONS = {
       warrior: 'Kultist', archer: 'Irrlichtwerfer', rider: 'Nachtmahrreiter', defender: 'Lehmgolem', knight: 'Hexenritter', griffin: 'Besenhexe',
       catapult: 'Fluchkessel', trebuchet: 'Seelenwerfer', mage: 'Hexenmeister', basilisk: 'Riesenkröte', blackknight: 'Todesritter',
       troll: 'Fleischgolem', giant: 'Golemkoloss', dragon: 'Knochendrache',
+    },
+    icons: { nest: '🐸', tavern: '⚰️', lair: '🧟', dragonlair: '💀', workshop: '🧪' },
+    buildings: { barracks: 'Zirkel', workshop: 'Hexenküche', sanctum: 'Hexenturm', nest: 'Krötensumpf', tavern: 'Gruft', lair: 'Golemgrube', dragonlair: 'Drachengruft' },
+    ups: {
+      w1: 'Dunkle Kutte', w2: ['Knochenmaske', '+5 % Verteidigung, trägt jetzt Knochenmaske'], w3a: ['Zwei Sicheln', 'Zweite Sichel statt Schild: +2 Angriff'], w3b: ['Augenschild', 'Großer Schild: +10 % Verteidigung, +2 Leben'], w4: 'Schattenpanzer', w5: ['Seelenschnitter', 'Schwarze Kutte: +2 Angriff, +1 Bewegung'],
+      r1: 'Geistersattel', r2: 'Bannschild', r3a: ['Klingenreiter', 'Schattenklinge: +2 Angriff, Sturmangriff'], r3b: ['Fluchwerfer', 'Fluchspeere: greift aus 2 Feldern an'], r4: 'Schattenpanzer', r5: 'Albtraumfürst',
+      d1: ['Steinplatte', 'Steinplatte am Arm: +5 % Verteidigung'], d2: 'Lehmdorn', d3a: 'Steinwall', d3b: ['Dornengolem', 'Langer Dorn: Durchschlag +20 gegen Reiter, Ritter, Greifenreiter, Trolle, Drachen'], d4: 'Gebrannter Ton', d5: ['Steinwächter', 'Zu Stein gebrannt: +10 % Verteidigung, +1 Bewegung'],
+      k1: ['Flammenlanze', 'Lanze mit Hexenfeuer: +2 Angriff'], k2: ['Hexenstahl', 'Spitzhelm und Rossharnisch: +10 % Verteidigung, +3 Leben'], k3a: ['Fluchlanze', 'Extralange Lanze: Nahkämpfer schlagen nicht zurück, +1 Angriff'], k3b: 'Schwerer Hexenritter', k4: 'Schattenrüstung', k5: 'Zirkelmeister',
+      f1: 'Flugsalbe', f2: 'Krallenhandschuh', f3a: 'Sturzflug', f3b: 'Eisenbesen', f4: 'Sturmbesen', f5: 'Oberhexe',
+      a1: 'Lockruf', a2: 'Nebelgänger', a3a: ['Großes Irrlicht', 'Großes Irrlicht: +1 Reichweite'], a3b: 'Hexenfeuer', a4: 'Giftlicht', a5: 'Herrin der Irrlichter',
+      m1: 'Siebenmeilenstiefel', m2: 'Totenkopfstab', m3a: ['Feuerhexer', 'Feuerkugel: +4 Angriff, +1 Reichweite'], m3b: ['Bannkreis', 'Schutzaura 1 Feld weiter'], m4: 'Hexentrank', m5: 'Erzhexer',
+      x1: 'Grabstahl', x2: 'Knochenrüstung', x3a: 'Seelenernter', x3b: 'Gruftwall', x4: 'Geisterschritt', x5: 'Todesfürst',
+      b1: 'Schleimhaut', b2: 'Giftzunge', b3a: ['Weitzunge', 'Lange Zunge: +1 Reichweite'], b3b: 'Panzerkröte', b4: 'Sprungbeine', b5: 'Urkröte',
+      c1: 'Größerer Kessel', c2: 'Eisenbänder', c3a: 'Zielguss', c3b: 'Giftspritzer', c4: 'Kesselwagen', c5: 'Schnellsud',
+      t1: 'Knochenarm', t2: 'Bannschirm', t3a: 'Seelenexplosion', t3b: 'Riesenschädel', t4: 'Grabsteingewicht', t5: 'Meister der Seelen',
+      o1: 'Runennähte', o2: 'Eisenklammern', o3a: 'Raserei', o3b: 'Steinhaut', o4: 'Frisches Fleisch', o5: 'Golemfürst',
+      g1: 'Knochenpanzer', g2: 'Grabesatem', g3a: 'Fäulnisschwall', g3b: 'Panzerknochen', g4: 'Geisterschwingen', g5: 'Urknochendrache',
     },
   },
   dragonkin: {
@@ -151,9 +185,46 @@ export const FACTIONS = {
       catapult: 'Lavaschleuder', trebuchet: 'Glutmörser', mage: 'Drachenpriester', basilisk: 'Salamander', blackknight: 'Drachenfürst',
       troll: 'Erdwyrm', giant: 'Wyrmkönig', dragon: 'Großer Wyrm',
     },
+    icons: { nest: '🔥', tavern: '👑', lair: '🪨', sanctum: '🔥', workshop: '🌋' },
+    buildings: { barracks: 'Schuppenhalle', workshop: 'Glutschmiede', sanctum: 'Flammentempel', nest: 'Lavateich', tavern: 'Fürstenhalle', lair: 'Wyrmgrube', dragonlair: 'Drachenhort' },
+    ups: {
+      w1: 'Schuppenwams', w2: ['Bronzehelm', '+5 % Verteidigung, trägt jetzt Bronzehelm'], w3a: ['Zwei Klingen', 'Zweite Klinge statt Schild: +2 Angriff'], w3b: 'Großschild', w4: 'Bronzeschuppen', w5: ['Klingentänzer', 'Dunkle Bronze: +2 Angriff, +1 Bewegung'],
+      r1: 'Raptorsattel', r2: 'Rundschild', r3a: ['Klingenreiter', 'Krummschwert: +2 Angriff, Sturmangriff'], r3b: 'Speerwerfer', r4: 'Bronzepanzer', r5: 'Rudelherr',
+      d1: 'Schuppenschild', d2: 'Hakenspeer', d3a: 'Schuppenwall', d3b: ['Langspeer', 'Langer Speer: Durchschlag +20 gegen Reiter, Ritter, Greifenreiter, Trolle, Drachen'], d4: 'Bronzeplatten', d5: ['Hortwächter', 'Dunkle Bronze: +10 % Verteidigung, +1 Bewegung'],
+      k1: 'Drachenlanze', k2: ['Bronzerüstung', 'Helm und Drachenharnisch: +10 % Verteidigung, +3 Leben'], k3a: ['Glutlanze', 'Extralange Lanze: Nahkämpfer schlagen nicht zurück, +1 Angriff'], k3b: 'Schwerer Drachenritter', k4: 'Obsidianrüstung', k5: 'Drachenorden',
+      f1: 'Wyverngeschirr', f2: 'Wyvernkrallen', f3a: 'Sturzflug', f3b: 'Gepanzerte Wyvern', f4: 'Weite Schwingen', f5: 'Wyvernkönig',
+      a1: 'Tiefer Atem', a2: 'Steppenläufer', a3a: ['Weiter Strahl', 'Weiter Feuerstrahl: +1 Reichweite'], a3b: 'Blaues Feuer', a4: 'Heiße Glut', a5: 'Meisterspeier',
+      m1: 'Glutsohlen', m2: 'Flammenstab', m3a: ['Feuerpriester', 'Feuerkugel: +4 Angriff, +1 Reichweite'], m3b: ['Flammenkreis', 'Schutzaura 1 Feld weiter'], m4: 'Drachenblut', m5: 'Hohepriester',
+      x1: 'Drachenstahl', x2: 'Hornpanzer', x3a: 'Glutklinge', x3b: 'Schuppenbollwerk', x4: 'Flügelschritt', x5: 'Drachenkaiser',
+      b1: 'Glutschuppen', b2: 'Feuerbiss', b3a: ['Flammenblick', 'Glühender Blick: +1 Reichweite'], b3b: 'Lavapanzer', b4: 'Flinke Läufe', b5: 'Ursalamander',
+      c1: 'Spannwerk', c2: 'Obsidianbeschlag', c3a: 'Präzisionswurf', c3b: 'Lavaspritzer', c4: 'Feldlafette', c5: 'Schnellladung',
+      t1: 'Verstärkter Arm', t2: 'Obsidianschirm', t3a: 'Lavageschosse', t3b: 'Glutkugeln', t4: 'Basaltgewicht', t5: 'Glutmeister',
+      o1: 'Erzadern', o2: 'Felspanzer', o3a: 'Erdbeben', o3b: 'Granithaut', o4: 'Wyrmblut', o5: 'Wyrmfürst',
+      g1: 'Goldschuppen', g2: 'Glutatem', g3a: 'Flammenschwall', g3b: 'Panzerwyrm', g4: 'Sturmschwingen', g5: 'Ahnenwyrm',
+    },
   },
 };
 export const FACTION_ORDER = ['kingdom', 'vikings', 'witches', 'dragonkin'];
+// Gebäude, die eine Einheit freischalten (Beschreibung nennt die Einheit des Volks)
+export const UNLOCKS = { barracks: 'knight', workshop: 'catapult', sanctum: 'mage', nest: 'basilisk', tavern: 'blackknight', lair: 'troll', dragonlair: 'dragon' };
+// Name und Beschreibung eines Gebäudes im Volk
+export function buildingName(faction, b) {
+  return FACTIONS[factionKey(faction)].buildings?.[b] || BUILDINGS[b].name;
+}
+export function buildingIcon(faction, b) {
+  return FACTIONS[factionKey(faction)].icons?.[b] || BUILDINGS[b].icon;
+}
+export function buildingDesc(faction, b) {
+  const F = FACTIONS[factionKey(faction)], u = UNLOCKS[b];
+  if (!u || !F.names[u]) return BUILDINGS[b].desc;
+  return BUILDINGS[b].desc.replace(/^.*? möglich/, `${F.names[u]} möglich`);
+}
+// Name und Beschreibung einer Entwicklungsstufe im Volk (Wirkung bleibt gleich)
+export function upText(faction, id) {
+  const o = FACTIONS[factionKey(faction)].ups?.[id];
+  const U = UP_INDEX[id];
+  return Array.isArray(o) ? { name: o[0], desc: o[1] } : { name: o || U.name, desc: U.desc };
+}
 export function factionKey(k) {
   return FACTIONS[k] ? k : 'kingdom';
 }
@@ -177,7 +248,6 @@ export const PERKS = {
   lance: { name: 'Lange Lanze', icon: '🗡️', desc: 'Nahkämpfer schlagen nicht zurück' },
   precise: { name: 'Präzision', icon: '🎯', desc: 'Kein Flächenschaden' },
   blast: { name: 'Sprengladung', icon: '💣', desc: 'Flächenschaden 40 %' },
-  mobile: { name: 'Schnellladung', icon: '⚙️', desc: 'Schießt auch nach dem Ziehen' },
 };
 export const PERK_CHOICES = {
   warrior: [['charge', 'shieldwall'], ['siege', 'tough']],
@@ -356,14 +426,14 @@ export const UNIT_UPS = {
     U('c2', 'Eisenbeschlag', '+4 Leben', { hp: 4 }),
     [U('c3a', 'Präzisionswurf', '+3 Angriff, kein Flächenschaden', { atk: 3 }, 'precise'), U('c3b', 'Streugeschosse', 'Flächenschaden +25 Prozentpunkte', {}, 'fire')],
     U('c4', 'Feldlafette', '+1 Bewegung', { move: 1 }),
-    U('c5', 'Schnellladung', '+2 Angriff, darf nach dem Ziehen schießen', { atk: 2 }, 'mobile'),
+    U('c5', 'Schnellladung', '+3 Angriff', { atk: 3 }),
   ],
   trebuchet: [
     U('t1', 'Verstärkter Arm', '+2 Angriff', { atk: 2 }),
     U('t2', 'Schutzschirm', '+5 Leben, +5 % Verteidigung', { hp: 5, def: 5 }),
     [U('t3a', 'Explosive Geschosse', 'Flächenschaden 40 % auf die Nachbarn', {}, 'blast'), U('t3b', 'Riesenkugeln', '+4 Angriff gegen das Einzelziel', { atk: 4 })],
     U('t4', 'Bleigegengewicht', '+1 Reichweite', { range: 1 }),
-    U('t5', 'Belagerungsmeister', '+2 Angriff, darf nach dem Ziehen schießen', { atk: 2 }, 'mobile'),
+    U('t5', 'Belagerungsmeister', '+3 Angriff', { atk: 3 }),
   ],
   troll: [
     U('o1', 'Kriegsbemalung', '+2 Angriff', { atk: 2 }),

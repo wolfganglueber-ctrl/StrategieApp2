@@ -445,7 +445,7 @@ export function canMove(u) {
   return !u.moved && !u.attacked && !UNITS[u.type].structure;
 }
 export function canAttack(u) {
-  return !u.attacked && !(UNITS[u.type].noMoveAttack && u.moved && !hasPerk(u, 'mobile'));
+  return !u.attacked; // alle Einheiten dürfen nach dem Ziehen angreifen oder handeln
 }
 export function canAct(state, u) {
   if (canMove(u)) return true;
