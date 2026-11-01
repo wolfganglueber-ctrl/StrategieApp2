@@ -294,7 +294,7 @@ const t0 = Date.now();
   check(unitCost(s, K, 'tower').wood < UNITS.tower.cost.wood && st(K, 'barrier').hp > st(V, 'barrier').hp, 'Königreich: Bollwerk (Türme/Wälle billiger und stärker)');
   check(st(V, 'warrior').atk > st(K, 'warrior').atk && st(V, 'archer').atk < st(K, 'archer').atk && unitCost(s, V, 'warrior').food > unitCost(s, K, 'warrior').food, 'Wikinger: Nahkampf stärker, Fernkampf schwächer, mehr Nahrung');
   check(st(V, 'warrior', 4).atk === st(V, 'warrior').atk + 3, 'Wikinger: Berserker unter halbem Leben');
-  check(unitCost(s, W, 'warrior').mana >= 1 && st(W, 'knight').atk < st(K, 'knight').atk, 'Hexer: Mana-Kosten, schwächerer Angriff');
+  check(!unitCost(s, W, 'warrior').mana && unitCost(s, W, 'knight').mana >= 1 && st(W, 'knight').atk < st(K, 'knight').atk && st(W, 'mage').range === 3 && st(K, 'mage').range === 2, 'Hexer: Mana erst ab Ritter, schwächerer Angriff, Hexenmeister Reichweite 3');
   check(st(D, 'warrior').hp === 12 && unitCost(s, D, 'knight').ore > unitCost(s, K, 'knight').ore, 'Drachenmenschen: mehr Leben, teurer');
   // Kampfregeln auf freier Wiese
   const geo = getGeo(s.cols, s.rows);
@@ -337,6 +337,15 @@ const t0 = Date.now();
   check(canAttack(cat), 'Katapult greift nach dem Ziehen an');
   check(buildingName('vikings', 'nest') === 'Wolfsbau' && buildingDesc('vikings', 'nest').startsWith('Fenriswolf möglich') && buildingName('kingdom', 'nest') === 'Basiliskennest', 'Gebäude je Volk');
   check(upText('witches', 'w3a').name === 'Zwei Sicheln' && upText('kingdom', 'w3a').name === 'Beidhändig', 'Entwicklung je Volk');
+}
+// Alle Werte auf Maximum
+{
+  const s = createGame({ seed: 77, cols: 16, rows: 21, biome: 'plains', players: [{ ai: 3 }, { ai: 3 }] });
+  const u = s.units.find((x) => x.owner === 0 && x.type === 'rider');
+  s.current = 0;
+  s.players[0].res = { food: 9999, wood: 9999, ore: 9999, mana: 99 };
+  check(applyAction(s, { type: 'boostAll', unitId: u.id }) && ['atk', 'def', 'hp', 'pen'].every((k) => u.boost[k] === 3) && u.hp === statsOf(s, u).hp, 'Alle Werte auf Maximum');
+  check(!applyAction(s, { type: 'boostAll', unitId: u.id }), 'Alle Werte: nichts mehr zu verbessern');
 }
 function unitById2(s, pid, idx) {
   return s.units.find((u) => u.owner === pid && u.idx === idx);

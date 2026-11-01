@@ -6,7 +6,7 @@ import {
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
   PERK_RANKS, CAVALRY, buildingYield, plantCost, START_BUILDINGS, slotsUsed, usesSlot, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_ADD, ATK_TYPE, DEF_TABLE, DEF_MAX, SKILLS, skillsFor, boostCost, skillCost,
   BASE_RES, MANA, ECO_TECH, ECO_TECH_PCT, ARCHER_MAX_RANGE, counterMax, FUSE, TOWER_BOOST_ADD, TOWER_KINDS, START_BONUS,
-  FACTIONS, factionKey,
+  FACTIONS, factionKey, UNIT_ORDER,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -138,7 +138,9 @@ export function unitCost(state, pid, type) {
     out[k] = Math.round(v * m);
     sum += v;
   }
-  if (!T.structure && F.manaCost) out.mana = (out.mana || 0) + Math.max(1, Math.round(sum * F.manaCost));
+  // Hexer: Mana-Zuschlag erst ab dem Ritter (manaFrom) aufwärts
+  const manaUnit = !F.manaFrom || UNIT_ORDER.indexOf(type) >= UNIT_ORDER.indexOf(F.manaFrom);
+  if (!T.structure && F.manaCost && manaUnit) out.mana = (out.mana || 0) + Math.max(1, Math.round(sum * F.manaCost));
   return out;
 }
 
@@ -199,11 +201,10 @@ export function statsOf(state, u) {
     const add = u.type === 'tower' ? TOWER_BOOST_ADD : BOOST_ADD;
     for (const k of ['atk', 'def', 'hp', 'pen']) if (u.boost[k] && add[k]) st[k] += add[k][u.boost[k]];
   }
+  st.range += F.range?.[u.type] || 0; // Hexer: Hexenmeister +1 Reichweite
   if (hasSkill(u, 'range1')) st.range++;
   if (hasSkill(u, 'range2')) st.range++;
   if (u.type === 'archer') st.range = Math.min(st.range, ARCHER_MAX_RANGE); // Schützen höchstens 4 Felder weit
-  // Stellung halten: nicht gezogen → +10 % Verteidigung
-  if (hasSkill(u, 'hold') && !u.walked) st.def += 10;
   // Wikinger (Berserker): unter halbem Leben stärker
   if (F.berserk && !UNITS[u.type].structure && u.hp * 2 < st.hp) st.atk += F.berserk;
   st.atk = Math.ceil(st.atk - 1e-9);
@@ -1173,6 +1174,20 @@ function applyActionCore(state, a) {
       ev.push({ k: 'boost', id: u.id, idx: u.idx, stat: a.stat, level: lvl + 1, type: u.type });
       break;
     }
+    case 'boostAll': {
+      // Alle Werte dieser Einheit auf einmal auf die höchste Stufe
+      const u = unitById(state, a.unitId);
+      if (!u || u.owner !== pid || !canBoost(u)) return null;
+      const cost = boostAllCost(state, u);
+      if (!cost || !canAfford(player.res, cost)) return null;
+      for (const k of RES) player.res[k] -= cost[k] || 0;
+      const before = statsOf(state, u).hp;
+      u.boost = { ...(u.boost || {}) };
+      for (const k of boostStats(u)) u.boost[k] = boostMax(state);
+      u.hp += statsOf(state, u).hp - before;
+      ev.push({ k: 'boost', id: u.id, idx: u.idx, stat: 'all', level: boostMax(state), type: u.type });
+      break;
+    }
     case 'skill': {
       const u = unitById(state, a.unitId);
       if (!u || u.owner !== pid || !skillOptions(u).includes(a.skill)) return null;
@@ -1476,6 +1491,18 @@ export function canBoost(u) {
 }
 export function boostStats(u) {
   return u.type === 'tower' ? ['atk', 'def', 'hp'] : ['atk', 'def', 'hp', 'pen'];
+}
+// Preis, um alle Werte auf die höchste Stufe zu bringen (null, wenn schon alles voll)
+export function boostAllCost(state, u) {
+  const cost = {};
+  let any = false;
+  for (const k of boostStats(u)) {
+    for (let lvl = u.boost?.[k] || 0; lvl < boostMax(state); lvl++) {
+      any = true;
+      for (const [r, v] of Object.entries(boostCost(u.type, lvl))) cost[r] = (cost[r] || 0) + v;
+    }
+  }
+  return any ? cost : null;
 }
 // Bauart für einen Turm wählbar (ab Stufe 2, einmalig)
 export function canTowerKind(state, u, kind) {

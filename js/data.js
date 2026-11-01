@@ -68,7 +68,7 @@ export const UNITS = {
   griffin: { name: 'Greifenreiter', cost: { food: 12, wood: 4, ore: 9 }, hp: 15, atk: 7, def: 0, move: 3, range: 1, flying: true, needs: 'barracks', desc: 'Ritter auf einem Greifen: Werte wie ein Ritter, fliegt aber über Berge, Seen und eigene Einheiten. Teurer als der Ritter, braucht eine Kaserne.' },
   knight: { name: 'Ritter', cost: { food: 8, wood: 2, ore: 6 }, hp: 15, atk: 7, def: 0, move: 3, range: 1, needs: 'barracks', desc: 'Stark und schnell. Braucht eine Kaserne.' },
   tower: { name: 'Turm', cost: { wood: 6, ore: 6 }, hp: 12, atk: 4, def: 0, move: 0, range: 1, structure: true, desc: 'Verteidigungsturm, schießt auf Gegner in Reichweite.' },
-  mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5, mana: 3 }, upkeep: { food: 2, mana: 1 }, hp: 10, atk: 2, def: 0, move: 2, range: 1, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben +15 % Verteidigung, Flächenschaden halbiert. Heilt statt anzugreifen, bis 3 Felder weit. Kostet Mana und 1 Mana Unterhalt pro Runde. Höchstens einer pro Stadt.' },
+  mage: { name: 'Zauberer', cost: { food: 6, wood: 4, ore: 5, mana: 3 }, upkeep: { food: 2, mana: 1 }, hp: 10, atk: 2, def: 0, move: 2, range: 2, healer: true, needs: 'sanctum', desc: 'Schutzaura: Eigene Einheiten daneben +15 % Verteidigung, Flächenschaden halbiert. Heilt statt anzugreifen, bis 3 Felder weit. Kostet Mana und 1 Mana Unterhalt pro Runde. Höchstens einer pro Stadt.' },
   blackknight: { name: 'Gepanzerter Schwarzer Ritter', short: 'Schwarzer Ritter', cost: { food: 35, wood: 15, ore: 40 }, hp: 35, atk: 15, def: 0, pen: 30, move: 3, range: 1, line: [1], supply: 2, needs: 'tavern', desc: 'Riesiger Ritter zu Fuß in schwarzer Rüstung mit Teufelshörnern. Kämpft wie die anderen Nahkämpfer, doch seine lange Axt reicht über 2 Felder: Er trifft den Gegner, den er angreift, und den Gegner direkt dahinter. Durchschlag 30, robust gegen Nahkampf und Pfeile. Kommt aus der Taverne.' },
   troll: { name: 'Schwarzer Troll', cost: { food: 45, wood: 25, ore: 50 }, hp: 70, atk: 12, def: 0, move: 4, range: 1, supply: 3, perRealm: 5, counters: 3, needs: 'lair', desc: 'Ein Titan: viel Leben und harte Schläge. Braucht eine Trollhöhle, höchstens 5 pro Reich.' },
   giant: { name: 'Riesentroll', cost: { food: 90, wood: 50, ore: 100 }, hp: 350, atk: 20, def: 0, move: 3, range: 1, supply: 3, sweep: true, counters: 3, fused: true, desc: 'Aus 5 Trollen verschmolzen (50 Mana): Leben aller fünf zusammen. Sein Rundumschlag trifft alle Gegner auf den 6 Nachbarfeldern auf einmal. Zieht 1 Feld weniger als ein Troll.' },
@@ -149,8 +149,8 @@ export const FACTIONS = {
   },
   witches: {
     name: 'Hexer', icon: '🔮', style: 'Magie und Flüche, brauchen viel Mana (Trauben), schlagen schwächer zu',
-    ability: 'Fluch: Jeder Treffer senkt die Verteidigung des Ziels bis zum nächsten eigenen Zug um 15 %. Greifen mit Feuer/Magie an (außer Belagerung), Angriff −10 %. Mana-Ertrag +50 %, jede Stadt +1 Mana. Einheiten kosten zusätzlich Mana, dafür weniger Erz.',
-    cost: { ore: 0.7 }, manaCost: 0.04, atk: { all: 0.9 }, magic: true, curse: 15, manaMul: 1.5, manaPerCity: 1,
+    ability: 'Fluch: Jeder Treffer senkt die Verteidigung des Ziels bis zum nächsten eigenen Zug um 15 %. Greifen mit Feuer/Magie an (außer Belagerung), Angriff −10 %. Mana-Ertrag +50 %, jede Stadt +1 Mana. Hexenmeister schießen 3 Felder weit. Einheiten ab dem Hexenritter kosten etwas Mana, dafür alle weniger Erz.',
+    cost: { ore: 0.7 }, manaCost: 0.02, manaFrom: 'knight', range: { mage: 1 }, atk: { all: 0.9 }, magic: true, curse: 15, manaMul: 1.5, manaPerCity: 1,
     aiUnits: { mage: 1.8, archer: 1.3, basilisk: 1.3 },
     names: {
       warrior: 'Kultist', archer: 'Irrlichtwerfer', rider: 'Nachtmahrreiter', defender: 'Lehmgolem', knight: 'Hexenritter', griffin: 'Besenhexe',
@@ -471,7 +471,6 @@ export const BOOST_COST = [60, 75, 90, 105, 120]; // Prozent des Kaufpreises
 export const BOOST_STATS = [['atk', 'Angriff', '⚔'], ['def', 'Verteidigung', '🛡'], ['hp', 'Leben', '❤'], ['pen', 'Durchschlag', '🗡']];
 export const SKILLS = {
   regen: { name: 'Selbstheilung', icon: '💚', desc: 'Heilt jede Runde 10 % des maximalen Lebens' },
-  hold: { name: 'Stellung halten', icon: '🪨', desc: '+10 % Verteidigung, wenn die Einheit in ihrem Zug nicht gezogen ist' },
   range1: { name: 'Weitschuss', icon: '🏹', desc: '+1 Reichweite' },
   range2: { name: 'Fernschuss', icon: '🎯', desc: '+2 Reichweite (statt +1)', req: 'range1' },
   firearrow: { name: 'Brandpfeile', icon: '🔥', desc: 'Flächenschaden: Gegner neben dem Ziel bekommen 25 % des Schadens' },
@@ -488,7 +487,7 @@ export function unitClass(type) {
   if (type === 'catapult' || type === 'trebuchet') return 'siege';
   return 'titan';
 }
-const CLASS_SKILLS = { melee: ['regen', 'hold'], ranged: ['range1', 'range2', 'firearrow', 'regen'], mage: ['freeze', 'areaheal', 'bomb'] };
+const CLASS_SKILLS = { melee: ['regen'], ranged: ['range1', 'range2', 'firearrow', 'regen'], mage: ['freeze', 'areaheal', 'bomb'] };
 export function skillsFor(type) {
   return CLASS_SKILLS[unitClass(type)] || [];
 }

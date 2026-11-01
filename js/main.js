@@ -7,7 +7,7 @@ import {
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, terrainDefense,
   canBoost, boostMax, boostStats, canTowerKind, rankXpNeed, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, canStorm, canFuse, fuseGroup, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
-  unitName, unitCost, factionOf,
+  unitName, unitCost, factionOf, boostAllCost,
 } from './game.js';
 import { planAction } from './ai.js';
 import { createDefenseGame, DEFENSE, DEFENSE_DIFFS, wavesInfo } from './defense.js';
@@ -846,6 +846,14 @@ function openBoost(u0) {
       if (quickAct(a, false)) { draw(); $('modalBox').scrollTop = top; }
     };
     const list = el('div', { class: 'tech-list' });
+    // Alle Werte auf einmal auf die höchste Stufe (Angriff, Verteidigung, Leben, Durchschlag)
+    const allCost = boostAllCost(S, u);
+    if (allCost) {
+      list.append(el('div', { class: 'tech-card' },
+        el('span', { class: 'ticon' }, '⏫'),
+        el('div', { class: 'binfo' }, el('b', {}, 'Alle Werte auf Maximum'), el('span', {}, `${boostStats(u).map((k) => BOOST_STATS.find((b) => b[0] === k)[1]).join(', ')} auf einmal auf Stufe ${boostMax(S)}`)),
+        el('button', { class: 'btn small', disabled: !my || !canAfford(p.res, allCost), onclick: () => buy({ type: 'boostAll', unitId: u.id }) }, costEl(allCost, p.res))));
+    }
     for (const [k, name, ic] of BOOST_STATS.filter(([k]) => boostStats(u).includes(k))) {
       const lvl = u.boost?.[k] || 0;
       const next = { ...u, boost: { ...(u.boost || {}), [k]: lvl + 1 } };
@@ -1529,7 +1537,7 @@ async function playEvent(ev, f, isAI, pan = true) {
     case 'boost':
       if (f > 0) R.ring(ev.idx, '#fde047', 500 * f);
       sound.play('chime', { pan: panOf(ev.idx), vol: isAI ? 0.3 : 1 });
-      R.floatText(ev.idx, `${BOOST_STATS.find((b) => b[0] === ev.stat)[2]} ${boostText(ev.stat, ev.level, ev.type)}`, '#fde68a', 1000 * Math.max(f, 0.6));
+      R.floatText(ev.idx, ev.stat === 'all' ? '⏫ Alle Werte auf Maximum' : `${BOOST_STATS.find((b) => b[0] === ev.stat)[2]} ${boostText(ev.stat, ev.level, ev.type)}`, '#fde68a', 1000 * Math.max(f, 0.6));
       break;
     case 'skill':
       if (f > 0) R.ring(ev.idx, '#fde047', 500 * f);
@@ -2599,7 +2607,7 @@ function renderHelp() {
     <p>Jede Stufe sieht man: goldene Steine am Sockel zählen die Stufen, neue Ausrüstung (Helm, Lanze, größerer Schild, zweites Schwert, Brandpfeile, Sprengbomben …), ab Stufe 4 schwarze Rüstung und auf Stufe 5 eine goldene Aura.</p>
     <h3>Einzel-Verbesserungen ⬆</h3>
     <p>Wähle eine eigene Einheit und tippe „⬆ Verbessern“: Diese Verbesserungen gelten nur für genau diese eine Einheit – verbesserte Einheiten erkennst du an schimmernden Sternen über dem Kopf: 1 Stern = verbessert, 2 Sterne = Angriff, Verteidigung, Leben oder Durchschlag auf Stufe 3, 3 violette Sterne = alles voll freigeschaltet. <b>Angriff</b> (+1 / +2 / +3), <b>Verteidigung</b> (+5 / +10 / +15 %), <b>Leben</b> (+3 / +6 / +10) und <b>Durchschlag</b> (10 / 20 / 30) haben je 3 Stufen; in der Burgverteidigung sogar 5 Stufen; jede Stufe kostet ${BOOST_COST.slice(0, 3).join(' / ')} % des Kaufpreises der Einheit – also etwas weniger als eine neue. Dazu kommen <b>Fähigkeiten</b> (je ${SKILL_COST} % des Kaufpreises):<br>
-    Nahkämpfer: 💚 Selbstheilung (10 % des Lebens pro Runde), 🪨 Stellung halten (+20 % Verteidigung, wenn sie in ihrem Zug nicht gezogen ist).<br>
+    Nahkämpfer: 💚 Selbstheilung (10 % des Lebens pro Runde).<br>
     Fernkämpfer (Schütze, Basilisk): 🏹 Weitschuss (+1 Reichweite), 🎯 Fernschuss (+2), 🔥 Brandpfeile (Nachbarn des Ziels bekommen 25 % des Schadens), 💚 Selbstheilung.<br>
     Zauberer: ❄️ Vereisen (ein Gegner bis 3 Felder weit setzt eine Runde aus, Titanen sind immun), ✨ Flächenheilung (beim Heilen bekommen die eigenen Nachbarn des Ziels 25 % ihres Lebens zurück), 💣 Bergsprengung (ein Gebirge bis 3 Felder weit wird zu begehbarem Lehm).<br>
     Katapulte, Triboke und Titanen haben keine Fähigkeiten, nur Werte. Alle Werte im Spiel sind ganze Zahlen.</p>
