@@ -6164,7 +6164,7 @@ const VK = {
     }
     // Haltung: Schultern setzen innen am Rumpf an; der hintere Arm liegt hinter dem Körper, nur seine Faust am Griff ist sichtbar
     const shN = [3.9, -19.8], shF = [-3.9, -19.8];
-    const armOpt = (bend) => ({ bare: st < 2, sleeve: '#9aa3ad', short: st >= 2, armored: false, skin, bend });
+    const armOpt = (bend) => ({ bare: true, armored: false, skin, bend });
     const ax0 = -1.6, ay0 = -6.5, ax1 = 11.6, ay1 = -40;
     const at = (t) => [ax0 + (ax1 - ax0) * t, ay0 + (ay1 - ay0) * t];
     const gAng = Math.atan2(ay1 - ay0, ax1 - ax0) + Math.PI / 2;
@@ -6361,13 +6361,16 @@ const VK = {
       tattoo();
     } else {
       // Große Axt mit beiden Händen schräg über der rechten Schulter, Ellbogen angewinkelt
+      // rechter Arm hinter dem Axtstiel, Faust danach darüber
+      const nh = at(0.47), ne = [8.8, -15.6];
+      rigArm(ctx, shN, nh, { ...armOpt(1), elbow: ne, grip: gAng });
       // Doppelaxt (Rasender: riesig, mit glühenden Runen)
       haft(ax0, ay0, ax1, ay1);
       ffAxe(ctx, ax1, ay1, Math.atan2(ay1 - ay0, ax1 - ax0), hasUp('k3a') ? 1.45 : 1.2, true);
       rune(ax1 - 3.4, ay1 - 0.6);
       if (hasUp('k3a')) ffGlow(ctx, ax1, ay1, 4, 'rgba(255,90,40,0.6)', 'rgba(255,0,0,0)');
       rigFist(ctx, far.h, far.grip, false, skin, far.elbow);
-      rigArm(ctx, shN, at(0.47), { ...armOpt(1), elbow: [8.8, -15.6], grip: gAng });
+      rigFist(ctx, nh, gAng, false, skin, ne);
       tattoo();
     }
     ctx.restore();
