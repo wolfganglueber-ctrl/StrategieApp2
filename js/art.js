@@ -6170,7 +6170,6 @@ const VK = {
     const gAng = Math.atan2(ay1 - ay0, ax1 - ax0) + Math.PI / 2;
     const far = hasUp('k3b') ? { h: [-3.4, -13.4], elbow: [-5.2, -15.6], grip: 0, hidden: true }
       : { h: at(0.26), elbow: [-4.4, -14.2], grip: gAng };
-    rigArm(ctx, shF, far.h, { ...armOpt(1), elbow: far.elbow, grip: far.grip });
     // Rumpf: breite Schultern, schmalere Hüfte
     const trunk = () => {
       ctx.beginPath();
@@ -6246,6 +6245,21 @@ const VK = {
     ctx.fillRect(-4.8, -9.8, 9.6, 1.6);
     ctx.fillStyle = '#d6d3d1';
     ctx.fillRect(-1, -10.1, 2, 2.2);
+    // linker Arm vor dem Körper, oben vom Mantel verdeckt
+    rigArm(ctx, shF, far.h, { ...armOpt(1), elbow: far.elbow, grip: far.grip });
+    ctx.fillStyle = grad(ctx, -8, -2.5, '#7a5a3a', '#3b2a1a');
+    ctx.beginPath();
+    ctx.moveTo(-6.2, -21.4);
+    ctx.lineTo(-2.6, -21.4);
+    ctx.quadraticCurveTo(-2.4, -17, -3.4, -14.8);
+    ctx.lineTo(-4.4, -13.2);
+    ctx.lineTo(-5.6, -14);
+    ctx.lineTo(-6.8, -12.6);
+    ctx.quadraticCurveTo(-8.4, -16, -6.2, -21.4);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.6);
+    fdFur(ctx, -5, -17, 2, 3.6, 'rgba(30,20,10,0.5)', 14, 1.1, 41, 1.7);
     // Fell über den Schultern mit Krallen
     ffFur(ctx, 0, -20.6, 7.2, '#6b4a2e');
     ctx.fillStyle = '#f5ecd5';
@@ -6270,33 +6284,37 @@ const VK = {
         ctx.fillStyle = '#c0c4cc';
         ctx.fillRect(bx - 0.5, 5.3, 1, 0.6);
       }
+      // Bärenkopf liegt direkt auf dem Kopf und fällt seitlich bis über die Ohren
       ctx.fillStyle = grad(ctx, -5, 5, '#8a6a46', '#3b2a1a');
       ctx.beginPath();
-      ctx.ellipse(0, -5.5, 5.6, 3.6, 0, Math.PI, 0);
-      ctx.lineTo(5.6, -4);
-      ctx.quadraticCurveTo(0, -2.5, -5.6, -4);
+      ctx.moveTo(-5, 0.6);
+      ctx.quadraticCurveTo(-5.6, -3.4, -4.6, -4.8);
+      ctx.ellipse(0, -3, 5.2, 3.6, 0, Math.PI * 1.1, Math.PI * 1.9);
+      ctx.quadraticCurveTo(5.6, -3.4, 5, -1);
+      ctx.quadraticCurveTo(0.2, -2.4, -3, -1.2);
+      ctx.quadraticCurveTo(-4, -0.4, -3.6, 0.8);
       ctx.closePath();
       ctx.fill();
       outline(ctx, 0.6);
-      fdFur(ctx, 0, -6.5, 5, 2.4, 'rgba(30,20,10,0.5)', 14, 0.9, 31, 1.2);
-      for (const sx of [-4, 4]) {
+      fdFur(ctx, 0, -4.2, 4.6, 2.2, 'rgba(30,20,10,0.5)', 14, 0.9, 31, 1.2);
+      for (const sx of [-3.6, 3.4]) {
         ctx.beginPath();
-        ctx.arc(sx, -8.7, 1.5, 0, Math.PI * 2);
+        ctx.arc(sx, -6.3, 1.3, 0, Math.PI * 2);
         ctx.fillStyle = '#6b4a2e';
         ctx.fill();
         outline(ctx, 0.5);
       }
       ctx.fillStyle = '#f5ecd5';
-      for (const tx of [-3.6, -1.8, 1.8, 3.6]) {
+      for (const tx of [-1.6, 0.4, 2.4, 4.2]) {
         ctx.beginPath();
-        ctx.moveTo(tx - 0.5, -3.9);
-        ctx.lineTo(tx, -2.5);
-        ctx.lineTo(tx + 0.5, -3.9);
+        ctx.moveTo(tx - 0.45, -2.2 + Math.abs(tx - 1.3) * 0.15);
+        ctx.lineTo(tx, -1.3 + Math.abs(tx - 1.3) * 0.15);
+        ctx.lineTo(tx + 0.45, -2.2 + Math.abs(tx - 1.3) * 0.15);
         ctx.fill();
       }
       if (st >= 2) {
-        ctx.fillStyle = steel(ctx, -4, 4, -4, -2);
-        ctx.fillRect(-4.6, -3.6, 9.2, 1);
+        ctx.fillStyle = steel(ctx, -4, 4, -3, -1);
+        ctx.fillRect(-3.8, -2.7, 8.6, 0.8);
       }
       if (st >= 5) {
         ctx.fillStyle = '#ef4444';
