@@ -1435,10 +1435,13 @@ function torso(ctx, x, y, col, kind = 'tunic') {
     ctx.save();
     body();
     ctx.clip();
-    ctx.fillStyle = 'rgba(40,46,54,0.45)';
-    for (let yy = top + 1; yy < waist + 1; yy += 1.4) {
-      for (let xx = x - 6 + ((yy - top) % 2.8 < 1.4 ? 0.7 : 0); xx < x + 6; xx += 1.4) {
-        ctx.fillRect(xx, yy, 0.6, 0.6);
+    ctx.strokeStyle = 'rgba(40,46,54,0.5)';
+    ctx.lineWidth = 0.25;
+    for (let yy = top + 1, row = 0; yy < waist + 1.5; yy += 1.1, row++) {
+      for (let xx = x - 6 + (row % 2 ? 0.6 : 0); xx < x + 6; xx += 1.2) {
+        ctx.beginPath();
+        ctx.arc(xx, yy, 0.55, 0, Math.PI * 2);
+        ctx.stroke();
       }
     }
     ctx.restore();
@@ -1453,6 +1456,21 @@ function torso(ctx, x, y, col, kind = 'tunic') {
     ctx.moveTo(x - 0.4, top + 1);
     ctx.lineTo(x - 0.4, waist);
     ctx.stroke();
+    // Bauchreifen und Nieten
+    ctx.strokeStyle = 'rgba(25,28,34,0.55)';
+    ctx.lineWidth = 0.4;
+    for (let k = 1; k <= 3; k++) {
+      ctx.beginPath();
+      ctx.moveTo(x - 5.4, waist + 1 - k * 1.7);
+      ctx.quadraticCurveTo(x, waist + 2 - k * 1.7, x + 5.4, waist + 1 - k * 1.7);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#e5e7eb';
+    for (const [rx, ry] of [[-4.4, top + 2.4], [4.4, top + 2.4], [-4.6, waist - 1], [4.6, waist - 1]]) {
+      ctx.beginPath();
+      ctx.arc(x + rx, ry, 0.35, 0, Math.PI * 2);
+      ctx.fill();
+    }
     shine(ctx, x - 2.6, top + 4, 1.4, 2.6, 0.6);
   } else {
     const c = kind === 'leather' ? { light: '#b98756', main: '#8a5a30', dark: '#4d3018' } : col;
@@ -1692,12 +1710,26 @@ function helmetInner(ctx, x, y, type, col) {
     ctx.roundRect ? ctx.roundRect(x - 5.2, y - 6.5, 10.4, 11.5, [3, 3, 1.5, 1.5]) : ctx.rect(x - 5.2, y - 6.5, 10.4, 11.5);
     ctx.fill();
     outline(ctx, 0.8);
+    // Stirnband mit Nieten, Sehschlitz mit Glanz, Atemlöcher
+    ctx.fillStyle = steel(ctx, x - 5, x + 5, y - 4, y - 2);
+    ctx.fillRect(x - 5.2, y - 3.4, 10.4, 1.3);
+    outline(ctx, 0.3);
     ctx.fillStyle = '#1b1d21';
     ctx.fillRect(x - 4.2, y - 1.6, 8.4, 1.3);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillRect(x - 4, y - 1.6, 8, 0.3);
     ctx.fillStyle = '#e9c45a';
     ctx.fillRect(x - 0.5, y - 6.3, 1, 11);
-    for (const hy of [1.5, 3]) for (const hx of [1.5, 3]) { ctx.fillStyle = '#1b1d21'; ctx.fillRect(x + hx, y + hy, 0.6, 0.6); }
+    ctx.fillStyle = '#f5d77a';
+    for (const hx of [-4.4, -2.2, 2.2, 4.4]) {
+      ctx.beginPath();
+      ctx.arc(x + hx, y - 2.75, 0.32, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#1b1d21';
+    for (const hy of [1.2, 2.5, 3.8]) for (const hx of [1.4, 2.7, 4]) ctx.fillRect(x + hx, y + hy, 0.55, 0.55);
     shine(ctx, x - 3, y - 3.8, 0.9, 2);
+    shine(ctx, x - 3.6, y + 2, 0.5, 1.2, 0.35);
   } else if (type === 'hood') {
     ctx.fillStyle = cloth(ctx, x - 6, x + 6, col);
     ctx.beginPath();
@@ -1819,6 +1851,24 @@ function kiteShield(ctx, x, y, w, h, col, sign = 'cross') {
     ctx.closePath();
     ctx.fill();
   }
+  // Wappenkante, Nieten im Rand, Kratzer und Glanz
+  ctx.strokeStyle = 'rgba(120,80,10,0.6)';
+  ctx.lineWidth = 0.35;
+  ctx.stroke();
+  ctx.fillStyle = '#d6dbe2';
+  for (const [rx, ry] of [[-0.42, 0.06], [0, 0.06], [0.42, 0.06], [0.44, 0.4], [-0.44, 0.4], [0.3, 0.72], [-0.3, 0.72]]) {
+    ctx.beginPath();
+    ctx.arc(x + w * rx, y + h * ry + 0.3, Math.max(0.3, w * 0.035), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 0.3;
+  ctx.beginPath();
+  ctx.moveTo(x + w * 0.15, y + h * 0.2);
+  ctx.lineTo(x + w * 0.3, y + h * 0.28);
+  ctx.moveTo(x - w * 0.2, y + h * 0.6);
+  ctx.lineTo(x - w * 0.05, y + h * 0.66);
+  ctx.stroke();
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.beginPath();
   ctx.moveTo(x - w / 2 + 1, y + 1);
@@ -2896,8 +2946,9 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       // Ritter wächst mit: ohne Helm mit Schwert → Lanze → Helm und Rossharnisch → schwarze Rüstung → Ordensritter
       const st = FIGST.stage;
       const coat = st >= 4 ? '#3a3a42' : '#e4e4ea', mane = st >= 4 ? '#15151a' : '#8f8f99';
-      horse2(ctx, coat, mane, col, { armored: st >= 2 });
+      horse2(ctx, coat, mane, col, { armored: st >= 2, dapple: st < 4, feather: st >= 4 ? '#2a2a30' : '#f4f4f6' });
       fdReins(ctx, [4.5, -27]);
+      fdCape(ctx, col);
       fdRiderLeg(ctx, st >= 2, '#6b4a2e');
       torso(ctx, -1, -11, col, st >= 2 ? 'plate' : 'mail');
       fdTabard(ctx, -1, col, 'lion');
@@ -4979,6 +5030,18 @@ function horse2(ctx, coat, mane, col, opts = {}) {
     ctx.arc(1 + k * 2.4, -12, 4, Math.PI * 1.05, Math.PI * 1.45);
     ctx.stroke();
   }
+  // Apfelschimmel: helle Flecken im Fell
+  if (opts.dapple) {
+    ctx.strokeStyle = 'rgba(90,90,105,0.35)';
+    ctx.lineWidth = 0.35;
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    for (let k = 0; k < 16; k++) {
+      ctx.beginPath();
+      ctx.arc(-13 + hash(k * 7 + 2) * 25, -19 + hash(k * 13 + 5) * 9, 0.7 + hash(k) * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
   // Glanz auf Kruppe und Schulter
   shine(ctx, -10, -18.5, 3.5, 1.4, 0.22);
   shine(ctx, 8, -17, 2, 1.2, 0.18);
@@ -5075,6 +5138,34 @@ function horse2(ctx, coat, mane, col, opts = {}) {
   // Muskel am Unterarm und Gaskin
   fdMuscle(ctx, 11, -8.5, 1.6, 2.6, 0.1, 0.25);
   fdMuscle(ctx, -12, -9.5, 1.8, 3, -0.3, 0.25);
+  // Fesselbehang (Kaltblut) oder Rauch an den Hufen
+  for (const [fx, fy] of [[11.6, 1], [-11, 1]]) {
+    if (opts.smoke) {
+      ctx.fillStyle = 'rgba(200,180,230,0.35)';
+      for (let k = 0; k < 3; k++) {
+        ctx.beginPath();
+        ctx.arc(fx - 2 + k * 2, fy + 1.4 - k * 0.4, 1.4 + k * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (opts.feather) {
+      ctx.fillStyle = opts.feather;
+      ctx.beginPath();
+      ctx.moveTo(fx - 1.6, fy - 2);
+      ctx.quadraticCurveTo(fx - 2.6, fy + 0.6, fx - 1.4, fy + 1.6);
+      ctx.lineTo(fx + 1.4, fy + 1.6);
+      ctx.quadraticCurveTo(fx + 0.6, fy, fx + 1.2, fy - 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+      ctx.lineWidth = 0.3;
+      ctx.beginPath();
+      for (const d of [-1, 0, 1]) {
+        ctx.moveTo(fx + d * 0.6, fy - 1.4);
+        ctx.lineTo(fx + d * 0.8, fy + 1.4);
+      }
+      ctx.stroke();
+    }
+  }
   // Zaumzeug in Spielerfarbe mit Nieten
   ctx.strokeStyle = col.dark;
   ctx.lineWidth = 0.9;
@@ -5109,7 +5200,8 @@ function horse2(ctx, coat, mane, col, opts = {}) {
     ctx.lineTo(9, -21.4);
     ctx.quadraticCurveTo(14.5, -19, 14.4, -13);
     ctx.lineTo(14.6, -3.8);
-    for (let k = 0; k <= 8; k++) ctx.lineTo(14.6 - k * 3.75, k % 2 ? -1.6 : -3.8);
+    // Saum: Zacken, zerfetzt (Hexer) mit unregelmäßigen Fetzen
+    for (let k = 0; k <= 8; k++) ctx.lineTo(14.6 - k * 3.75, opts.tattered ? -3.8 + hash(k * 5 + 1) * 3.4 : k % 2 ? -1.6 : -3.8);
     ctx.lineTo(-16, -4.5);
     ctx.quadraticCurveTo(-16.8, -13, -15, -19);
     ctx.closePath();
@@ -5137,10 +5229,11 @@ function horse2(ctx, coat, mane, col, opts = {}) {
     ctx.moveTo(-16, -6.4);
     ctx.lineTo(14.6, -6);
     ctx.stroke();
-    ctx.fillStyle = '#f2d06a';
+    ctx.fillStyle = opts.tattered ? '#a3e635' : '#f2d06a';
     for (let k = 0; k <= 8; k++) {
+      if (opts.tattered && k % 3) continue;
       ctx.beginPath();
-      ctx.arc(14.6 - k * 3.75, k % 2 ? -1.6 : -3.8, 0.45, 0, Math.PI * 2);
+      ctx.arc(14.6 - k * 3.75, opts.tattered ? -3.8 + hash(k * 5 + 1) * 3.4 : k % 2 ? -1.6 : -3.8, 0.45, 0, Math.PI * 2);
       ctx.fill();
     }
     // Rosspanzer am Hals (Kanz) und Rossstirn mit Dorn
@@ -5241,6 +5334,26 @@ function horse2(ctx, coat, mane, col, opts = {}) {
   }
 }
 
+// Wehender Umhang des Reiters über dem Pferderücken (zerfetzt: Hexer)
+function fdCape(ctx, col, tattered = false) {
+  ctx.fillStyle = cloth(ctx, -16, -2, { light: shade(col.main, 0.15), main: col.dark, dark: shade(col.dark, -0.4) });
+  ctx.beginPath();
+  ctx.moveTo(-2.5, -33);
+  ctx.quadraticCurveTo(-9, -31, -15, -24);
+  for (let k = 0; k <= 4; k++) ctx.lineTo(-15 + k * 2, -22 + (tattered ? hash(k * 3 + 1) * 3 : (k % 2) * 1.2));
+  ctx.quadraticCurveTo(-5, -24, 0.5, -29);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.6);
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = 0.4;
+  ctx.beginPath();
+  ctx.moveTo(-4, -31);
+  ctx.quadraticCurveTo(-9, -27, -12, -22.5);
+  ctx.moveTo(-2, -30);
+  ctx.quadraticCurveTo(-6, -26, -8, -22.2);
+  ctx.stroke();
+}
 // Zügel vom Gebiss bis zur Reiterhand
 function fdReins(ctx, hand, c = '#2a1a0e') {
   ctx.strokeStyle = c;
@@ -5301,18 +5414,58 @@ function fdTabard(ctx, x, col, sign) {
   ctx.strokeStyle = '#e9c45a';
   ctx.lineWidth = 0.5;
   ctx.stroke();
+  // gestickter Rand
+  ctx.setLineDash([0.5, 0.6]);
+  ctx.strokeStyle = 'rgba(255,240,180,0.8)';
+  ctx.lineWidth = 0.35;
+  ctx.beginPath();
+  ctx.moveTo(x - 3.6, -30.8);
+  ctx.lineTo(x + 3.6, -30.8);
+  ctx.lineTo(x + 4.3, -21.4);
+  ctx.moveTo(x - 3.6, -30.8);
+  ctx.lineTo(x - 4.3, -21.4);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Faltenwurf
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  ctx.lineWidth = 0.4;
+  ctx.beginPath();
+  ctx.moveTo(x - 2.6, -24);
+  ctx.lineTo(x - 2.4, -19.5);
+  ctx.moveTo(x + 2.6, -24);
+  ctx.lineTo(x + 2.4, -19.5);
+  ctx.stroke();
   ctx.fillStyle = '#f2d06a';
   if (sign === 'lion') {
-    // steigender Löwe, vereinfacht
+    // steigender Löwe mit Krone, Mähne und Schwanz
     ctx.beginPath();
-    ctx.moveTo(x - 1.6, -21.5);
-    ctx.lineTo(x - 1, -25);
-    ctx.lineTo(x - 2.4, -27.4);
-    ctx.lineTo(x - 0.6, -29);
-    ctx.lineTo(x + 0.9, -28.2);
-    ctx.lineTo(x + 0.4, -26.6);
-    ctx.lineTo(x + 2, -25);
-    ctx.lineTo(x + 1.4, -21.5);
+    ctx.moveTo(x - 1.8, -23.6);
+    ctx.lineTo(x - 1.2, -26);
+    ctx.lineTo(x - 2.8, -27.6);
+    ctx.lineTo(x - 1.6, -28.2);
+    ctx.lineTo(x - 0.4, -29.6);
+    ctx.lineTo(x + 1.2, -28.8);
+    ctx.lineTo(x + 0.9, -27.6);
+    ctx.lineTo(x + 2.4, -26.6);
+    ctx.lineTo(x + 1.6, -25.8);
+    ctx.lineTo(x + 2, -23.6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#f2d06a';
+    ctx.lineWidth = 0.4;
+    ctx.beginPath();
+    ctx.moveTo(x + 1.8, -24.4);
+    ctx.quadraticCurveTo(x + 3.6, -25, x + 3, -27);
+    ctx.stroke();
+    ctx.fillStyle = '#b91c1c';
+    ctx.fillRect(x + 0.4, -28.9, 0.6, 0.5);
+    ctx.fillStyle = '#fde68a';
+    ctx.beginPath();
+    ctx.moveTo(x - 1, -29.6);
+    ctx.lineTo(x - 0.8, -30.5);
+    ctx.lineTo(x - 0.3, -30);
+    ctx.lineTo(x + 0.2, -30.6);
+    ctx.lineTo(x + 0.5, -29.6);
     ctx.closePath();
     ctx.fill();
   } else if (sign === 'skull') ffSkull(ctx, x, -25.5, 1.8, '#a3e635');
@@ -5807,6 +5960,23 @@ const VK = {
       ctx.fill();
     }
     face(ctx, 0, -20.5, st >= 5 ? '#b45309' : null);
+    // geflochtene Bartzöpfe mit Ringen, Narbe
+    for (const bx of [-1, 1.4]) {
+      ctx.strokeStyle = st >= 5 ? '#b45309' : '#d6a24a';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(bx, -16.5);
+      ctx.lineTo(bx + 0.2, -13.6);
+      ctx.stroke();
+      ctx.fillStyle = '#c0c4cc';
+      ctx.fillRect(bx - 0.5, -15.2, 1, 0.6);
+    }
+    ctx.strokeStyle = 'rgba(150,40,40,0.7)';
+    ctx.lineWidth = 0.4;
+    ctx.beginPath();
+    ctx.moveTo(2.4, -23);
+    ctx.lineTo(3.4, -20.6);
+    ctx.stroke();
     // Bärenkopf als Kapuze
     ctx.fillStyle = grad(ctx, -5, 5, '#8a6a46', '#3b2a1a');
     ctx.beginPath();
@@ -5822,12 +5992,29 @@ const VK = {
       ctx.fill();
       outline(ctx, 0.5);
     }
+    // Zähne des Bärenkopfs über der Stirn
+    ctx.fillStyle = '#f5ecd5';
+    for (const tx of [-3.6, -1.8, 1.8, 3.6]) {
+      ctx.beginPath();
+      ctx.moveTo(tx - 0.5, -24.4);
+      ctx.lineTo(tx, -23);
+      ctx.lineTo(tx + 0.5, -24.4);
+      ctx.fill();
+    }
     if (st >= 5) {
       ctx.fillStyle = '#ef4444';
       ctx.fillRect(0.2, -21.2, 3, 0.9);
     }
     // Waffen: Doppelaxt (Stufe 1+), beidhändig (k3a) oder mit Schild (k3b)
     arm(ctx, 4.8, -14, 9.5, -21, skinOf());
+    // Knotenmuster-Tätowierung auf dem Oberarm
+    ctx.strokeStyle = 'rgba(30,60,120,0.7)';
+    ctx.lineWidth = 0.35;
+    ctx.beginPath();
+    ctx.arc(6, -15.6, 0.8, 0, Math.PI * 1.6);
+    ctx.moveTo(6.8, -16.9);
+    ctx.lineTo(7.4, -17.8);
+    ctx.stroke();
     ffLine(ctx, 9.5, -16, 14, -40, 2, ffWood());
     // Lederwicklung am Griff und Armringe
     ctx.strokeStyle = '#3b2616';
@@ -6307,13 +6494,34 @@ const WT = {
     ctx.save();
     ctx.translate(0, 6);
     horse2(ctx, '#2b2333', '#4c1d95', col, {
-      armored: st >= 2, barding: { main: '#3b2a55', dark: '#140a20', light: col.main }, eyes: 'rgba(190,255,120,0.95)', flameMane: '#c084fc', emblem: false,
+      armored: st >= 2, barding: { main: '#3b2a55', dark: '#140a20', light: col.main }, eyes: 'rgba(190,255,120,0.95)', flameMane: '#c084fc', emblem: false, tattered: true, smoke: true,
       chanfron: (c) => ffSkull(c, 21.2, -29.5, 1.8, '#a3e635'),
     });
     fdReins(ctx, [4.5, -27], '#1c1917');
     fdRiderLeg(ctx, st >= 2, '#2a1838');
     torso(ctx, -1, -11, col, st >= 2 ? 'plate' : 'mail');
+    fdCape(ctx, { main: '#2a1838', dark: '#0b0612', light: col.main }, true);
     fdTabard(ctx, -1, { main: '#3b2a55', dark: '#140a20', light: col.light }, 'skull');
+    // leuchtende Runen auf der Rüstung, Kette mit Schädel
+    ctx.strokeStyle = 'rgba(190,255,120,0.9)';
+    ctx.lineWidth = 0.4;
+    ctx.beginPath();
+    for (const [rx, ry] of [[-4.2, -29], [3, -29]]) {
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(rx + 0.6, ry + 2);
+      ctx.lineTo(rx - 0.4, ry + 3);
+      ctx.moveTo(rx + 0.2, ry + 1);
+      ctx.lineTo(rx + 1, ry + 0.6);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = '#9ca3af';
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([0.8, 0.5]);
+    ctx.beginPath();
+    ctx.moveTo(-5, -31.5);
+    ctx.quadraticCurveTo(-1, -26, 3.5, -31);
+    ctx.stroke();
+    ctx.setLineDash([]);
     if (st >= 2) {
       fdPauldron(ctx, 3, -31.5);
       ctx.fillStyle = '#e7e5e4';
@@ -7173,8 +7381,20 @@ const DK = {
     ctx.save();
     ctx.translate(0, 6);
     dkDrake(ctx, st >= 4 ? '#3f1d0e' : '#7c2d12', st >= 2, col);
+    fdCape(ctx, col);
+    // Echsenschwanz des Reiters hängt seitlich herab
+    ctx.fillStyle = grad(ctx, -8, -2, DK_SKIN[0], DK_SKIN[1]);
+    ctx.beginPath();
+    ctx.moveTo(-3, -22);
+    ctx.quadraticCurveTo(-8, -18, -7.5, -10);
+    ctx.quadraticCurveTo(-6, -15, -1.5, -20);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.5);
     fdRiderLeg(ctx, st >= 2, DK_SKIN[1]);
+    if (st < 2) fdScales(ctx, -0.4, -15.5, 2.2, 4.5, 'rgba(20,40,5,0.45)', 0.7);
     torso(ctx, -1, -11, col, st >= 2 ? 'plate' : 'mail');
+    if (st < 2) fdScales(ctx, -1, -27, 5, 4.5, 'rgba(20,40,5,0.35)', 0.8);
     fdTabard(ctx, -1, col, 'flame');
     if (st >= 2) fdPauldron(ctx, 3, -31.5);
     dkHead(ctx, -1, -37.5);
