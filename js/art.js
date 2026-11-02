@@ -4806,24 +4806,75 @@ function rigLimb(ctx, a, j, b, wa, wj, wb, cUpper, cLower, cap = null) {
   }
   if (cap) cap(j);
 }
-// Faust, die einen Griff in Richtung ang umschließt (Knöchel sichtbar); armored = Panzerhandschuh
-function rigFist(ctx, p, ang, armored, skin) {
+// Faust um einen Griff: ang = Griffwinkel + 90° (wie bisher), wrist = Ellbogen (bestimmt, von welcher Seite die Hand kommt).
+// Handrücken zum Betrachter, Knöchelreihe, vier Finger umschließen den Griff und zeigen zur Gegenseite, Daumen liegt oben darüber.
+function rigFist(ctx, p, ang, armored, skin, wrist = null) {
   ctx.save();
   ctx.translate(p[0], p[1]);
   ctx.rotate(ang);
-  ctx.fillStyle = armored ? steel(ctx, -2, 2, -2, 2) : grad(ctx, -2, 2, shade(skin, 0.2), shade(skin, -0.25));
-  ctx.beginPath();
-  ctx.roundRect ? ctx.roundRect(-1.3, -1.9, 2.6, 3.8, 1) : ctx.rect(-1.3, -1.9, 2.6, 3.8);
-  ctx.fill();
-  outline(ctx, 0.45);
-  ctx.strokeStyle = armored ? 'rgba(30,30,35,0.6)' : 'rgba(120,60,30,0.5)';
-  ctx.lineWidth = 0.3;
-  ctx.beginPath();
-  for (const k of [-0.9, 0, 0.9]) {
-    ctx.moveTo(1.3, k);
-    ctx.lineTo(0.4, k);
+  // Handgelenk liegt immer auf der −x-Seite: sonst spiegeln
+  if (wrist) {
+    const dx = wrist[0] - p[0], dy = wrist[1] - p[1];
+    if (dx * Math.cos(ang) + dy * Math.sin(ang) > 0) ctx.scale(-1, 1);
   }
-  ctx.stroke();
+  const base = armored ? null : skin;
+  const fill = (x0, x1) => (armored ? steel(ctx, x0, x1, -2, 2) : grad(ctx, x0, x1, shade(base, 0.25), shade(base, -0.3)));
+  // Handrücken
+  ctx.fillStyle = fill(-2.6, 0.6);
+  ctx.beginPath();
+  ctx.moveTo(-2.6, -1.4);
+  ctx.quadraticCurveTo(-1.4, -2.2, 0.2, -2);
+  ctx.lineTo(0.4, 2);
+  ctx.quadraticCurveTo(-1.4, 2.3, -2.6, 1.4);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.4);
+  // vier Finger um den Griff, Fingerspitzen auf der Gegenseite
+  for (let k = 0; k < 4; k++) {
+    const y = -1.9 + k * 0.97;
+    ctx.fillStyle = fill(0, 1.8);
+    ctx.beginPath();
+    ctx.moveTo(0, y + 0.05);
+    ctx.lineTo(1.2, y + 0.05);
+    ctx.arc(1.2, y + 0.47, 0.42, -Math.PI / 2, Math.PI / 2);
+    ctx.lineTo(0, y + 0.89);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.3);
+    // Fingergelenk
+    ctx.strokeStyle = armored ? 'rgba(30,30,35,0.6)' : 'rgba(120,60,30,0.45)';
+    ctx.lineWidth = 0.25;
+    ctx.beginPath();
+    ctx.moveTo(0.75, y + 0.2);
+    ctx.lineTo(0.75, y + 0.75);
+    ctx.stroke();
+  }
+  // Knöchelreihe mit Glanz
+  ctx.fillStyle = armored ? 'rgba(255,255,255,0.55)' : 'rgba(255,240,220,0.5)';
+  for (let k = 0; k < 4; k++) {
+    ctx.beginPath();
+    ctx.arc(-0.1, -1.45 + k * 0.97, 0.32, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Daumen legt sich oben über den Zeigefinger
+  ctx.fillStyle = fill(-2, 1);
+  ctx.beginPath();
+  ctx.moveTo(-2.2, -1.2);
+  ctx.quadraticCurveTo(-1, -2.6, 0.9, -2.3);
+  ctx.quadraticCurveTo(1.3, -1.8, 0.7, -1.5);
+  ctx.quadraticCurveTo(-0.6, -1.6, -1.6, -0.6);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.3);
+  if (armored) {
+    // Stulpe des Panzerhandschuhs
+    ctx.strokeStyle = 'rgba(30,30,35,0.55)';
+    ctx.lineWidth = 0.3;
+    ctx.beginPath();
+    ctx.moveTo(-1.6, -1.8);
+    ctx.lineTo(-1.6, 1.8);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 // Arm von der Schulter s zur Hand h. o: { l1, l2, bend, sleeve, armored, skin, grip (Winkel des Griffs), bare }
@@ -4851,7 +4902,7 @@ function rigArm(ctx, s, h, o = {}) {
     ctx.fillStyle = o.cuff;
     ctx.fill();
   }
-  rigFist(ctx, h, o.grip ?? Math.atan2(h[1] - e[1], h[0] - e[0]), o.armored, skin);
+  rigFist(ctx, h, o.grip ?? Math.atan2(h[1] - e[1], h[0] - e[0]), o.armored, skin, e);
   return e;
 }
 // Bein von der Hüfte zur Ferse; Fuß zeigt nach rechts. o: { l1, l2, bend, trouser, armored, boot }
@@ -6117,8 +6168,7 @@ const VK = {
     const ax0 = -1.6, ay0 = -6.5, ax1 = 11.6, ay1 = -40;
     const at = (t) => [ax0 + (ax1 - ax0) * t, ay0 + (ay1 - ay0) * t];
     const gAng = Math.atan2(ay1 - ay0, ax1 - ax0) + Math.PI / 2;
-    const far = hasUp('k3a') ? { h: [1.2, -12.6], elbow: [-4.2, -14.6], grip: -0.2 + Math.PI / 2 }
-      : hasUp('k3b') ? { h: [-3.4, -13.4], elbow: [-5.2, -15.6], grip: 0, hidden: true }
+    const far = hasUp('k3b') ? { h: [-3.4, -13.4], elbow: [-5.2, -15.6], grip: 0, hidden: true }
       : { h: at(0.26), elbow: [-4.4, -14.2], grip: gAng };
     rigArm(ctx, shF, far.h, { ...armOpt(1), elbow: far.elbow, grip: far.grip });
     // Rumpf: breite Schultern, schmalere Hüfte
@@ -6283,18 +6333,7 @@ const VK = {
       ctx.arc(5.8, -17.4, 0.8, 0, Math.PI * 1.6);
       ctx.stroke();
     };
-    if (hasUp('k3a')) {
-      // Zwei Äxte in Kampfhaltung: linke Axt tief vor dem Körper zur Abwehr, rechte zum Schlag über den Kopf ausgeholt
-      haft(-1.6, -12, 11.2, -15);
-      ffAxe(ctx, 11.2, -15, Math.atan2(-3, 12.8), 0.95);
-      rigFist(ctx, far.h, far.grip, false, skin);
-      const rh = [5.4, -29.6];
-      haft(rh[0] + 0.6, rh[1] + 3, rh[0] - 3.6, rh[1] - 13);
-      ffAxe(ctx, rh[0] - 3.6, rh[1] - 13, Math.atan2(-16, -4.2), 1.05, st >= 1);
-      rune(rh[0] - 6, rh[1] - 12);
-      rigArm(ctx, shN, rh, { ...armOpt(1), elbow: [9, -24.2], grip: Math.atan2(-16, -4.2) + Math.PI / 2 });
-      tattoo();
-    } else if (hasUp('k3b')) {
+    if (hasUp('k3b')) {
       // Schild vor der Brust, Axt einhändig erhoben
       ffVikingShield(ctx, -5.4, -13.6, 8.5, col);
       haft(9.4, -19.4, 12, -40);
@@ -6304,10 +6343,12 @@ const VK = {
       tattoo();
     } else {
       // Große Axt mit beiden Händen schräg über der rechten Schulter, Ellbogen angewinkelt
+      // Doppelaxt (Rasender: riesig, mit glühenden Runen)
       haft(ax0, ay0, ax1, ay1);
-      ffAxe(ctx, ax1, ay1, Math.atan2(ay1 - ay0, ax1 - ax0), 1.2, st >= 1);
+      ffAxe(ctx, ax1, ay1, Math.atan2(ay1 - ay0, ax1 - ax0), hasUp('k3a') ? 1.45 : 1.2, true);
       rune(ax1 - 3.4, ay1 - 0.6);
-      rigFist(ctx, far.h, far.grip, false, skin);
+      if (hasUp('k3a')) ffGlow(ctx, ax1, ay1, 4, 'rgba(255,90,40,0.6)', 'rgba(255,0,0,0)');
+      rigFist(ctx, far.h, far.grip, false, skin, far.elbow);
       rigArm(ctx, shN, at(0.47), { ...armOpt(1), elbow: [8.8, -15.6], grip: gAng });
       tattoo();
     }
