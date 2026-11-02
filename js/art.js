@@ -4911,18 +4911,20 @@ function rigRider(ctx, col, o) {
   if (o.scales) fdScales(ctx, -1, -27, 5, 4.5, 'rgba(20,40,5,0.35)', 0.8);
   if (o.sign) fdTabard(ctx, -1, o.tabardCol || col, o.sign);
   if (o.scabbard !== false) fdScabbard(ctx, -3.5, -21.5, 11);
-  if (o.armored) fdPauldron(ctx, 3.2, -31.2);
   if (o.extra) o.extra(ctx);
   rigNeck(ctx, -0.6, -34.6, -32.4, o.armored ? '#9aa3ad' : skin);
   rigHead(ctx, -0.5, -36.8, 0.82, () => o.head(ctx));
+  const shoulderCap = () => { if (o.armored) fdPauldron(ctx, sh0[0] + 0.4, sh0[1] - 0.2); };
   const [sw, sh, ss, sc] = o.shield || [8, 13, 'chevron', col];
   kiteShield(ctx, -7.6, -32.5, sw, sh, sc, ss);
-  const sh0 = [1.4, -31];
+  // Schulter hinter dem Kopf (wie beim Lanzenreiter von der Seite gesehen)
+  const sh0 = [-2.4, -31];
   if (o.weapon === 'sword') {
     // Schwert erhoben, Ellbogen außen unten
-    const h = [7.6, -35.2];
+    const h = [6.6, -35.4];
     sword(ctx, h[0], h[1] + 1.6, h[0] + 4.2, h[1] - 15);
-    rigArm(ctx, sh0, h, { sleeve, armored: o.armored, skin, bend: 1, grip: Math.atan2(-16.6, 4.2) + Math.PI / 2 });
+    rigArm(ctx, sh0, h, { sleeve, armored: o.armored, skin, l1: 5.8, l2: 6, bend: 1, grip: Math.atan2(-16.6, 4.2) + Math.PI / 2 });
+    shoulderCap();
     return;
   }
   // Eingelegte Lanze: unter der Achsel, flach nach vorn, Hand vor der Brust
@@ -4986,7 +4988,8 @@ function rigRider(ctx, col, o) {
   // Lanze unter der Achsel: Oberarm drückt sie an den Körper, Unterarm liegt an der Lanze, Hand vor der Brust
   // Wie beim Lanzenritt: Oberarm hängt von der Schulter herab bis unter die Lanze, Unterarm nach vorn, Faust direkt hinter der Brechscheibe
   const h = [x0 + Math.cos(ang) * 22.4, y0 + Math.sin(ang) * 22.4 + 0.6];
-  rigArm(ctx, sh0, h, { sleeve, armored: o.armored, skin, elbow: [0.2, -24.2], grip: ang + Math.PI / 2 });
+  rigArm(ctx, sh0, h, { sleeve, armored: o.armored, skin, elbow: [-1.8, -24.4], grip: ang + Math.PI / 2 });
+  shoulderCap();
   fdVamplate(ctx, h[0] + 2.4, h[1] - 0.6, ang, col);
 }
 
