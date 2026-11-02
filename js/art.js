@@ -4829,7 +4829,8 @@ function rigFist(ctx, p, ang, armored, skin) {
 // Arm von der Schulter s zur Hand h. o: { l1, l2, bend, sleeve, armored, skin, grip (Winkel des Griffs), bare }
 function rigArm(ctx, s, h, o = {}) {
   const l1 = o.l1 ?? 5.4, l2 = o.l2 ?? 5.2;
-  const e = rigJoint(s, h, l1, l2, o.bend ?? 1);
+  // Ellbogen fest vorgegeben (z. B. Lanze unter der Achsel) oder berechnet
+  const e = o.elbow || rigJoint(s, h, l1, l2, o.bend ?? 1);
   const skin = o.skin || skinOf();
   const up = o.armored ? '#aab2bc' : o.bare ? skin : o.sleeve, lo = o.armored ? '#b9c1ca' : o.bare || o.short ? skin : o.sleeve;
   rigLimb(ctx, s, e, h, 3.2, 2.5, 2.1, up, lo, o.armored ? (j) => {
@@ -4925,8 +4926,8 @@ function rigRider(ctx, col, o) {
     return;
   }
   // Eingelegte Lanze: unter der Achsel, flach nach vorn, Hand vor der Brust
-  const ang = -0.32, L = o.lanceLen || 46;
-  const x0 = -13, y0 = -24.6, lx = x0 + Math.cos(ang) * L, ly = y0 + Math.sin(ang) * L;
+  const ang = -0.3, L = o.lanceLen || 46;
+  const x0 = -14, y0 = -21.2, lx = x0 + Math.cos(ang) * L, ly = y0 + Math.sin(ang) * L;
   ffLine(ctx, x0, y0, lx, ly, 2, o.lanceCol || '#d8c49a');
   if (o.lanceStripe) {
     ctx.strokeStyle = o.lanceStripe;
@@ -4982,9 +4983,11 @@ function rigRider(ctx, col, o) {
     ctx.stroke();
     ctx.restore();
   }
-  const h = [x0 + Math.cos(ang) * 18.6, y0 + Math.sin(ang) * 18.6];
-  rigArm(ctx, sh0, h, { sleeve, armored: o.armored, skin, bend: 1, grip: ang + Math.PI / 2 });
-  fdVamplate(ctx, h[0] + Math.cos(ang) * 2.4, h[1] + Math.sin(ang) * 2.4, ang, col);
+  // Lanze unter der Achsel: Oberarm drückt sie an den Körper, Unterarm liegt an der Lanze, Hand vor der Brust
+  const at = (d) => [x0 + Math.cos(ang) * d, y0 + Math.sin(ang) * d - 1.3];
+  const elbow = at(15.6), h = at(23.2);
+  rigArm(ctx, sh0, h, { sleeve, armored: o.armored, skin, elbow, grip: ang + Math.PI / 2 });
+  fdVamplate(ctx, h[0] + Math.cos(ang) * 2.6, h[1] + 1.3 + Math.sin(ang) * 2.6, ang, col);
 }
 
 // ------------------------------------------------------------------ Feindetails (1.10)
@@ -6269,18 +6272,16 @@ const VK = {
       ctx.stroke();
     };
     if (hasUp('k3a')) {
-      // Zwei Äxte, Arme angewinkelt, Ellbogen nach außen
-      const lh = [-8.4, -24.6], rh = [8.4, -24.6];
-      rigArm(ctx, [-4.8, -20.4], lh, { ...armOpt(-1), grip: -Math.PI / 2 + Math.PI / 2 - 0.2 });
-      haft(-8.6, -20, -10.6, -38);
-      ctx.save();
-      ctx.scale(-1, 1);
-      ffAxe(ctx, 10.6, -38, -1.68, 1);
-      ctx.restore();
-      haft(8.6, -20, 10.6, -38);
-      ffAxe(ctx, 10.6, -38, -1.46, 1.05, st >= 1);
-      rune(8.4, -38.4);
-      rigArm(ctx, [4.8, -20.4], rh, { ...armOpt(1), grip: 0.12 });
+      // Zwei Äxte in Kampfhaltung: linke Axt tief vor dem Körper zur Abwehr, rechte zum Schlag über den Kopf ausgeholt
+      const lh = [1.2, -12.6];
+      rigArm(ctx, [-4.8, -20.4], lh, { ...armOpt(1), elbow: [-5.4, -15], grip: -0.2 + Math.PI / 2 });
+      haft(-1.6, -12, 11.2, -15);
+      ffAxe(ctx, 11.2, -15, Math.atan2(-3, 12.8), 0.95);
+      const rh = [5.4, -29.6];
+      haft(rh[0] + 0.6, rh[1] + 3, rh[0] - 3.6, rh[1] - 13);
+      ffAxe(ctx, rh[0] - 3.6, rh[1] - 13, Math.atan2(-16, -4.2), 1.05, st >= 1);
+      rune(rh[0] - 6, rh[1] - 12);
+      rigArm(ctx, [4.8, -20.4], rh, { ...armOpt(1), elbow: [9.6, -24.4], grip: Math.atan2(-16, -4.2) + Math.PI / 2 });
       tattoo();
     } else if (hasUp('k3b')) {
       // Schild vor der Brust, Axt einhändig erhoben
