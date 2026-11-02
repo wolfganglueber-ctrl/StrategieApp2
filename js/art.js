@@ -4917,7 +4917,7 @@ function rigRider(ctx, col, o) {
   rigHead(ctx, -0.5, -36.8, 0.82, () => o.head(ctx));
   const [sw, sh, ss, sc] = o.shield || [8, 13, 'chevron', col];
   kiteShield(ctx, -7.6, -32.5, sw, sh, sc, ss);
-  const sh0 = [3.4, -31.2];
+  const sh0 = [1.4, -31];
   if (o.weapon === 'sword') {
     // Schwert erhoben, Ellbogen außen unten
     const h = [7.6, -35.2];
@@ -4926,8 +4926,8 @@ function rigRider(ctx, col, o) {
     return;
   }
   // Eingelegte Lanze: unter der Achsel, flach nach vorn, Hand vor der Brust
-  const ang = -0.3, L = o.lanceLen || 46;
-  const x0 = -14, y0 = -21.2, lx = x0 + Math.cos(ang) * L, ly = y0 + Math.sin(ang) * L;
+  const ang = -0.03, L = o.lanceLen || 46;
+  const x0 = -15, y0 = -27.2, lx = x0 + Math.cos(ang) * L, ly = y0 + Math.sin(ang) * L;
   ffLine(ctx, x0, y0, lx, ly, 2, o.lanceCol || '#d8c49a');
   if (o.lanceStripe) {
     ctx.strokeStyle = o.lanceStripe;
@@ -4984,10 +4984,10 @@ function rigRider(ctx, col, o) {
     ctx.restore();
   }
   // Lanze unter der Achsel: Oberarm drückt sie an den Körper, Unterarm liegt an der Lanze, Hand vor der Brust
-  const at = (d) => [x0 + Math.cos(ang) * d, y0 + Math.sin(ang) * d - 1.3];
-  const elbow = at(15.6), h = at(23.2);
-  rigArm(ctx, sh0, h, { sleeve, armored: o.armored, skin, elbow, grip: ang + Math.PI / 2 });
-  fdVamplate(ctx, h[0] + Math.cos(ang) * 2.6, h[1] + 1.3 + Math.sin(ang) * 2.6, ang, col);
+  // Wie beim Lanzenritt: Oberarm hängt von der Schulter herab bis unter die Lanze, Unterarm nach vorn, Faust direkt hinter der Brechscheibe
+  const h = [x0 + Math.cos(ang) * 22.4, y0 + Math.sin(ang) * 22.4 + 0.6];
+  rigArm(ctx, sh0, h, { sleeve, armored: o.armored, skin, elbow: [0.2, -24.2], grip: ang + Math.PI / 2 });
+  fdVamplate(ctx, h[0] + 2.4, h[1] - 0.6, ang, col);
 }
 
 // ------------------------------------------------------------------ Feindetails (1.10)
@@ -6108,6 +6108,16 @@ const VK = {
       ctx.fill();
       fdFur(ctx, lx + 0.6, 2.6, 2.2, 0.9, 'rgba(30,20,10,0.6)', 8, 0.8, 9 + lx, 1.6);
     }
+    // Haltung: Schultern setzen innen am Rumpf an; der hintere Arm liegt hinter dem Körper, nur seine Faust am Griff ist sichtbar
+    const shN = [3.9, -19.8], shF = [-3.9, -19.8];
+    const armOpt = (bend) => ({ bare: st < 2, sleeve: '#9aa3ad', short: st >= 2, armored: false, skin, bend });
+    const ax0 = -1.6, ay0 = -6.5, ax1 = 11.6, ay1 = -40;
+    const at = (t) => [ax0 + (ax1 - ax0) * t, ay0 + (ay1 - ay0) * t];
+    const gAng = Math.atan2(ay1 - ay0, ax1 - ax0) + Math.PI / 2;
+    const far = hasUp('k3a') ? { h: [1.2, -12.6], elbow: [-4.2, -14.6], grip: -0.2 + Math.PI / 2 }
+      : hasUp('k3b') ? { h: [-3.4, -13.4], elbow: [-5.2, -15.6], grip: 0, hidden: true }
+      : { h: at(0.26), elbow: [-4.4, -14.2], grip: gAng };
+    rigArm(ctx, shF, far.h, { ...armOpt(1), elbow: far.elbow, grip: far.grip });
     // Rumpf: breite Schultern, schmalere Hüfte
     const trunk = () => {
       ctx.beginPath();
@@ -6240,7 +6250,6 @@ const VK = {
         ctx.fillRect(0.2, -0.7, 3, 0.9);
       }
     });
-    const armOpt = (bend) => ({ bare: st < 2, sleeve: '#9aa3ad', short: st >= 2, armored: false, skin, bend });
     const haft = (x0, y0, x1, y1) => {
       ffLine(ctx, x0, y0, x1, y1, 1.9, ffWood());
       // Lederwicklung am Griff
@@ -6273,35 +6282,30 @@ const VK = {
     };
     if (hasUp('k3a')) {
       // Zwei Äxte in Kampfhaltung: linke Axt tief vor dem Körper zur Abwehr, rechte zum Schlag über den Kopf ausgeholt
-      const lh = [1.2, -12.6];
-      rigArm(ctx, [-4.8, -20.4], lh, { ...armOpt(1), elbow: [-5.4, -15], grip: -0.2 + Math.PI / 2 });
       haft(-1.6, -12, 11.2, -15);
       ffAxe(ctx, 11.2, -15, Math.atan2(-3, 12.8), 0.95);
+      rigFist(ctx, far.h, far.grip, false, skin);
       const rh = [5.4, -29.6];
       haft(rh[0] + 0.6, rh[1] + 3, rh[0] - 3.6, rh[1] - 13);
       ffAxe(ctx, rh[0] - 3.6, rh[1] - 13, Math.atan2(-16, -4.2), 1.05, st >= 1);
       rune(rh[0] - 6, rh[1] - 12);
-      rigArm(ctx, [4.8, -20.4], rh, { ...armOpt(1), elbow: [9.6, -24.4], grip: Math.atan2(-16, -4.2) + Math.PI / 2 });
+      rigArm(ctx, shN, rh, { ...armOpt(1), elbow: [9, -24.2], grip: Math.atan2(-16, -4.2) + Math.PI / 2 });
       tattoo();
     } else if (hasUp('k3b')) {
       // Schild vor der Brust, Axt einhändig erhoben
-      rigArm(ctx, [-4.8, -20.4], [-4.6, -13.4], armOpt(-1));
       ffVikingShield(ctx, -5.4, -13.6, 8.5, col);
       haft(9.4, -19.4, 12, -40);
       ffAxe(ctx, 12, -40, -1.45, 1.15, st >= 1);
       rune(9.6, -40.6);
-      rigArm(ctx, [4.8, -20.4], [9.6, -25], { ...armOpt(1), grip: 0.12 });
+      rigArm(ctx, shN, [9.6, -25], { ...armOpt(1), elbow: [8.4, -18.4], grip: 0.12 });
       tattoo();
     } else {
       // Große Axt mit beiden Händen schräg über der rechten Schulter, Ellbogen angewinkelt
-      const x0 = -1.6, y0 = -6.5, x1 = 11.6, y1 = -40;
-      const at = (t) => [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t];
-      const gAng = Math.atan2(y1 - y0, x1 - x0) + Math.PI / 2;
-      rigArm(ctx, [-4.8, -20.4], at(0.26), { ...armOpt(1), grip: gAng });
-      haft(x0, y0, x1, y1);
-      ffAxe(ctx, x1, y1, Math.atan2(y1 - y0, x1 - x0), 1.2, st >= 1);
-      rune(x1 - 3.4, y1 - 0.6);
-      rigArm(ctx, [4.8, -20.4], at(0.47), { ...armOpt(1), grip: gAng });
+      haft(ax0, ay0, ax1, ay1);
+      ffAxe(ctx, ax1, ay1, Math.atan2(ay1 - ay0, ax1 - ax0), 1.2, st >= 1);
+      rune(ax1 - 3.4, ay1 - 0.6);
+      rigFist(ctx, far.h, far.grip, false, skin);
+      rigArm(ctx, shN, at(0.47), { ...armOpt(1), elbow: [8.8, -15.6], grip: gAng });
       tattoo();
     }
     ctx.restore();
