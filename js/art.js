@@ -2694,24 +2694,17 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
   }
   switch (type) {
     case 'warrior': {
-      // Krieger in Bereitschaftshaltung: Schwert vor der Brust schräg nach oben, Schild vor dem Körper
+      // Krieger: Langschwert beidhändig über der rechten Schulter (Grundgerüst wie der Berserker), Schild auf dem Rücken
       const st = FIGST.stage;
-      const ang = -1.15, near = { h: [6.8, -15.6], elbow: [7.4, -10.6], grip: ang + Math.PI / 2, weapon: (c) => rigSword(c, [6.8, -15.6], ang, hasUp('w5') || st >= 5 ? 18 : 15) };
-      let far = { h: [-3.4, -13.4], elbow: [-5, -15.4], hidden: true };
-      if (hasUp('w3a')) {
-        // Beidhändig: zweites Schwert tief nach vorn
-        const a2 = 0.32;
-        far = { h: [-0.4, -9.4], elbow: [-4.8, -13.4], grip: a2 + Math.PI / 2, weapon: (c) => rigSword(c, [-0.4, -9.4], a2, 13) };
-      }
-      rigStand(ctx, col, {
-        kind: st >= 4 ? 'plate' : 'mail', cape: col, trouser: '#4a3a2e', sleeve: '#9aa3ad', armored: st >= 4, armoredLegs: st >= 4,
+      rigTwoHand(ctx, col, {
+        kind: st >= 4 ? 'plate' : 'mail', cape: col, flap: col, trouser: '#4a3a2e', sleeve: '#9aa3ad', armored: st >= 4, armoredLegs: st >= 4,
+        back: st >= 1 || hasUp('w3b') ? (c) => (hasUp('w3b') ? kiteShield(c, -6.6, -21, 10, 18, col, 'cross') : roundShield(c, -6.2, -13.6, 6.6, col)) : null,
         head: () => {
           face(ctx, 0, 0);
           if (st >= 2) helmet(ctx, 0, -1, st >= 5 ? 'great' : 'kettle', col);
           else hair(ctx, 0, 0);
         },
-        far, near,
-        shield: hasUp('w3a') ? null : (c) => (hasUp('w3b') ? kiteShield(c, -4.4, -22.5, 12, 22, col, 'cross') : roundShield(c, -4, -13.4, st >= 1 ? 7.4 : 6.6, col)),
+        weapon: (c, at, ang) => thLongsword(c, at, ang, hasUp('w3a') || st >= 5),
       });
       break;
     }
@@ -4785,7 +4778,7 @@ function rigFill(ctx, p0, p1, w, c) {
   return g;
 }
 // Ein Glied aus zwei Teilen (Arm oder Bein): Umriss, Füllung, Gelenkkappe, Muskel-Glanz
-function rigLimb(ctx, a, j, b, wa, wj, wb, cUpper, cLower, cap = null) {
+function rigLimb(ctx, a, j, b, wa, wj, wb, cUpper, cLower, cap = null, decor = null) {
   ctx.fillStyle = 'rgba(20,14,10,0.85)';
   rigSeg(ctx, a, j, wa, wj, 0.5);
   ctx.fill();
@@ -4797,32 +4790,6 @@ function rigLimb(ctx, a, j, b, wa, wj, wb, cUpper, cLower, cap = null) {
   ctx.fillStyle = rigFill(ctx, j, b, wj, cLower);
   rigSeg(ctx, j, b, wj, wb);
   ctx.fill();
-  // Trennlinie am Gelenk: Kontur des unteren Glieds, soweit sie über dem oberen liegt (Ellbogen-/Kniefalte)
-  ctx.save();
-  rigSeg(ctx, a, j, wa, wj);
-  ctx.clip();
-  rigSeg(ctx, j, b, wj, wb);
-  ctx.strokeStyle = 'rgba(20,14,10,0.8)';
-  ctx.lineWidth = 0.5;
-  ctx.stroke();
-  ctx.restore();
-  // Bei stark gebeugtem Gelenk liegen beide Glieder nebeneinander: Kante des unteren Glieds zur Seite des oberen ganz durchziehen
-  {
-    const dx = b[0] - j[0], dy = b[1] - j[1], L = Math.hypot(dx, dy) || 1;
-    let nx = -dy / L, ny = dx / L;
-    if (nx * (a[0] - j[0]) + ny * (a[1] - j[1]) < 0) { nx = -nx; ny = -ny; }
-    const ux = (a[0] - j[0]) / (Math.hypot(a[0] - j[0], a[1] - j[1]) || 1), uy = (a[1] - j[1]) / (Math.hypot(a[0] - j[0], a[1] - j[1]) || 1);
-    // nur wenn das obere Glied wirklich daneben liegt (Winkel am Gelenk kleiner als ~70°)
-    if ((dx / L) * ux + (dy / L) * uy > 0.35) {
-      ctx.strokeStyle = 'rgba(20,14,10,0.9)';
-      ctx.lineWidth = 0.7;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(j[0] + nx * wj * 0.5, j[1] + ny * wj * 0.5);
-      ctx.lineTo(b[0] + nx * wb * 0.5 - (dx / L) * 1.2, b[1] + ny * wb * 0.5 - (dy / L) * 1.2);
-      ctx.stroke();
-    }
-  }
   // Muskelglanz auf beiden Gliedern
   for (const [p, q, w] of [[a, j, wa], [j, b, wj]]) {
     const dx = q[0] - p[0], dy = q[1] - p[1], L = Math.hypot(dx, dy) || 1;
@@ -4833,6 +4800,34 @@ function rigLimb(ctx, a, j, b, wa, wj, wb, cUpper, cLower, cap = null) {
     ctx.moveTo(p[0] + dx * 0.2 + nx * w * 0.25, p[1] + dy * 0.2 + ny * w * 0.25);
     ctx.quadraticCurveTo(p[0] + dx * 0.5 + nx * w * 0.38, p[1] + dy * 0.5 + ny * w * 0.38, p[0] + dx * 0.8 + nx * w * 0.2, p[1] + dy * 0.8 + ny * w * 0.2);
     ctx.stroke();
+  }
+  // Tätowierungen u. ä. auf der Haut, unter den Trennlinien
+  if (decor) decor(a, j, b);
+  // Trennlinie am Gelenk: Kontur des unteren Glieds, soweit sie über dem oberen liegt (Ellbogen-/Kniefalte)
+  ctx.save();
+  rigSeg(ctx, a, j, wa, wj);
+  ctx.clip();
+  rigSeg(ctx, j, b, wj, wb);
+  ctx.strokeStyle = '#1c140e';
+  ctx.lineWidth = 0.6;
+  ctx.stroke();
+  ctx.restore();
+  // Bei stark gebeugtem Gelenk liegen beide Glieder nebeneinander: Kante des unteren Glieds zur Seite des oberen ganz durchziehen
+  {
+    const dx = b[0] - j[0], dy = b[1] - j[1], L = Math.hypot(dx, dy) || 1;
+    let nx = -dy / L, ny = dx / L;
+    if (nx * (a[0] - j[0]) + ny * (a[1] - j[1]) < 0) { nx = -nx; ny = -ny; }
+    const ux = (a[0] - j[0]) / (Math.hypot(a[0] - j[0], a[1] - j[1]) || 1), uy = (a[1] - j[1]) / (Math.hypot(a[0] - j[0], a[1] - j[1]) || 1);
+    // nur wenn das obere Glied wirklich daneben liegt (Winkel am Gelenk kleiner als ~70°)
+    if ((dx / L) * ux + (dy / L) * uy > 0.35) {
+      ctx.strokeStyle = '#1c140e';
+      ctx.lineWidth = 0.7;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(j[0] + nx * wj * 0.5, j[1] + ny * wj * 0.5);
+      ctx.lineTo(b[0] + nx * wb * 0.5 - (dx / L) * 1.2, b[1] + ny * wb * 0.5 - (dy / L) * 1.2);
+      ctx.stroke();
+    }
   }
   if (cap) cap(j);
 }
@@ -4922,7 +4917,7 @@ function rigArm(ctx, s, h, o = {}) {
     ctx.fill();
     outline(ctx, 0.4);
     shine(ctx, j[0] - 0.4, j[1] - 0.5, 0.4, 0.6, 0.7);
-  } : null);
+  } : null, o.decor || null);
   if (o.cuff && !o.armored) {
     // Ärmelsaum am Unterarm
     const t = 0.55, cx = e[0] + (h[0] - e[0]) * t, cy = e[1] + (h[1] - e[1]) * t;
@@ -5015,6 +5010,99 @@ function rigStand(ctx, col, o) {
 function rigSword(ctx, h, ang, len = 15) {
   const ux = Math.cos(ang), uy = Math.sin(ang);
   sword(ctx, h[0] - ux * 1, h[1] - uy * 1, h[0] + ux * len, h[1] + uy * len);
+}
+
+// Beidhändige Grundhaltung nach dem Berserker-Vorbild: Waffe schräg über der rechten Schulter,
+// linker Arm quer vor dem Körper (oben vom Umhang verdeckt), rechter Arm hinter dem Waffenstiel, Fäuste umschließen den Stiel.
+// o: { kind, robe, trouser, boot, skin, sleeve, bare, armored, armoredLegs, cape, flap (Umhangfarbe über der linken Schulter),
+//      tail(ctx), body(ctx), head(ctx), back(ctx) (Schild auf dem Rücken), weapon(ctx, at, ang), decor(a, j, b) }
+const TH = { x0: -1.6, y0: -6.5, x1: 11.6, y1: -40 };
+function thAt(t) {
+  return [TH.x0 + (TH.x1 - TH.x0) * t, TH.y0 + (TH.y1 - TH.y0) * t];
+}
+function rigTwoHand(ctx, col, o) {
+  const skin = o.skin || skinOf();
+  const ang = Math.atan2(TH.y1 - TH.y0, TH.x1 - TH.x0), gAng = ang + Math.PI / 2;
+  const shN = [3.9, -19.8], shF = [-3.9, -19.8];
+  const farH = thAt(0.26), farE = [-4.4, -14.2], nearH = thAt(0.47), nearE = [8.8, -15.6];
+  const armOpt = (elbow, decor = null) => ({ sleeve: o.sleeve || col.main, bare: o.bare, armored: o.armored, skin, elbow, grip: gAng, decor });
+  if (o.back) o.back(ctx);
+  if (o.cape) cape(ctx, 0, 2, o.cape, 21, 8.5);
+  if (o.tail) o.tail(ctx);
+  rigLeg(ctx, [-2.3, -8], [-2.9, 4.6], { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
+  rigLeg(ctx, [2.3, -8], [3.4, 4.6], { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
+  if (o.robe) ffRobe(ctx, 0, col, o.robe);
+  else torso(ctx, 0, 0.2, col, o.kind || 'tunic');
+  if (o.body) o.body(ctx);
+  // linker Arm vor dem Körper, oben vom Umhang verdeckt
+  rigArm(ctx, shF, farH, armOpt(farE));
+  if (o.flap) {
+    ctx.fillStyle = cloth(ctx, -8, -2.5, o.flap);
+    ctx.beginPath();
+    ctx.moveTo(-6.2, -21.4);
+    ctx.lineTo(-2.6, -21.4);
+    ctx.quadraticCurveTo(-2.4, -17, -3.4, -14.8);
+    ctx.lineTo(-4.4, -13.2);
+    ctx.lineTo(-5.6, -14);
+    ctx.lineTo(-6.8, -12.6);
+    ctx.quadraticCurveTo(-8.4, -16, -6.2, -21.4);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.6);
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = 0.4;
+    ctx.beginPath();
+    ctx.moveTo(-4.4, -20.5);
+    ctx.quadraticCurveTo(-5.6, -17, -5.4, -14);
+    ctx.stroke();
+  }
+  if (o.shoulders) o.shoulders(ctx);
+  rigNeck(ctx, 0, -23.2, -21, o.armored ? '#9aa3ad' : skin);
+  rigHead(ctx, 0, -25.6, 0.86, () => o.head(ctx));
+  // rechter Arm hinter dem Stiel, dann Waffe, dann beide Fäuste darüber
+  rigArm(ctx, shN, nearH, armOpt(nearE, o.decor));
+  o.weapon(ctx, thAt, ang);
+  rigFist(ctx, farH, gAng, o.armored, skin, farE);
+  rigFist(ctx, nearH, gAng, o.armored, skin, nearE);
+}
+// Langschwert entlang der Haltelinie: langer Griff für zwei Hände, Parierstange, Klinge
+function thLongsword(ctx, at, ang, big = false) {
+  const [px, py] = at(0.12), [gx, gy] = at(0.56), [tx, ty] = at(big ? 1.08 : 1);
+  const ux = Math.cos(ang), uy = Math.sin(ang), nx = -uy, ny = ux, w = big ? 1.6 : 1.25;
+  ffLine(ctx, px, py, gx, gy, 1.5, '#4a2f1a');
+  ctx.fillStyle = steel(ctx, gx + nx * w, gx - nx * w, gy, ty);
+  ctx.beginPath();
+  ctx.moveTo(gx + nx * w, gy + ny * w);
+  ctx.lineTo(tx + nx * 0.5 - ux * 2, ty + ny * 0.5 - uy * 2);
+  ctx.lineTo(tx, ty);
+  ctx.lineTo(tx - nx * 0.5 - ux * 2, ty - ny * 0.5 - uy * 2);
+  ctx.lineTo(gx - nx * w, gy - ny * w);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.6);
+  ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+  ctx.lineWidth = 0.45;
+  ctx.beginPath();
+  ctx.moveTo(gx + ux * 1.5, gy + uy * 1.5);
+  ctx.lineTo(tx - ux * 4, ty - uy * 4);
+  ctx.stroke();
+  ctx.strokeStyle = '#d9ad3c';
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(gx + nx * 3.4, gy + ny * 3.4);
+  ctx.lineTo(gx - nx * 3.4, gy - ny * 3.4);
+  ctx.stroke();
+  ctx.fillStyle = '#e9c45a';
+  ctx.beginPath();
+  ctx.arc(px - ux * 0.6, py - uy * 0.6, 1.1, 0, Math.PI * 2);
+  ctx.fill();
+  outline(ctx, 0.4);
+}
+// Stangenwaffe: Holzstiel entlang der Linie, Kopf am Ende
+function thHaft(ctx, at, c = ffWood()) {
+  const [x0, y0] = at(0.04), [x1, y1] = at(1);
+  ffLine(ctx, x0, y0, x1, y1, 1.8, c);
 }
 
 // Reiter mit Gelenken auf einem Reittier (Pferderahmen: Sattel bei y ≈ −21).
@@ -6108,30 +6196,23 @@ function ffRiderBody(ctx, col, kind, legCol) {
 // ---------------------------------------------------------------- Wikinger
 const VK = {
   warrior(ctx, col) {
-    // Plünderer: Axt kampfbereit vor der Brust, Rundschild vor dem Körper
+    // Plünderer: Bartaxt beidhändig über der rechten Schulter (Grundgerüst wie der Berserker), Rundschild auf dem Rücken
     const st = FIGST.stage;
-    const ang = -1.2, h = [6.8, -15.6];
-    const axe = (c, hh, a, s) => {
-      const ux = Math.cos(a), uy = Math.sin(a);
-      ffLine(c, hh[0] - ux * 3, hh[1] - uy * 3, hh[0] + ux * 13, hh[1] + uy * 13, 1.6, ffWood());
-      ffAxe(c, hh[0] + ux * 13, hh[1] + uy * 13, a, s);
-    };
-    let far = { h: [-3.4, -13.4], elbow: [-5, -15.4], hidden: true };
-    if (hasUp('w3a')) {
-      const a2 = 0.3;
-      far = { h: [-0.4, -9.4], elbow: [-4.8, -13.4], grip: a2 + Math.PI / 2, weapon: (c) => axe(c, [-0.4, -9.4], a2, 0.9) };
-    }
-    rigStand(ctx, col, {
-      kind: st >= 4 ? 'mail' : 'leather', trouser: '#5a4a3a', boot: '#4a3828', bare: st < 4, sleeve: '#9aa3ad',
-      body: st >= 1 ? (c) => ffFur(c, 0, -20.4, 7, '#7a5a3a') : null,
+    rigTwoHand(ctx, col, {
+      kind: st >= 4 ? 'mail' : 'leather', trouser: '#5a4a3a', boot: '#4a3828', bare: true,
+      flap: st >= 1 ? { light: '#a08060', main: '#7a5a3a', dark: '#3b2a1a' } : null,
+      back: (c) => ffVikingShield(c, -6.2, -13.6, hasUp('w3b') ? 8.6 : 7, col),
+      shoulders: st >= 1 ? (c) => ffFur(c, 0, -20.4, 7, '#7a5a3a') : null,
       head: () => {
         face(ctx, 0, 0);
         if (st >= 2) ffHornHelm(ctx, 0, -0.6);
         else hair(ctx, 0, 0, '#d6a24a');
       },
-      far,
-      near: { h, elbow: [7.4, -10.6], grip: ang + Math.PI / 2, weapon: (c) => axe(c, h, ang, hasUp('w5') || st >= 5 ? 1.2 : 1) },
-      shield: hasUp('w3a') ? null : (c) => ffVikingShield(c, -4, -13.4, hasUp('w3b') ? 9.4 : st >= 1 ? 7.8 : 6.8, col),
+      weapon: (c, at, ang) => {
+        thHaft(c, at);
+        const [x, y] = at(1);
+        ffAxe(c, x, y, ang, hasUp('w5') || st >= 5 ? 1.2 : 1, hasUp('w3a'));
+      },
     });
   },
   archer(ctx, col) {
@@ -6419,11 +6500,12 @@ const VK = {
       ctx.lineTo(x + 1.2, y - 1.6);
       ctx.stroke();
     };
-    const tattoo = () => {
-      ctx.strokeStyle = 'rgba(30,60,120,0.7)';
+    // Tätowierung in der Mitte des Oberarms (unter der Trennlinie)
+    const tattooOn = (a, j) => {
+      ctx.strokeStyle = 'rgba(30,60,120,0.75)';
       ctx.lineWidth = 0.35;
       ctx.beginPath();
-      ctx.arc(5.8, -17.4, 0.8, 0, Math.PI * 1.6);
+      ctx.arc((a[0] + j[0]) / 2, (a[1] + j[1]) / 2, 0.8, 0, Math.PI * 1.6);
       ctx.stroke();
     };
     if (hasUp('k3b')) {
@@ -6432,13 +6514,12 @@ const VK = {
       haft(9.4, -19.4, 12, -40);
       ffAxe(ctx, 12, -40, -1.45, 1.15, st >= 1);
       rune(9.6, -40.6);
-      rigArm(ctx, shN, [9.6, -25], { ...armOpt(1), elbow: [8.4, -18.4], grip: 0.12 });
-      tattoo();
+      rigArm(ctx, shN, [9.6, -25], { ...armOpt(1), elbow: [8.4, -18.4], grip: 0.12, decor: tattooOn });
     } else {
       // Große Axt mit beiden Händen schräg über der rechten Schulter, Ellbogen angewinkelt
       // rechter Arm hinter dem Axtstiel, Faust danach darüber
       const nh = at(0.47), ne = [8.8, -15.6];
-      rigArm(ctx, shN, nh, { ...armOpt(1), elbow: ne, grip: gAng });
+      rigArm(ctx, shN, nh, { ...armOpt(1), elbow: ne, grip: gAng, decor: tattooOn });
       // Doppelaxt (Rasender: riesig, mit glühenden Runen)
       haft(ax0, ay0, ax1, ay1);
       ffAxe(ctx, ax1, ay1, Math.atan2(ay1 - ay0, ax1 - ax0), hasUp('k3a') ? 1.45 : 1.2, true);
@@ -6446,7 +6527,6 @@ const VK = {
       if (hasUp('k3a')) ffGlow(ctx, ax1, ay1, 4, 'rgba(255,90,40,0.6)', 'rgba(255,0,0,0)');
       rigFist(ctx, far.h, far.grip, false, skin, far.elbow);
       rigFist(ctx, nh, gAng, false, skin, ne);
-      tattoo();
     }
     ctx.restore();
   },
@@ -6771,27 +6851,43 @@ function ffSkull(ctx, x, y, r = 2.4, eyes = null) {
 }
 const WT = {
   warrior(ctx, col) {
-    // Kultist: Sichel erhoben vor der Brust, zweite Hand verborgen im Gewand
+    // Kultist: Sense beidhändig über der rechten Schulter (Grundgerüst wie der Berserker)
     const st = FIGST.stage;
-    const ang = -1.1, h = [6.6, -15.4];
-    const sickle = (c, hh, a, sc) => {
-      c.save();
-      c.translate(hh[0], hh[1]);
-      c.rotate(a + Math.PI / 2);
-      ffSickle(c, 0, 3, sc);
-      c.restore();
-    };
-    let far = { h: [-2, -12], elbow: [-4.8, -14.6], hidden: true };
-    if (hasUp('w3a')) far = { h: [-0.4, -9.6], elbow: [-4.8, -13.4], grip: 0.4 + Math.PI / 2, weapon: (c) => sickle(c, [-0.4, -9.6], 0.4, 0.9) };
-    rigStand(ctx, col, {
-      robe: st >= 4 ? '#0b0612' : '#2a1838', sleeve: st >= 4 ? '#0b0612' : '#2a1838',
+    const robe = st >= 4 ? '#0b0612' : '#2a1838';
+    rigTwoHand(ctx, col, {
+      robe, sleeve: robe, flap: { light: '#4c2f72', main: robe, dark: '#05030a' },
+      back: hasUp('w3b') ? (c) => kiteShield(c, -6.6, -21, 10, 18, { main: '#3b2a55', dark: '#140a20', light: col.light }, 'none') : null,
       body: st >= 1 ? (c) => { for (const sx of [-3, 0, 3]) ffSkull(c, sx, -9, 1.1); } : null,
       head: () => ffHood(ctx, 0, 0.6, col, st >= 5 ? '#f0abfc' : '#a3e635', st >= 2),
-      far,
-      near: { h, elbow: [7.4, -10.6], grip: ang + Math.PI / 2, weapon: (c) => sickle(c, h, ang, hasUp('w5') || st >= 5 ? 1.25 : 1) },
-      shield: hasUp('w3b') ? (c) => { kiteShield(c, -4.4, -22, 11, 20, { main: '#3b2a55', dark: '#140a20', light: col.light }, 'none'); ffGlow(c, -4.4, -13, 2.5, 'rgba(163,230,53,0.9)', 'rgba(60,120,0,0)'); } : null,
-      front: st >= 5 ? (c) => ffGlow(c, 0, -6, 9, 'rgba(163,230,53,0.25)', 'rgba(60,120,0,0)') : null,
+      weapon: (c, at, ang) => {
+        thHaft(c, at, '#3b2a1a');
+        // Sensenblatt nach hinten gebogen
+        const [x, y] = at(1);
+        c.save();
+        c.translate(x, y);
+        c.rotate(ang);
+        const L = hasUp('w5') || st >= 5 ? 1.25 : 1;
+        c.fillStyle = steel(c, -12 * L, 0, -2, 6);
+        c.beginPath();
+        c.moveTo(0.4, -0.8);
+        c.quadraticCurveTo(-4 * L, 5 * L, -13 * L, 7 * L);
+        c.quadraticCurveTo(-5 * L, 3 * L, -0.4, 1);
+        c.closePath();
+        c.fill();
+        outline(c, 0.5);
+        if (hasUp('w3a')) {
+          c.beginPath();
+          c.moveTo(0.4, 0.8);
+          c.quadraticCurveTo(-3 * L, -4 * L, -10 * L, -5 * L);
+          c.quadraticCurveTo(-4 * L, -2 * L, -0.4, -1);
+          c.closePath();
+          c.fill();
+          outline(c, 0.5);
+        }
+        c.restore();
+      },
     });
+    if (st >= 5) ffGlow(ctx, 0, -6, 9, 'rgba(163,230,53,0.25)', 'rgba(60,120,0,0)');
   },
   archer(ctx, col) {
     // Irrlichtwerfer: wirft grüne Geisterlichter
@@ -7707,37 +7803,42 @@ function dkWyrm(ctx, col, king) {
 }
 const DK = {
   warrior(ctx, col) {
-    // Echsenkrieger: Krummschwert (Khopesch) kampfbereit, Schild vor dem Körper, Schwanz
+    // Echsenkrieger: Glefe beidhändig über der rechten Schulter (Grundgerüst wie der Berserker), Schild auf dem Rücken, Schwanz
     const st = FIGST.stage;
-    const ang = -1.15, h = [6.8, -15.6];
-    const khopesh = (c, hh, a) => {
-      c.save();
-      c.translate(hh[0], hh[1]);
-      c.rotate(a);
-      ffLine(c, -1.4, 0, 5, 0, 1.4, '#5a3a1e');
-      c.fillStyle = steel(c, 4, 14, -4, 2);
-      c.beginPath();
-      c.moveTo(4.6, -0.8);
-      c.quadraticCurveTo(10, -1.6, 13, -4.6);
-      c.quadraticCurveTo(15, -2, 12.4, -0.4);
-      c.quadraticCurveTo(9, 1, 4.6, 0.8);
-      c.closePath();
-      c.fill();
-      outline(c, 0.5);
-      c.restore();
-    };
-    let far = { h: [-3.4, -13.4], elbow: [-5, -15.4], hidden: true };
-    if (hasUp('w3a')) far = { h: [-0.4, -9.4], elbow: [-4.8, -13.4], grip: 0.3 + Math.PI / 2, weapon: (c) => khopesh(c, [-0.4, -9.4], 0.3) };
-    rigStand(ctx, col, {
+    rigTwoHand(ctx, col, {
       kind: st >= 4 ? 'plate' : 'leather', trouser: DK_SKIN[1], boot: DK_SKIN[1], bare: true, armored: st >= 4, skin: DK_SKIN[0],
       tail: (c) => dkTail(c, -2, -4, 14),
+      back: st >= 1 || hasUp('w3b') ? (c) => (hasUp('w3b') ? kiteShield(c, -6.6, -21, 10, 18, col, 'none') : roundShield(c, -6.2, -13.6, 6.6, col)) : null,
       head: () => {
         dkHead(ctx, 0, 0);
         if (st >= 2) dkHelm(ctx, 0, -1);
       },
-      far,
-      near: { h, elbow: [7.4, -10.6], grip: ang + Math.PI / 2, weapon: (c) => khopesh(c, h, ang) },
-      shield: hasUp('w3a') ? null : st >= 1 || hasUp('w3b') ? (c) => (hasUp('w3b') ? kiteShield(c, -4.4, -22.5, 12, 22, col, 'none') : roundShield(c, -4, -13.4, 7, col)) : null,
+      weapon: (c, at, ang) => {
+        thHaft(c, at, '#5a3a1e');
+        const [x, y] = at(1);
+        c.save();
+        c.translate(x, y);
+        c.rotate(ang);
+        const L = hasUp('w5') || st >= 5 ? 1.2 : 1;
+        c.fillStyle = steel(c, 0, 10 * L, -4, 3);
+        c.beginPath();
+        c.moveTo(-1.5, -1);
+        c.quadraticCurveTo(4 * L, -3.6 * L, 9 * L, -1.4);
+        c.quadraticCurveTo(5 * L, 0.6, -1.5, 1.2);
+        c.closePath();
+        c.fill();
+        outline(c, 0.5);
+        if (hasUp('w3a')) {
+          c.beginPath();
+          c.moveTo(-1, 1);
+          c.lineTo(1.2, 4.2);
+          c.lineTo(2.4, 1);
+          c.closePath();
+          c.fill();
+          outline(c, 0.4);
+        }
+        c.restore();
+      },
     });
   },
   archer(ctx, col) {
