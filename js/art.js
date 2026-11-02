@@ -2694,17 +2694,20 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
   }
   switch (type) {
     case 'warrior': {
-      // Krieger: Langschwert beidhändig über der rechten Schulter (Grundgerüst wie der Berserker), Schild auf dem Rücken
+      // Krieger: Hellebarde beidhändig über der rechten Schulter (Grundgerüst wie der Berserker)
       const st = FIGST.stage;
       rigTwoHand(ctx, col, {
         kind: st >= 4 ? 'plate' : 'mail', cape: col, flap: col, trouser: '#4a3a2e', sleeve: '#9aa3ad', armored: st >= 4, armoredLegs: st >= 4,
-        back: st >= 1 || hasUp('w3b') ? (c) => (hasUp('w3b') ? kiteShield(c, -6.6, -21, 10, 18, col, 'cross') : roundShield(c, -6.2, -13.6, 6.6, col)) : null,
         head: () => {
           face(ctx, 0, 0);
           if (st >= 2) helmet(ctx, 0, -1, st >= 5 ? 'great' : 'kettle', col);
           else hair(ctx, 0, 0);
         },
-        weapon: (c, at, ang) => thLongsword(c, at, ang, hasUp('w3a') || st >= 5),
+        weapon: (c, at, ang) => {
+          thHaft(c, at);
+          const [x, y] = at(1);
+          thHalberd(c, x, y, ang, hasUp('w5') || st >= 5 ? 1.2 : 1, hasUp('w3a'));
+        },
       });
       break;
     }
@@ -5099,6 +5102,51 @@ function thLongsword(ctx, at, ang, big = false) {
   ctx.fill();
   outline(ctx, 0.4);
 }
+// Hellebardenkopf am Stielende (x entlang des Stiels): Stoßspitze, Beilklinge nach außen, Haken nach hinten
+function thHalberd(ctx, x, y, ang, L = 1, big = false) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  ctx.scale(L, L);
+  const b = big ? 1.25 : 1;
+  ctx.fillStyle = steel(ctx, -3, 9, -6, 4);
+  // Stoßspitze
+  ctx.beginPath();
+  ctx.moveTo(-1, -0.9);
+  ctx.lineTo(8.5, 0);
+  ctx.lineTo(-1, 0.9);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.45);
+  // Beilklinge (zur Außenseite, gebogene Schneide)
+  ctx.beginPath();
+  ctx.moveTo(-3.2, 0.6);
+  ctx.lineTo(-3.6, 5.6 * b);
+  ctx.quadraticCurveTo(0.4, 6.6 * b, 3.4, 5.2 * b);
+  ctx.lineTo(1.2, 0.6);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.5);
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+  ctx.lineWidth = 0.4;
+  ctx.beginPath();
+  ctx.moveTo(-3.2, 5 * b);
+  ctx.quadraticCurveTo(0.3, 5.9 * b, 2.8, 4.7 * b);
+  ctx.stroke();
+  // Haken auf der Gegenseite
+  ctx.beginPath();
+  ctx.moveTo(-2.4, -0.6);
+  ctx.quadraticCurveTo(-1.6, -3.6, 1, -4.6);
+  ctx.quadraticCurveTo(-0.6, -2.4, 0.4, -0.6);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.45);
+  // Ringe am Übergang zum Stiel
+  ctx.fillStyle = '#6b7280';
+  ctx.fillRect(-4.6, -1.1, 1.2, 2.2);
+  outline(ctx, 0.3);
+  ctx.restore();
+}
 // Stangenwaffe: Holzstiel entlang der Linie, Kopf am Ende
 function thHaft(ctx, at, c = ffWood()) {
   const [x0, y0] = at(0.04), [x1, y1] = at(1);
@@ -6196,12 +6244,11 @@ function ffRiderBody(ctx, col, kind, legCol) {
 // ---------------------------------------------------------------- Wikinger
 const VK = {
   warrior(ctx, col) {
-    // Plünderer: Bartaxt beidhändig über der rechten Schulter (Grundgerüst wie der Berserker), Rundschild auf dem Rücken
+    // Plünderer: Bartaxt beidhändig über der rechten Schulter (Grundgerüst wie der Berserker)
     const st = FIGST.stage;
     rigTwoHand(ctx, col, {
       kind: st >= 4 ? 'mail' : 'leather', trouser: '#5a4a3a', boot: '#4a3828', bare: true,
       flap: st >= 1 ? { light: '#a08060', main: '#7a5a3a', dark: '#3b2a1a' } : null,
-      back: (c) => ffVikingShield(c, -6.2, -13.6, hasUp('w3b') ? 8.6 : 7, col),
       shoulders: st >= 1 ? (c) => ffFur(c, 0, -20.4, 7, '#7a5a3a') : null,
       head: () => {
         face(ctx, 0, 0);
@@ -6856,7 +6903,6 @@ const WT = {
     const robe = st >= 4 ? '#0b0612' : '#2a1838';
     rigTwoHand(ctx, col, {
       robe, sleeve: robe, flap: { light: '#4c2f72', main: robe, dark: '#05030a' },
-      back: hasUp('w3b') ? (c) => kiteShield(c, -6.6, -21, 10, 18, { main: '#3b2a55', dark: '#140a20', light: col.light }, 'none') : null,
       body: st >= 1 ? (c) => { for (const sx of [-3, 0, 3]) ffSkull(c, sx, -9, 1.1); } : null,
       head: () => ffHood(ctx, 0, 0.6, col, st >= 5 ? '#f0abfc' : '#a3e635', st >= 2),
       weapon: (c, at, ang) => {
@@ -7803,12 +7849,11 @@ function dkWyrm(ctx, col, king) {
 }
 const DK = {
   warrior(ctx, col) {
-    // Echsenkrieger: Glefe beidhändig über der rechten Schulter (Grundgerüst wie der Berserker), Schild auf dem Rücken, Schwanz
+    // Echsenkrieger: Glefe beidhändig über der rechten Schulter (Grundgerüst wie der Berserker), Schwanz
     const st = FIGST.stage;
     rigTwoHand(ctx, col, {
       kind: st >= 4 ? 'plate' : 'leather', trouser: DK_SKIN[1], boot: DK_SKIN[1], bare: true, armored: st >= 4, skin: DK_SKIN[0],
       tail: (c) => dkTail(c, -2, -4, 14),
-      back: st >= 1 || hasUp('w3b') ? (c) => (hasUp('w3b') ? kiteShield(c, -6.6, -21, 10, 18, col, 'none') : roundShield(c, -6.2, -13.6, 6.6, col)) : null,
       head: () => {
         dkHead(ctx, 0, 0);
         if (st >= 2) dkHelm(ctx, 0, -1);
