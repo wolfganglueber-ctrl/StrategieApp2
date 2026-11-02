@@ -2694,21 +2694,25 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
   }
   switch (type) {
     case 'warrior': {
-      cape(ctx, 0, 6, col, 19, 7.5);
-      legs(ctx, 0, 6);
-      torso(ctx, 0, 6, col, FIGST.stage >= 4 ? 'plate' : 'mail');
-      arm(ctx, 4.8, -14, 8.5, -19, '#9aa3ad', true);
-      sword(ctx, 8.5, -19, 15, -38);
-      face(ctx, 0, -20.5);
-      // Ohne Eisenhelm (Stufe 2) nur Haarschopf
-      if (FIGST.stage >= 2) helmet(ctx, 0, -21.5, FIGST.stage >= 5 ? 'great' : 'kettle', col);
-      else hair(ctx, 0, -20.5);
+      // Krieger in Bereitschaftshaltung: Schwert vor der Brust schräg nach oben, Schild vor dem Körper
+      const st = FIGST.stage;
+      const ang = -1.15, near = { h: [6.8, -15.6], elbow: [7.4, -10.6], grip: ang + Math.PI / 2, weapon: (c) => rigSword(c, [6.8, -15.6], ang, hasUp('w5') || st >= 5 ? 18 : 15) };
+      let far = { h: [-3.4, -13.4], elbow: [-5, -15.4], hidden: true };
       if (hasUp('w3a')) {
-        // Beidhändig: zweites Schwert statt Schild
-        arm(ctx, -4.8, -14, -8.5, -19, '#9aa3ad', true);
-        sword(ctx, -8.5, -19, -15, -38);
-      } else if (hasUp('w3b')) kiteShield(ctx, -6, -24, 12, 22, col, 'cross');
-      else roundShield(ctx, -6.5, -9.5, 7.2, col);
+        // Beidhändig: zweites Schwert tief nach vorn
+        const a2 = 0.32;
+        far = { h: [-0.4, -9.4], elbow: [-4.8, -13.4], grip: a2 + Math.PI / 2, weapon: (c) => rigSword(c, [-0.4, -9.4], a2, 13) };
+      }
+      rigStand(ctx, col, {
+        kind: st >= 4 ? 'plate' : 'mail', cape: col, trouser: '#4a3a2e', sleeve: '#9aa3ad', armored: st >= 4, armoredLegs: st >= 4,
+        head: () => {
+          face(ctx, 0, 0);
+          if (st >= 2) helmet(ctx, 0, -1, st >= 5 ? 'great' : 'kettle', col);
+          else hair(ctx, 0, 0);
+        },
+        far, near,
+        shield: hasUp('w3a') ? null : (c) => (hasUp('w3b') ? kiteShield(c, -4.4, -22.5, 12, 22, col, 'cross') : roundShield(c, -4, -13.4, st >= 1 ? 7.4 : 6.6, col)),
+      });
       break;
     }
     case 'archer': {
@@ -4972,6 +4976,47 @@ function rigNeck(ctx, x, y0, y1, skin) {
   outline(ctx, 0.4);
 }
 
+// Stehende Gelenk-Figur (Fußtruppen). Füße bei y ≈ 4.6, Hüfte −8, Schultern −19.8 (innen am Rumpf), Kopf −25.6 im Maßstab 0,86.
+// o: { kind (Rumpf für torso()), robe (Gewand-Farbe statt Rumpf), trouser, boot, skin, sleeve, bare, armored, cape (Farbe), tail(ctx),
+//      head(ctx) im Kopf-Maßstab, far: { h, elbow, grip, weapon(ctx) }, near: { h, elbow, grip, weapon(ctx) }, shield(ctx), front(ctx) }
+// Hinterer Arm liegt hinter dem Rumpf (nur Faust und Waffe sichtbar), Schild und vorderer Arm davor.
+function rigStand(ctx, col, o) {
+  const skin = o.skin || skinOf();
+  const shN = [3.9, -19.8], shF = [-3.9, -19.8];
+  const armOpt = (a) => ({ sleeve: o.sleeve || col.main, bare: o.bare, armored: o.armored, skin, elbow: a.elbow, grip: a.grip });
+  if (o.cape) cape(ctx, 0, 2, o.cape, 21, 8);
+  if (o.tail) o.tail(ctx);
+  // Beine leicht gebeugt, vorderes Knie nach vorn
+  rigLeg(ctx, [-2.3, -8], [-3, 4.6], { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
+  rigLeg(ctx, [2.3, -8], [3.3, 4.6], { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
+  // hinterer Arm hinter dem Rumpf
+  let farE = null;
+  if (o.far) farE = rigArm(ctx, shF, o.far.h, armOpt(o.far));
+  if (o.robe) ffRobe(ctx, 0, col, o.robe);
+  else torso(ctx, 0, 0.2, col, o.kind || 'tunic');
+  if (o.body) o.body(ctx);
+  rigNeck(ctx, 0, -23.2, -21, o.armored ? '#9aa3ad' : skin);
+  rigHead(ctx, 0, -25.6, 0.86, () => o.head(ctx));
+  // Waffe der hinteren Hand und Faust darüber, dann Schild
+  if (o.far) {
+    if (o.far.weapon) o.far.weapon(ctx);
+    if (!o.far.hidden) rigFist(ctx, o.far.h, o.far.grip ?? 0, o.armored, skin, farE);
+  }
+  if (o.shield) o.shield(ctx);
+  // vorderer Arm: hinter der eigenen Waffe, Faust darüber
+  if (o.near) {
+    const e = rigArm(ctx, shN, o.near.h, armOpt(o.near));
+    if (o.near.weapon) o.near.weapon(ctx);
+    rigFist(ctx, o.near.h, o.near.grip ?? 0, o.armored, skin, e);
+  }
+  if (o.front) o.front(ctx);
+}
+// Schwert in der Faust bei h, Klinge in Richtung ang mit Länge len (Griff wird von der Faust umschlossen)
+function rigSword(ctx, h, ang, len = 15) {
+  const ux = Math.cos(ang), uy = Math.sin(ang);
+  sword(ctx, h[0] - ux * 1, h[1] - uy * 1, h[0] + ux * len, h[1] + uy * len);
+}
+
 // Reiter mit Gelenken auf einem Reittier (Pferderahmen: Sattel bei y ≈ −21).
 // o: { armored, kind (Rumpf), legCol, skin, head(ctx) im Kopf-Maßstab, weapon: 'sword' | 'lance', lanceLen, lanceCol, lanceStripe,
 //      lanceTip(ctx, x, y, ang), pennant, shield: [w, h, sign, col], sign (Waffenrock), capeCol, tattered, sleeve, scabbard }
@@ -6063,27 +6108,31 @@ function ffRiderBody(ctx, col, kind, legCol) {
 // ---------------------------------------------------------------- Wikinger
 const VK = {
   warrior(ctx, col) {
+    // Plünderer: Axt kampfbereit vor der Brust, Rundschild vor dem Körper
     const st = FIGST.stage;
-    if (st >= 1) ffFur(ctx, 0, -15, 7.5);
-    legs(ctx, 0, 6, '#5a4a3a');
-    torso(ctx, 0, 6, col, st >= 4 ? 'mail' : 'leather');
-    if (st >= 1) ffFur(ctx, 0, -14.5, 7);
-    arm(ctx, 4.8, -14, 9, -20, skinOf());
-    // Axt erhoben (Klingenmeister: größere Axt)
-    ffLine(ctx, 9, -16, 13, -36, 1.8, ffWood());
-    ffAxe(ctx, 13, -36, -1.37, hasUp('w5') || st >= 5 ? 1.25 : 1);
-    face(ctx, 0, -20.5);
-    if (st >= 2) ffHornHelm(ctx, 0, -21);
-    else hair(ctx, 0, -20.5, '#d6a24a');
+    const ang = -1.2, h = [6.8, -15.6];
+    const axe = (c, hh, a, s) => {
+      const ux = Math.cos(a), uy = Math.sin(a);
+      ffLine(c, hh[0] - ux * 3, hh[1] - uy * 3, hh[0] + ux * 13, hh[1] + uy * 13, 1.6, ffWood());
+      ffAxe(c, hh[0] + ux * 13, hh[1] + uy * 13, a, s);
+    };
+    let far = { h: [-3.4, -13.4], elbow: [-5, -15.4], hidden: true };
     if (hasUp('w3a')) {
-      arm(ctx, -4.8, -14, -9, -19, skinOf());
-      ffLine(ctx, -9, -16, -13, -33, 1.8, ffWood());
-      ffAxe(ctx, -13, -33, -1.8, 1, false);
-    } else ffVikingShield(ctx, -6.5, -10, hasUp('w3b') ? 9.5 : st >= 1 ? 7.8 : 6.6, col);
-    if (st >= 5) {
-      ctx.fillStyle = '#facc15';
-      ctx.fillRect(6.5, -18.2, 2.2, 1.1);
+      const a2 = 0.3;
+      far = { h: [-0.4, -9.4], elbow: [-4.8, -13.4], grip: a2 + Math.PI / 2, weapon: (c) => axe(c, [-0.4, -9.4], a2, 0.9) };
     }
+    rigStand(ctx, col, {
+      kind: st >= 4 ? 'mail' : 'leather', trouser: '#5a4a3a', boot: '#4a3828', bare: st < 4, sleeve: '#9aa3ad',
+      body: st >= 1 ? (c) => ffFur(c, 0, -20.4, 7, '#7a5a3a') : null,
+      head: () => {
+        face(ctx, 0, 0);
+        if (st >= 2) ffHornHelm(ctx, 0, -0.6);
+        else hair(ctx, 0, 0, '#d6a24a');
+      },
+      far,
+      near: { h, elbow: [7.4, -10.6], grip: ang + Math.PI / 2, weapon: (c) => axe(c, h, ang, hasUp('w5') || st >= 5 ? 1.2 : 1) },
+      shield: hasUp('w3a') ? null : (c) => ffVikingShield(c, -4, -13.4, hasUp('w3b') ? 9.4 : st >= 1 ? 7.8 : 6.8, col),
+    });
   },
   archer(ctx, col) {
     const st = FIGST.stage;
@@ -6722,25 +6771,27 @@ function ffSkull(ctx, x, y, r = 2.4, eyes = null) {
 }
 const WT = {
   warrior(ctx, col) {
-    // Kultist mit Sichel
+    // Kultist: Sichel erhoben vor der Brust, zweite Hand verborgen im Gewand
     const st = FIGST.stage;
-    ffRobe(ctx, 0, col, st >= 4 ? '#0b0612' : '#2a1838');
-    arm(ctx, 4.6, -14, 8.5, -16, '#2a1838');
-    ffSickle(ctx, 8.5, -12, hasUp('w5') || st >= 5 ? 1.25 : 1);
-    ffHood(ctx, 0, -21, col, st >= 5 ? '#f0abfc' : '#a3e635', st >= 2);
-    if (st >= 1) for (const sx of [-3, 0, 3]) ffSkull(ctx, sx, -4, 1.1);
-    if (hasUp('w3a')) {
-      arm(ctx, -4.6, -14, -8.5, -16, '#2a1838');
-      ctx.save();
-      ctx.scale(-1, 1);
-      ffSickle(ctx, 8.5, -12, 1);
-      ctx.restore();
-    } else if (hasUp('w3b')) {
-      // Schild mit Auge
-      kiteShield(ctx, -6, -22, 11, 20, { main: '#3b2a55', dark: '#140a20', light: col.light }, 'none');
-      ffGlow(ctx, -6, -13, 2.5, 'rgba(163,230,53,0.9)', 'rgba(60,120,0,0)');
-    }
-    if (st >= 5) ffGlow(ctx, 0, -2, 9, 'rgba(163,230,53,0.25)', 'rgba(60,120,0,0)');
+    const ang = -1.1, h = [6.6, -15.4];
+    const sickle = (c, hh, a, sc) => {
+      c.save();
+      c.translate(hh[0], hh[1]);
+      c.rotate(a + Math.PI / 2);
+      ffSickle(c, 0, 3, sc);
+      c.restore();
+    };
+    let far = { h: [-2, -12], elbow: [-4.8, -14.6], hidden: true };
+    if (hasUp('w3a')) far = { h: [-0.4, -9.6], elbow: [-4.8, -13.4], grip: 0.4 + Math.PI / 2, weapon: (c) => sickle(c, [-0.4, -9.6], 0.4, 0.9) };
+    rigStand(ctx, col, {
+      robe: st >= 4 ? '#0b0612' : '#2a1838', sleeve: st >= 4 ? '#0b0612' : '#2a1838',
+      body: st >= 1 ? (c) => { for (const sx of [-3, 0, 3]) ffSkull(c, sx, -9, 1.1); } : null,
+      head: () => ffHood(ctx, 0, 0.6, col, st >= 5 ? '#f0abfc' : '#a3e635', st >= 2),
+      far,
+      near: { h, elbow: [7.4, -10.6], grip: ang + Math.PI / 2, weapon: (c) => sickle(c, h, ang, hasUp('w5') || st >= 5 ? 1.25 : 1) },
+      shield: hasUp('w3b') ? (c) => { kiteShield(c, -4.4, -22, 11, 20, { main: '#3b2a55', dark: '#140a20', light: col.light }, 'none'); ffGlow(c, -4.4, -13, 2.5, 'rgba(163,230,53,0.9)', 'rgba(60,120,0,0)'); } : null,
+      front: st >= 5 ? (c) => ffGlow(c, 0, -6, 9, 'rgba(163,230,53,0.25)', 'rgba(60,120,0,0)') : null,
+    });
   },
   archer(ctx, col) {
     // Irrlichtwerfer: wirft grüne Geisterlichter
@@ -7656,27 +7707,38 @@ function dkWyrm(ctx, col, king) {
 }
 const DK = {
   warrior(ctx, col) {
+    // Echsenkrieger: Krummschwert (Khopesch) kampfbereit, Schild vor dem Körper, Schwanz
     const st = FIGST.stage;
-    dkBody(ctx, col, st >= 4 ? 'plate' : 'leather');
-    arm(ctx, 4.8, -14, 8.5, -19, skinOf());
-    // Krummschwert (Khopesch)
-    ffLine(ctx, 8.5, -19, 11, -26, 1.4, '#5a3a1e');
-    ctx.fillStyle = steel(ctx, 10, 18, -36, -24);
-    ctx.beginPath();
-    ctx.moveTo(10.4, -25);
-    ctx.quadraticCurveTo(12, -33, 17, -35);
-    ctx.quadraticCurveTo(19, -31, 16, -30);
-    ctx.quadraticCurveTo(13.5, -30, 12.4, -24.5);
-    ctx.closePath();
-    ctx.fill();
-    outline(ctx, 0.5);
-    dkHead(ctx, 0, -21);
-    if (st >= 2) dkHelm(ctx, 0, -22);
-    if (hasUp('w3a')) {
-      arm(ctx, -4.8, -14, -8.5, -19, skinOf());
-      ffLine(ctx, -8.5, -19, -12, -32, 1.4, steel(ctx, -12, -8, -32, -19));
-    } else if (hasUp('w3b')) kiteShield(ctx, -6, -24, 12, 22, col, 'none');
-    else if (st >= 1) roundShield(ctx, -6.5, -9.5, 7, col);
+    const ang = -1.15, h = [6.8, -15.6];
+    const khopesh = (c, hh, a) => {
+      c.save();
+      c.translate(hh[0], hh[1]);
+      c.rotate(a);
+      ffLine(c, -1.4, 0, 5, 0, 1.4, '#5a3a1e');
+      c.fillStyle = steel(c, 4, 14, -4, 2);
+      c.beginPath();
+      c.moveTo(4.6, -0.8);
+      c.quadraticCurveTo(10, -1.6, 13, -4.6);
+      c.quadraticCurveTo(15, -2, 12.4, -0.4);
+      c.quadraticCurveTo(9, 1, 4.6, 0.8);
+      c.closePath();
+      c.fill();
+      outline(c, 0.5);
+      c.restore();
+    };
+    let far = { h: [-3.4, -13.4], elbow: [-5, -15.4], hidden: true };
+    if (hasUp('w3a')) far = { h: [-0.4, -9.4], elbow: [-4.8, -13.4], grip: 0.3 + Math.PI / 2, weapon: (c) => khopesh(c, [-0.4, -9.4], 0.3) };
+    rigStand(ctx, col, {
+      kind: st >= 4 ? 'plate' : 'leather', trouser: DK_SKIN[1], boot: DK_SKIN[1], bare: true, armored: st >= 4, skin: DK_SKIN[0],
+      tail: (c) => dkTail(c, -2, -4, 14),
+      head: () => {
+        dkHead(ctx, 0, 0);
+        if (st >= 2) dkHelm(ctx, 0, -1);
+      },
+      far,
+      near: { h, elbow: [7.4, -10.6], grip: ang + Math.PI / 2, weapon: (c) => khopesh(c, h, ang) },
+      shield: hasUp('w3a') ? null : st >= 1 || hasUp('w3b') ? (c) => (hasUp('w3b') ? kiteShield(c, -4.4, -22.5, 12, 22, col, 'none') : roundShield(c, -4, -13.4, 7, col)) : null,
+    });
   },
   archer(ctx, col) {
     // Feuerspucker: speit Flammen statt zu schießen
