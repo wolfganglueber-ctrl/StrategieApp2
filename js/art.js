@@ -4793,6 +4793,32 @@ function rigLimb(ctx, a, j, b, wa, wj, wb, cUpper, cLower, cap = null) {
   ctx.fillStyle = rigFill(ctx, j, b, wj, cLower);
   rigSeg(ctx, j, b, wj, wb);
   ctx.fill();
+  // Trennlinie am Gelenk: Kontur des unteren Glieds, soweit sie über dem oberen liegt (Ellbogen-/Kniefalte)
+  ctx.save();
+  rigSeg(ctx, a, j, wa, wj);
+  ctx.clip();
+  rigSeg(ctx, j, b, wj, wb);
+  ctx.strokeStyle = 'rgba(20,14,10,0.8)';
+  ctx.lineWidth = 0.5;
+  ctx.stroke();
+  ctx.restore();
+  // Bei stark gebeugtem Gelenk liegen beide Glieder nebeneinander: Kante des unteren Glieds zur Seite des oberen ganz durchziehen
+  {
+    const dx = b[0] - j[0], dy = b[1] - j[1], L = Math.hypot(dx, dy) || 1;
+    let nx = -dy / L, ny = dx / L;
+    if (nx * (a[0] - j[0]) + ny * (a[1] - j[1]) < 0) { nx = -nx; ny = -ny; }
+    const ux = (a[0] - j[0]) / (Math.hypot(a[0] - j[0], a[1] - j[1]) || 1), uy = (a[1] - j[1]) / (Math.hypot(a[0] - j[0], a[1] - j[1]) || 1);
+    // nur wenn das obere Glied wirklich daneben liegt (Winkel am Gelenk kleiner als ~70°)
+    if ((dx / L) * ux + (dy / L) * uy > 0.35) {
+      ctx.strokeStyle = 'rgba(20,14,10,0.9)';
+      ctx.lineWidth = 0.7;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(j[0] + nx * wj * 0.5, j[1] + ny * wj * 0.5);
+      ctx.lineTo(b[0] + nx * wb * 0.5 - (dx / L) * 1.2, b[1] + ny * wb * 0.5 - (dy / L) * 1.2);
+      ctx.stroke();
+    }
+  }
   // Muskelglanz auf beiden Gliedern
   for (const [p, q, w] of [[a, j, wa], [j, b, wj]]) {
     const dx = q[0] - p[0], dy = q[1] - p[1], L = Math.hypot(dx, dy) || 1;
