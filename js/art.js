@@ -5147,6 +5147,144 @@ function thHalberd(ctx, x, y, ang, L = 1, big = false) {
   outline(ctx, 0.3);
   ctx.restore();
 }
+// Sense: Blatt fast quer zum Stiel, über den Kopf nach hinten geschwungen, Spitze nach unten (x entlang des Stiels)
+function thScythe(ctx, x, y, ang, L = 1, dbl = false) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  // Stielende mit Eisenring und Zwinge, an der das Blatt sitzt
+  ctx.fillStyle = '#4b4f57';
+  ctx.fillRect(-2.6, -1.25, 2.2, 2.5);
+  outline(ctx, 0.35);
+  const blade = (sg) => {
+    ctx.save();
+    ctx.scale(L, sg * L);
+    // Blattrücken (außen, gewölbt) und Schneide (innen, hohl) laufen in eine feine Spitze aus
+    ctx.fillStyle = steel(ctx, -6, 2, -18, 0);
+    ctx.beginPath();
+    ctx.moveTo(1.2, -0.6);
+    ctx.bezierCurveTo(3.4, -7, 1.6, -14.5, -5.5, -19.5);
+    ctx.bezierCurveTo(-2.4, -14.6, -2.2, -8, -2.6, -1.4);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.5);
+    // Rippe am Rücken
+    ctx.strokeStyle = 'rgba(40,40,48,0.7)';
+    ctx.lineWidth = 0.55;
+    ctx.beginPath();
+    ctx.moveTo(0.5, -1.2);
+    ctx.bezierCurveTo(2.3, -7, 0.8, -13.6, -5, -18.8);
+    ctx.stroke();
+    // geschliffene Schneide hell
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 0.45;
+    ctx.beginPath();
+    ctx.moveTo(-1.9, -2.4);
+    ctx.bezierCurveTo(-1.6, -8, -1.9, -13.4, -4.7, -18.4);
+    ctx.stroke();
+    ctx.restore();
+  };
+  blade(-1);
+  if (dbl) blade(1);
+  ctx.restore();
+}
+// Speer: Tülle mit Wicklung, blattförmige Spitze mit Mittelgrat (zweifarbig für Plastizität), Quaste; dbl = Flügelspieß mit Parierhaken
+function thSpear(ctx, x, y, ang, L = 1, dbl = false, col = null) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  ctx.scale(L, L);
+  // Quaste unter der Tülle: hängt senkrecht nach unten (Weltkoordinaten)
+  if (col) {
+    ctx.save();
+    ctx.scale(1 / L, 1 / L);
+    ctx.rotate(-ang);
+    const [qx, qy] = [Math.cos(ang) * -3.6 * L, Math.sin(ang) * -3.6 * L];
+    ctx.strokeStyle = '#3a2414';
+    ctx.lineWidth = 0.4;
+    ctx.beginPath();
+    ctx.moveTo(qx, qy);
+    ctx.lineTo(qx + 0.6, qy + 1.6);
+    ctx.stroke();
+    ctx.fillStyle = col.dark;
+    ctx.beginPath();
+    ctx.moveTo(qx - 0.2, qy + 1.4);
+    ctx.quadraticCurveTo(qx + 1.8, qy + 1.6, qx + 1.9, qy + 5.4);
+    ctx.lineTo(qx + 1.2, qy + 4.6);
+    ctx.lineTo(qx + 0.7, qy + 5.6);
+    ctx.lineTo(qx + 0.2, qy + 4.6);
+    ctx.lineTo(qx - 0.6, qy + 5.2);
+    ctx.quadraticCurveTo(qx - 0.6, qy + 2.6, qx - 0.2, qy + 1.4);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.3);
+    ctx.restore();
+  }
+  // Tülle: verjüngt sich zur Klinge, mit Lederwicklung
+  ctx.fillStyle = steel(ctx, -4, 2, -1.4, 1.4);
+  ctx.beginPath();
+  ctx.moveTo(-4, -1.25);
+  ctx.lineTo(1.6, -0.75);
+  ctx.lineTo(1.6, 0.75);
+  ctx.lineTo(-4, 1.25);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.4);
+  ctx.strokeStyle = '#3a2414';
+  ctx.lineWidth = 0.5;
+  for (const t of [-3.2, -2.3]) {
+    ctx.beginPath();
+    ctx.moveTo(t, -1.25);
+    ctx.lineTo(t + 0.3, 1.25);
+    ctx.stroke();
+  }
+  // Flügel (Parierhaken) am Klingenansatz
+  if (dbl) {
+    ctx.fillStyle = steel(ctx, 0, 3, -4, 4);
+    for (const sg of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(0.6, sg * 0.6);
+      ctx.quadraticCurveTo(0.2, sg * 3.2, 2.6, sg * 4.4);
+      ctx.quadraticCurveTo(1.6, sg * 2.4, 2.4, sg * 0.6);
+      ctx.closePath();
+      ctx.fill();
+      outline(ctx, 0.35);
+    }
+  }
+  // Blattspitze: Ober- und Unterhälfte getrennt schattiert, Grat in der Mitte
+  const tip = 11.5, wMax = 2.5;
+  ctx.fillStyle = '#e2e6eb';
+  ctx.beginPath();
+  ctx.moveTo(1.4, 0);
+  ctx.bezierCurveTo(2.6, -wMax * 1.1, 5.6, -wMax, tip, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#8f98a3';
+  ctx.beginPath();
+  ctx.moveTo(1.4, 0);
+  ctx.bezierCurveTo(2.6, wMax * 1.1, 5.6, wMax, tip, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(1.4, 0);
+  ctx.bezierCurveTo(2.6, -wMax * 1.1, 5.6, -wMax, tip, 0);
+  ctx.bezierCurveTo(5.6, wMax, 2.6, wMax * 1.1, 1.4, 0);
+  ctx.closePath();
+  outline(ctx, 0.45);
+  ctx.strokeStyle = 'rgba(60,66,76,0.8)';
+  ctx.lineWidth = 0.35;
+  ctx.beginPath();
+  ctx.moveTo(1.6, 0);
+  ctx.lineTo(tip - 0.6, 0);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 0.3;
+  ctx.beginPath();
+  ctx.moveTo(3, -1.3);
+  ctx.quadraticCurveTo(6, -1.5, tip - 1.4, -0.3);
+  ctx.stroke();
+  ctx.restore();
+}
 // Stangenwaffe: Holzstiel entlang der Linie, Kopf am Ende
 function thHaft(ctx, at, c = ffWood()) {
   const [x0, y0] = at(0.04), [x1, y1] = at(1);
@@ -6907,30 +7045,8 @@ const WT = {
       head: () => ffHood(ctx, 0, 0.6, col, st >= 5 ? '#f0abfc' : '#a3e635', st >= 2),
       weapon: (c, at, ang) => {
         thHaft(c, at, '#3b2a1a');
-        // Sensenblatt nach hinten gebogen
         const [x, y] = at(1);
-        c.save();
-        c.translate(x, y);
-        c.rotate(ang);
-        const L = hasUp('w5') || st >= 5 ? 1.25 : 1;
-        c.fillStyle = steel(c, -12 * L, 0, -2, 6);
-        c.beginPath();
-        c.moveTo(0.4, -0.8);
-        c.quadraticCurveTo(-4 * L, 5 * L, -13 * L, 7 * L);
-        c.quadraticCurveTo(-5 * L, 3 * L, -0.4, 1);
-        c.closePath();
-        c.fill();
-        outline(c, 0.5);
-        if (hasUp('w3a')) {
-          c.beginPath();
-          c.moveTo(0.4, 0.8);
-          c.quadraticCurveTo(-3 * L, -4 * L, -10 * L, -5 * L);
-          c.quadraticCurveTo(-4 * L, -2 * L, -0.4, -1);
-          c.closePath();
-          c.fill();
-          outline(c, 0.5);
-        }
-        c.restore();
+        thScythe(c, x, y, ang, hasUp('w5') || st >= 5 ? 1.25 : 1, hasUp('w3a'));
       },
     });
     if (st >= 5) ffGlow(ctx, 0, -6, 9, 'rgba(163,230,53,0.25)', 'rgba(60,120,0,0)');
@@ -7861,28 +7977,7 @@ const DK = {
       weapon: (c, at, ang) => {
         thHaft(c, at, '#5a3a1e');
         const [x, y] = at(1);
-        c.save();
-        c.translate(x, y);
-        c.rotate(ang);
-        const L = hasUp('w5') || st >= 5 ? 1.2 : 1;
-        c.fillStyle = steel(c, 0, 10 * L, -4, 3);
-        c.beginPath();
-        c.moveTo(-1.5, -1);
-        c.quadraticCurveTo(4 * L, -3.6 * L, 9 * L, -1.4);
-        c.quadraticCurveTo(5 * L, 0.6, -1.5, 1.2);
-        c.closePath();
-        c.fill();
-        outline(c, 0.5);
-        if (hasUp('w3a')) {
-          c.beginPath();
-          c.moveTo(-1, 1);
-          c.lineTo(1.2, 4.2);
-          c.lineTo(2.4, 1);
-          c.closePath();
-          c.fill();
-          outline(c, 0.4);
-        }
-        c.restore();
+        thSpear(c, x, y, ang, hasUp('w5') || st >= 5 ? 1.2 : 1, hasUp('w3a'), col);
       },
     });
   },
