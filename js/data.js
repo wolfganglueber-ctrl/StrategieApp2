@@ -155,7 +155,7 @@ export const FACTIONS = {
     names: {
       warrior: 'Kultist', archer: 'Irrlichtwerfer', rider: 'Nachtmahrreiter', defender: 'Lehmgolem', knight: 'Hexenritter', griffin: 'Besenhexe',
       catapult: 'Fluchkessel', trebuchet: 'Seelenwerfer', mage: 'Hexenmeister', basilisk: 'Riesenkröte', blackknight: 'Todesritter',
-      troll: 'Raditron', giant: 'Golemkoloss', dragon: 'Knochendrache',
+      troll: 'Raditron', giant: 'Ur-Raditron', dragon: 'Knochendrache',
     },
     icons: { nest: '🐸', tavern: '⚰️', lair: '🧟', dragonlair: '💀', workshop: '🧪' },
     buildings: { barracks: 'Zirkel', workshop: 'Hexenküche', sanctum: 'Hexenturm', nest: 'Krötensumpf', tavern: 'Gruft', lair: 'Golemgrube', dragonlair: 'Drachengruft' },

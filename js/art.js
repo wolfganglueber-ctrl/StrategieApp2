@@ -3116,7 +3116,12 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       drawTroll2(ctx, col);
       break;
     case 'giant':
-      drawGiant(ctx, col);
+      // Riesentroll: der neue Troll, größer, zweiköpfig und gepanzert
+      ctx.save();
+      ctx.scale(1.35, 1.35);
+      ctx.translate(0, -1.4);
+      drawTroll2(ctx, col, { giant: true });
+      ctx.restore();
       break;
     case 'blackknight':
       drawBlackKnight(ctx, col);
@@ -4112,203 +4117,6 @@ function drawBlackKnight(ctx, col) {
 }
 
 
-// Riesentroll: aus 5 Trollen verschmolzen – moosgrüne Steinhaut, zwei Köpfe, Hauer, riesige Steinkeule, Knochenkette
-function drawGiant(ctx, col, pal = null) {
-  const [skin, skinD, skinL] = pal || ['#4d5a3a', '#1e2416', '#8b9a6a'];
-  const skinGrad = (x0, y0, r) => {
-    const g = ctx.createRadialGradient(x0 - r * 0.35, y0 - r * 0.35, r * 0.1, x0, y0, r);
-    g.addColorStop(0, skinL);
-    g.addColorStop(0.55, skin);
-    g.addColorStop(1, skinD);
-    return g;
-  };
-  // große Faust (rigFist 2,2-fach)
-  const bigFist = (p, ang, wrist) => {
-    ctx.save();
-    ctx.translate(p[0], p[1]);
-    ctx.scale(2.2, 2.2);
-    rigFist(ctx, [0, 0], ang, false, skin, [(wrist[0] - p[0]) / 2.2, (wrist[1] - p[1]) / 2.2]);
-    ctx.restore();
-  };
-  const limb = (pts, w, fill) => {
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = 'rgba(10,8,6,0.9)';
-    ctx.lineWidth = w + 1.6;
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k][0], pts[k][1]);
-    ctx.stroke();
-    ctx.strokeStyle = fill;
-    ctx.lineWidth = w;
-    ctx.stroke();
-  };
-  // Säulenbeine mit Steinschienen
-  for (const [hx, fx] of [[-9, -10], [7, 8]]) {
-    limb([[hx, -16], [fx, 3]], 9.5, grad(ctx, fx - 6, fx + 6, skinL, skinD));
-    ctx.fillStyle = grad(ctx, fx - 6, fx + 6, '#9a968c', '#4a4740');
-    ctx.beginPath();
-    ctx.roundRect(fx - 5.5, -8, 11, 6, 2);
-    ctx.fill();
-    outline(ctx, 0.6);
-    ctx.fillStyle = skinD;
-    ctx.beginPath();
-    ctx.ellipse(fx + 1, 5, 6.5, 2.6, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // rechter Arm hinter dem Rumpf, hängt mit geballter Faust herab
-  limb([[17, -44], [23, -30], [19, -18]], 8.5, grad(ctx, 14, 26, skinL, skinD));
-  bigFist([19, -15.6], Math.atan2(12, -4), [23, -30]);
-  // Breiter Rumpf mit Steinplatten auf den Schultern
-  ctx.fillStyle = skinGrad(0, -34, 28);
-  ctx.beginPath();
-  ctx.moveTo(-13, -13);
-  ctx.quadraticCurveTo(-24, -28, -20, -46);
-  ctx.quadraticCurveTo(-10, -56, 2, -54);
-  ctx.quadraticCurveTo(16, -55, 21, -44);
-  ctx.quadraticCurveTo(24, -26, 12, -13);
-  ctx.closePath();
-  ctx.fill();
-  outline(ctx, 1.3);
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-  ctx.lineWidth = 0.9;
-  ctx.beginPath();
-  ctx.moveTo(-8, -42);
-  ctx.quadraticCurveTo(0, -36, 12, -42);
-  ctx.moveTo(1, -37);
-  ctx.quadraticCurveTo(2, -26, 1, -16);
-  ctx.moveTo(-8, -28);
-  ctx.quadraticCurveTo(1, -24, 11, -28);
-  ctx.stroke();
-  // Moosflecken
-  ctx.fillStyle = 'rgba(132,170,70,0.55)';
-  for (const [x, y, r] of [[-15, -38, 3], [14, -30, 2.4], [-6, -20, 2], [9, -48, 2.2]]) {
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  for (const sx of [-17, 17]) {
-    ctx.fillStyle = grad(ctx, sx - 7, sx + 7, '#b2ada2', '#55524b');
-    ctx.beginPath();
-    ctx.ellipse(sx, -47, 7.5, 4.5, sx < 0 ? -0.3 : 0.3, 0, Math.PI * 2);
-    ctx.fill();
-    outline(ctx, 0.8);
-  }
-  // Steinkeule über die linke Schulter gelegt, vor dem Körper
-  ctx.save();
-  ctx.translate(-14, -38);
-  ctx.rotate(-0.55);
-  ctx.fillStyle = grad(ctx, -3, 3, '#7a5a3a', '#3a2614');
-  ctx.fillRect(-2.2, -4, 4.4, 26);
-  outline(ctx, 0.7);
-  ctx.fillStyle = grad(ctx, -9, 9, '#a7a39a', '#4b4842');
-  ctx.beginPath();
-  ctx.moveTo(-6, -4);
-  ctx.quadraticCurveTo(-10, -14, -6, -22);
-  ctx.quadraticCurveTo(0, -27, 7, -21);
-  ctx.quadraticCurveTo(10, -12, 6, -4);
-  ctx.closePath();
-  ctx.fill();
-  outline(ctx, 0.9);
-  ctx.fillStyle = '#d6d2c6';
-  for (const [x, y] of [[-6, -12], [6, -10], [0, -24], [-3, -18], [4, -17]]) {
-    ctx.beginPath();
-    ctx.moveTo(x - 1.4, y);
-    ctx.lineTo(x, y - 3);
-    ctx.lineTo(x + 1.4, y);
-    ctx.fill();
-  }
-  ctx.restore();
-  // linker Arm vor dem Körper: Ellbogen außen, Faust umschließt den Keulenstiel vor der Brust
-  limb([[-17, -44], [-23.5, -33], [-11, -30.6]], 8.5, grad(ctx, -26, -12, skinL, skinD));
-  bigFist([-9.8, -30.8], Math.atan2(-0.852, -0.523) + Math.PI / 2, [-23.5, -33]);
-  // Knochenkette mit Anhänger in Spielerfarbe
-  ctx.strokeStyle = '#3a2a1a';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(-11, -48);
-  ctx.quadraticCurveTo(0, -36, 11, -48);
-  ctx.stroke();
-  for (let k = 0; k <= 6; k++) {
-    const t = k / 6;
-    const x = -11 + 22 * t, y = -48 + Math.sin(t * Math.PI) * 9;
-    ctx.fillStyle = '#ece4cf';
-    ctx.beginPath();
-    ctx.ellipse(x, y, 1.1, 2, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.fillStyle = cloth(ctx, -3, 3, col);
-  ctx.beginPath();
-  ctx.moveTo(0, -42);
-  ctx.lineTo(3.2, -37);
-  ctx.lineTo(0, -32);
-  ctx.lineTo(-3.2, -37);
-  ctx.closePath();
-  ctx.fill();
-  outline(ctx, 0.6);
-  // Lendenschurz in Spielerfarbe mit Steingürtel
-  ctx.fillStyle = grad(ctx, -14, 13, '#8e8a80', '#3f3c36');
-  ctx.fillRect(-14, -17, 27, 4);
-  outline(ctx, 0.6);
-  ctx.fillStyle = cloth(ctx, -13, 12, col);
-  ctx.beginPath();
-  ctx.moveTo(-13, -13);
-  ctx.lineTo(12, -13);
-  ctx.lineTo(9, -2);
-  ctx.lineTo(4, -5);
-  ctx.lineTo(0, 0);
-  ctx.lineTo(-4, -5);
-  ctx.lineTo(-9, -1);
-  ctx.closePath();
-  ctx.fill();
-  outline(ctx, 0.7);
-  // Zwei Köpfe mit Hauern und glühenden Augen
-  for (const [hx, hy, tilt] of [[-7, -58, -0.25], [8, -59, 0.2]]) {
-    ctx.save();
-    ctx.translate(hx, hy);
-    ctx.rotate(tilt);
-    ctx.fillStyle = skinGrad(0, 0, 8);
-    ctx.beginPath();
-    ctx.moveTo(-6, 4);
-    ctx.quadraticCurveTo(-8, -6, 0, -8);
-    ctx.quadraticCurveTo(8, -6, 6, 4);
-    ctx.quadraticCurveTo(0, 8, -6, 4);
-    ctx.fill();
-    outline(ctx, 0.9);
-    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(-4.5, -2.5);
-    ctx.lineTo(-1, -1.2);
-    ctx.moveTo(4.5, -2.5);
-    ctx.lineTo(1, -1.2);
-    ctx.stroke();
-    ctx.fillStyle = '#ffb020';
-    for (const ex of [-2.6, 2.6]) {
-      ctx.beginPath();
-      ctx.arc(ex, 0, 1.1, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = '#f3ecd8';
-    for (const tx of [-3, 3]) {
-      ctx.beginPath();
-      ctx.moveTo(tx - 1, 4);
-      ctx.lineTo(tx + (tx < 0 ? -0.8 : 0.8), 0.2);
-      ctx.lineTo(tx + 1, 4);
-      ctx.fill();
-    }
-    // Horn
-    ctx.fillStyle = grad(ctx, -2, 2, '#e8dcc0', '#7a6a50');
-    ctx.beginPath();
-    ctx.moveTo(-2, -7);
-    ctx.quadraticCurveTo(tilt < 0 ? -6 : 6, -12, tilt < 0 ? -4 : 4, -15);
-    ctx.quadraticCurveTo(0, -11, 2, -7);
-    ctx.fill();
-    outline(ctx, 0.5);
-    ctx.restore();
-  }
-  shine(ctx, -12, -46, 3, 6, 0.18);
-}
 
 // Troll (neu, 1.20): gebeugter Riese mit Gelenken, Blick nach rechts. Füße auf dem Boden (y ≈ 4), Kopf bei y ≈ −60.
 // Linker Arm vorn: Faust hält den Stiel, die Waffe liegt auf der linken Schulter. Rechter Arm hängt hinter dem Körper.
@@ -4316,7 +4124,139 @@ function drawGiant(ctx, col, pal = null) {
 function drawTroll2(ctx, col, v = {}) {
   const st = FIGST.stage;
   const [sk, skD, skL] = v.skin || ['#56604a', '#1f2519', '#9aa684'];
-  const frost = !!v.frost;
+  const frost = !!v.frost, giant = !!v.giant;
+  // Kopf mit Haar, Hörnern, Kiefer und Hauern (beim Riesentroll zweimal: zweiter Kopf dahinter)
+  function trollHead(hx, hy) {
+  // Schädel
+  ctx.fillStyle = shadeG(hx, hy - 1, 8);
+  ctx.beginPath();
+  ctx.moveTo(hx - 5.6, hy + 2.4);
+  ctx.quadraticCurveTo(hx - 7, hy - 6.4, hx, hy - 7.2);
+  ctx.quadraticCurveTo(hx + 6, hy - 7, hx + 6.6, hy - 2);
+  ctx.lineTo(hx + 7, hy + 2.6);
+  ctx.quadraticCurveTo(hx + 1, hy + 4.4, hx - 5.6, hy + 2.4);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.9);
+  // zottiges Haar auf dem Schädel (Frost: weiß)
+  ctx.fillStyle = frost ? '#f8fafc' : '#2e2418';
+  ctx.beginPath();
+  ctx.moveTo(hx - 5.8, hy - 1);
+  ctx.quadraticCurveTo(hx - 6.6, hy - 7.4, hx + 0.4, hy - 7.6);
+  ctx.quadraticCurveTo(hx + 4.4, hy - 7.6, hx + 5, hy - 5.4);
+  for (let k = 0; k < 6; k++) ctx.lineTo(hx + 4 - k * 1.8, hy - 5.2 + (k % 2 ? 1.6 : 0) - k * 0.1);
+  ctx.lineTo(hx - 4.6, hy - 2.6);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.5);
+  // Hörner wie beim bisherigen Troll, nach hinten geschwungen (Frost: mit Reif)
+  ctx.save();
+  // Hornansätze sitzen im Haar oben auf dem Schädel
+  ctx.translate(hx - 9 + 0.6, hy + 50 + 1.6);
+  ctx.fillStyle = frost ? grad(ctx, -8, 8, '#ffffff', '#93c5fd') : grad(ctx, -8, 8, '#f1eadb', '#8f846f');
+  ctx.beginPath();
+  ctx.moveTo(4, -56);
+  ctx.quadraticCurveTo(-4, -62, -6, -70);
+  ctx.quadraticCurveTo(-1, -64, 7, -58);
+  ctx.closePath();
+  ctx.moveTo(10, -58);
+  ctx.quadraticCurveTo(6, -66, 8, -73);
+  ctx.quadraticCurveTo(11, -66, 13, -58);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.6);
+  ctx.restore();
+  // spitzes Ohr nach hinten
+  ctx.fillStyle = shadeG(hx - 5, hy - 1, 4);
+  ctx.beginPath();
+  ctx.moveTo(hx - 3.4, hy - 2);
+  ctx.lineTo(hx - 9.4, hy - 4.6);
+  ctx.lineTo(hx - 3.6, hy + 1.2);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.5);
+  // schwerer Unterkiefer direkt unter dem Gesicht, mit Unterbiss
+  ctx.fillStyle = grad(ctx, hx - 3, hx + 9, sk, skD);
+  ctx.beginPath();
+  ctx.moveTo(hx - 3.6, hy + 1.6);
+  ctx.lineTo(hx + 8.4, hy + 1.8);
+  ctx.quadraticCurveTo(hx + 9, hy + 5.2, hx + 6, hy + 6.2);
+  ctx.quadraticCurveTo(hx + 1, hy + 7, hx - 2.6, hy + 5.4);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.8);
+  // Mundspalte
+  ctx.strokeStyle = 'rgba(10,6,4,0.9)';
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(hx + 0.6, hy + 2);
+  ctx.lineTo(hx + 8.2, hy + 2);
+  ctx.stroke();
+  // Hauer aus dem Unterkiefer nach oben über die Oberlippe
+  ctx.fillStyle = '#f5f0e2';
+  for (const tx of [hx + 2.4, hx + 6.8]) {
+    ctx.beginPath();
+    ctx.moveTo(tx - 0.8, hy + 2.6);
+    ctx.quadraticCurveTo(tx - 0.6, hy - 0.4, tx + 0.4, hy - 1.6);
+    ctx.lineTo(tx + 0.8, hy + 2.6);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.35);
+  }
+  // Stirnwulst, Augen darunter, breite Nase
+  ctx.fillStyle = 'rgba(0,0,0,0.38)';
+  ctx.beginPath();
+  ctx.ellipse(hx + 2.4, hy - 3.6, 5, 1.4, -0.05, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = frost ? '#7dd3fc' : '#fbbf24';
+  ctx.shadowColor = ctx.fillStyle;
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.ellipse(hx + 1.2, hy - 2.4, 1, 0.65, 0, 0, Math.PI * 2);
+  ctx.ellipse(hx + 4.6, hy - 2.4, 0.9, 0.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = shadeG(hx + 7, hy - 0.6, 2.6);
+  ctx.beginPath();
+  ctx.ellipse(hx + 7.4, hy - 0.4, 2.1, 1.7, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  outline(ctx, 0.5);
+  if (st >= 1) {
+    ctx.strokeStyle = col.main;
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(hx - 0.6, hy - 1.4);
+    ctx.lineTo(hx - 0.2, hy + 0.8);
+    ctx.stroke();
+  }
+  // Frost: Eiszapfen-Bart am Kinn
+  if (frost) {
+    ctx.fillStyle = grad(ctx, hx - 2, hx + 8, '#ffffff', '#93c5fd');
+    for (let k = 0; k < 5; k++) {
+      const x = hx - 1.6 + k * 1.9, l = 4 + (k % 2) * 2.4;
+      ctx.beginPath();
+      ctx.moveTo(x - 0.9, hy + 5.6);
+      ctx.lineTo(x, hy + 5.6 + l);
+      ctx.lineTo(x + 0.9, hy + 5.6);
+      ctx.closePath();
+      ctx.fill();
+      outline(ctx, 0.3);
+    }
+  }
+  // Trollkönig (Stufe 5): eiserne Krone
+  if (st >= 5) {
+    ctx.fillStyle = frost ? '#e0f2fe' : '#facc15';
+    ctx.beginPath();
+    ctx.moveTo(hx - 4.6, hy - 6);
+    for (let k = 0; k <= 4; k++) {
+      ctx.lineTo(hx - 4.6 + k * 2.4, hy - 6 - (k % 2 ? 1 : 4));
+    }
+    ctx.lineTo(hx + 5, hy - 5.4);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.4);
+  }
+  }
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   const shadeG = (x0, y0, r) => {
@@ -4392,6 +4332,14 @@ function drawTroll2(ctx, col, v = {}) {
   // rechtes Bein hinten im Schatten (dunkel, zuerst), linkes Bein vorn hell
   leg([6, -17], [10.4, -7.6], [7.4, 0], true);
   leg([-6, -17], [-9.6, -7], [-8.2, 0], false);
+  if (giant) {
+    // zweiter Kopf hinter dem ersten, wächst aus der Schulter
+    ctx.fillStyle = sk;
+    ctx.beginPath();
+    ctx.ellipse(1, -54, 6, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    trollHead(2, -58.6);
+  }
   // Rumpf: Buckel hinten oben, mächtige Brust, Bauch
   const torsoP = () => {
     ctx.beginPath();
@@ -4528,136 +4476,7 @@ function drawTroll2(ctx, col, v = {}) {
   ctx.quadraticCurveTo(8, -45, 4, -44.4);
   ctx.closePath();
   ctx.fill();
-  const hx = 14, hy = -54;
-  // Schädel
-  ctx.fillStyle = shadeG(hx, hy - 1, 8);
-  ctx.beginPath();
-  ctx.moveTo(hx - 5.6, hy + 2.4);
-  ctx.quadraticCurveTo(hx - 7, hy - 6.4, hx, hy - 7.2);
-  ctx.quadraticCurveTo(hx + 6, hy - 7, hx + 6.6, hy - 2);
-  ctx.lineTo(hx + 7, hy + 2.6);
-  ctx.quadraticCurveTo(hx + 1, hy + 4.4, hx - 5.6, hy + 2.4);
-  ctx.closePath();
-  ctx.fill();
-  outline(ctx, 0.9);
-  // zottiges Haar auf dem Schädel (Frost: weiß)
-  ctx.fillStyle = frost ? '#f8fafc' : '#2e2418';
-  ctx.beginPath();
-  ctx.moveTo(hx - 5.8, hy - 1);
-  ctx.quadraticCurveTo(hx - 6.6, hy - 7.4, hx + 0.4, hy - 7.6);
-  ctx.quadraticCurveTo(hx + 4.4, hy - 7.6, hx + 5, hy - 5.4);
-  for (let k = 0; k < 6; k++) ctx.lineTo(hx + 4 - k * 1.8, hy - 5.2 + (k % 2 ? 1.6 : 0) - k * 0.1);
-  ctx.lineTo(hx - 4.6, hy - 2.6);
-  ctx.closePath();
-  ctx.fill();
-  outline(ctx, 0.5);
-  // Hörner wie beim bisherigen Troll, nach hinten geschwungen (Frost: mit Reif)
-  ctx.save();
-  // Hornansätze sitzen im Haar oben auf dem Schädel
-  ctx.translate(hx - 9 + 0.6, hy + 50 + 1.6);
-  ctx.fillStyle = frost ? grad(ctx, -8, 8, '#ffffff', '#93c5fd') : grad(ctx, -8, 8, '#f1eadb', '#8f846f');
-  ctx.beginPath();
-  ctx.moveTo(4, -56);
-  ctx.quadraticCurveTo(-4, -62, -6, -70);
-  ctx.quadraticCurveTo(-1, -64, 7, -58);
-  ctx.closePath();
-  ctx.moveTo(10, -58);
-  ctx.quadraticCurveTo(6, -66, 8, -73);
-  ctx.quadraticCurveTo(11, -66, 13, -58);
-  ctx.closePath();
-  ctx.fill();
-  outline(ctx, 0.6);
-  ctx.restore();
-  // spitzes Ohr nach hinten
-  ctx.fillStyle = shadeG(hx - 5, hy - 1, 4);
-  ctx.beginPath();
-  ctx.moveTo(hx - 3.4, hy - 2);
-  ctx.lineTo(hx - 9.4, hy - 4.6);
-  ctx.lineTo(hx - 3.6, hy + 1.2);
-  ctx.closePath();
-  ctx.fill();
-  outline(ctx, 0.5);
-  // schwerer Unterkiefer direkt unter dem Gesicht, mit Unterbiss
-  ctx.fillStyle = grad(ctx, hx - 3, hx + 9, sk, skD);
-  ctx.beginPath();
-  ctx.moveTo(hx - 3.6, hy + 1.6);
-  ctx.lineTo(hx + 8.4, hy + 1.8);
-  ctx.quadraticCurveTo(hx + 9, hy + 5.2, hx + 6, hy + 6.2);
-  ctx.quadraticCurveTo(hx + 1, hy + 7, hx - 2.6, hy + 5.4);
-  ctx.closePath();
-  ctx.fill();
-  outline(ctx, 0.8);
-  // Mundspalte
-  ctx.strokeStyle = 'rgba(10,6,4,0.9)';
-  ctx.lineWidth = 0.7;
-  ctx.beginPath();
-  ctx.moveTo(hx + 0.6, hy + 2);
-  ctx.lineTo(hx + 8.2, hy + 2);
-  ctx.stroke();
-  // Hauer aus dem Unterkiefer nach oben über die Oberlippe
-  ctx.fillStyle = '#f5f0e2';
-  for (const tx of [hx + 2.4, hx + 6.8]) {
-    ctx.beginPath();
-    ctx.moveTo(tx - 0.8, hy + 2.6);
-    ctx.quadraticCurveTo(tx - 0.6, hy - 0.4, tx + 0.4, hy - 1.6);
-    ctx.lineTo(tx + 0.8, hy + 2.6);
-    ctx.closePath();
-    ctx.fill();
-    outline(ctx, 0.35);
-  }
-  // Stirnwulst, Augen darunter, breite Nase
-  ctx.fillStyle = 'rgba(0,0,0,0.38)';
-  ctx.beginPath();
-  ctx.ellipse(hx + 2.4, hy - 3.6, 5, 1.4, -0.05, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = frost ? '#7dd3fc' : '#fbbf24';
-  ctx.shadowColor = ctx.fillStyle;
-  ctx.shadowBlur = 4;
-  ctx.beginPath();
-  ctx.ellipse(hx + 1.2, hy - 2.4, 1, 0.65, 0, 0, Math.PI * 2);
-  ctx.ellipse(hx + 4.6, hy - 2.4, 0.9, 0.6, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = shadeG(hx + 7, hy - 0.6, 2.6);
-  ctx.beginPath();
-  ctx.ellipse(hx + 7.4, hy - 0.4, 2.1, 1.7, 0.2, 0, Math.PI * 2);
-  ctx.fill();
-  outline(ctx, 0.5);
-  if (st >= 1) {
-    ctx.strokeStyle = col.main;
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(hx - 0.6, hy - 1.4);
-    ctx.lineTo(hx - 0.2, hy + 0.8);
-    ctx.stroke();
-  }
-  // Frost: Eiszapfen-Bart am Kinn
-  if (frost) {
-    ctx.fillStyle = grad(ctx, hx - 2, hx + 8, '#ffffff', '#93c5fd');
-    for (let k = 0; k < 5; k++) {
-      const x = hx - 1.6 + k * 1.9, l = 4 + (k % 2) * 2.4;
-      ctx.beginPath();
-      ctx.moveTo(x - 0.9, hy + 5.6);
-      ctx.lineTo(x, hy + 5.6 + l);
-      ctx.lineTo(x + 0.9, hy + 5.6);
-      ctx.closePath();
-      ctx.fill();
-      outline(ctx, 0.3);
-    }
-  }
-  // Trollkönig (Stufe 5): eiserne Krone
-  if (st >= 5) {
-    ctx.fillStyle = frost ? '#e0f2fe' : '#facc15';
-    ctx.beginPath();
-    ctx.moveTo(hx - 4.6, hy - 6);
-    for (let k = 0; k <= 4; k++) {
-      ctx.lineTo(hx - 4.6 + k * 2.4, hy - 6 - (k % 2 ? 1 : 4));
-    }
-    ctx.lineTo(hx + 5, hy - 5.4);
-    ctx.closePath();
-    ctx.fill();
-    outline(ctx, 0.4);
-  }
+  trollHead(14, -54);
   // linker Arm vor dem Körper: Oberarm hängt, Ellbogen außen, Unterarm nach vorn zur Faust am Stiel
   const F = at(0.27), E = [-19.4, -31.6];
   limb([[-10, -46], E, F], [9.4, 7.6, 6.4], grad(ctx, -24, -4, skL, sk));
@@ -4670,6 +4489,40 @@ function drawTroll2(ctx, col, v = {}) {
   ctx.moveTo(-17, -32.4);
   ctx.quadraticCurveTo(-11, -31.6, -6, -29.6);
   ctx.stroke();
+  if (giant) {
+    // schwere Rüstung: Bauchplatte mit Nieten und Schulterpanzer mit Dornen auf der linken Schulter
+    ctx.fillStyle = frost ? grad(ctx, -2, 16, '#e0f2fe', '#475569') : steel(ctx, -2, 16, -32, -18);
+    ctx.beginPath();
+    ctx.moveTo(1, -32);
+    ctx.quadraticCurveTo(9, -34, 15.4, -31);
+    ctx.quadraticCurveTo(15.6, -23, 11, -18.6);
+    ctx.quadraticCurveTo(5, -17.6, 2, -19);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.7);
+    ctx.fillStyle = '#e5e7eb';
+    for (const [x, y] of [[3, -30], [13.6, -29.4], [3.6, -20.4], [11, -20]]) {
+      ctx.beginPath();
+      ctx.arc(x, y, 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = frost ? grad(ctx, -16, -4, '#f0f9ff', '#60a5fa') : steel(ctx, -16, -4, -52, -40);
+    ctx.beginPath();
+    ctx.ellipse(-10.6, -46.4, 7, 4.6, -0.35, Math.PI * 0.9, Math.PI * 2.1);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.8);
+    for (const [x, y] of [[-15, -48], [-11, -51], [-6.6, -50.6]]) {
+      ctx.fillStyle = frost ? '#f0f9ff' : steel(ctx, x - 1.5, x + 1.5);
+      ctx.beginPath();
+      ctx.moveTo(x - 1.4, y + 1);
+      ctx.lineTo(x, y - 4.4);
+      ctx.lineTo(x + 1.4, y + 1);
+      ctx.closePath();
+      ctx.fill();
+      outline(ctx, 0.4);
+    }
+  }
   // Waffe über die Schulter, dann die Faust darüber
   const [x0, y0] = at(-0.08), [x1, y1] = at(0.94);
   ffLine(ctx, x0, y0, x1, y1, 3.2, frost ? '#6b5a48' : '#5a3a1e');
@@ -4734,7 +4587,7 @@ function drawTroll2(ctx, col, v = {}) {
   fist(F, wAng + Math.PI / 2, E, 2.2);
 }
 // Fluchbaum (Hexer-Titan, neu 1.20): verfluchter wandelnder Baum mit Wurzelbeinen, glühenden Runen, Astarmen und Krallenzweigen
-function drawCurseTree(ctx, col) {
+function drawCurseTree(ctx, col, giant = false) {
   const st = FIGST.stage;
   const glow = st >= 5 ? '#fde047' : '#a3e635';
   const bark = st >= 4 ? ['#4a4038', '#16120e', '#7a6a5a'] : ['#5b4a38', '#1f160e', '#8a7458'];
@@ -4756,7 +4609,7 @@ function drawCurseTree(ctx, col) {
     }
   };
   // Irrlichter um den Baum
-  for (const [x, y, r] of [[-20, -52, 2], [22, -60, 1.6], [-24, -28, 1.4]].slice(0, 1 + Math.min(2, st))) ffGlow(ctx, x, y, r * 1.6, 'rgba(190,255,120,0.9)', 'rgba(20,160,60,0)');
+  for (const [x, y, r] of [[-20, -52, 2], [22, -60, 1.6], [-24, -28, 1.4], [24, -40, 1.6], [-18, -70, 1.4]].slice(0, giant ? 5 : 1 + Math.min(2, st))) ffGlow(ctx, x, y, r * 1.6, 'rgba(190,255,120,0.9)', 'rgba(20,160,60,0)');
   // hinterer Astarm (rechts, hinter dem Stamm) mit Krallenzweigen
   // Wurzelfinger: vier gekrümmte, auslaufende Wurzeln an der Hand
   const rootHand = (hx, hy, c, dir) => {
@@ -4861,6 +4714,22 @@ function drawCurseTree(ctx, col) {
     ctx.lineTo(tx + 0.6, -37.6);
     ctx.fill();
   }
+  if (giant) {
+    // zweites, älteres Gesicht tiefer im Stamm
+    ctx.fillStyle = '#05030a';
+    ctx.beginPath();
+    ctx.ellipse(-2.4, -27.4, 1.2, 0.9, 0.2, 0, Math.PI * 2);
+    ctx.ellipse(2, -27.6, 1.4, 1, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ffGlow(ctx, -2.4, -27.4, 1.4, 'rgba(190,255,120,0.9)', 'rgba(20,160,60,0)');
+    ffGlow(ctx, 2, -27.6, 1.6, 'rgba(190,255,120,0.9)', 'rgba(20,160,60,0)');
+    ctx.strokeStyle = '#05030a';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(-3, -24);
+    ctx.quadraticCurveTo(0, -22.6, 3, -24.2);
+    ctx.stroke();
+  }
   // Spielerfarbe: Stofffetzen um den Stamm geknotet
   ctx.fillStyle = cloth(ctx, -11, 11, col);
   ctx.beginPath();
@@ -4893,7 +4762,9 @@ function drawCurseTree(ctx, col) {
     }
   }
   // Krone aus kahlen Ästen mit hängendem Moos
-  for (const pts of [[[-4, -56], [-10, -64], [-16, -66]], [[0, -58], [1, -68], [-2, -74]], [[4, -56], [10, -64], [16, -64]], [[-10, -64], [-12, -70]], [[10, -64], [12, -71]]]) branch(pts, 3, 1, bark[0]);
+  const crown = [[[-4, -56], [-10, -64], [-16, -66]], [[0, -58], [1, -68], [-2, -74]], [[4, -56], [10, -64], [16, -64]], [[-10, -64], [-12, -70]], [[10, -64], [12, -71]]];
+  if (giant) crown.push([[-6, -54], [-16, -58], [-22, -56]], [[6, -54], [16, -57], [22, -54]], [[-16, -66], [-20, -72]], [[16, -64], [21, -69]], [[1, -68], [6, -76]]);
+  for (const pts of crown) branch(pts, giant ? 3.6 : 3, 1, bark[0]);
   ctx.fillStyle = 'rgba(74,92,48,0.85)';
   for (const [x, y, l] of [[-12, -65, 6], [12, -64, 5], [0, -66, 4]]) {
     ctx.beginPath();
@@ -7593,8 +7464,11 @@ const VK = {
     drawTroll2(ctx, col, { skin: ['#6e9cc4', '#1e3448', '#d4ecff'], frost: true });
   },
   giant(ctx, col) {
-    drawGiant(ctx, col, ['#5b84a8', '#1e3448', '#bfe0ff']);
-    ffFrost(ctx, 0, -52, 1.3);
+    ctx.save();
+    ctx.scale(1.35, 1.35);
+    ctx.translate(0, -1.4);
+    drawTroll2(ctx, col, { skin: ['#6e9cc4', '#1e3448', '#d4ecff'], frost: true, giant: true });
+    ctx.restore();
   },
   dragon(ctx, col) {
     drawDragon(ctx, col, ['#1f4a44', '#0b1f1c', '#3f8a7a', '#b8c48a']);
@@ -7703,27 +7577,6 @@ function ffRaven(ctx, x, y) {
   ctx.lineTo(x + 4.8, y - 1.6);
   ctx.lineTo(x + 3.1, y - 1.2);
   ctx.fill();
-}
-// Eiskristalle (Frostriese)
-function ffFrost(ctx, x, y, s) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(s, s);
-  for (const [cx, cy, h, a] of [[-12, 6, 9, -0.5], [-8, 3, 7, -0.2], [11, 5, 9, 0.5], [7, 2, 6, 0.25]]) {
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(a);
-    ctx.fillStyle = grad(ctx, -2, 2, '#f0f9ff', '#7dd3fc');
-    ctx.beginPath();
-    ctx.moveTo(-1.6, 0);
-    ctx.lineTo(0, -h);
-    ctx.lineTo(1.6, 0);
-    ctx.closePath();
-    ctx.fill();
-    outline(ctx, 0.5);
-    ctx.restore();
-  }
-  ctx.restore();
 }
 
 // ---------------------------------------------------------------- Hexer
@@ -8596,8 +8449,12 @@ const WT = {
     drawCurseTree(ctx, col);
   },
   giant(ctx, col) {
-    drawGiant(ctx, col, ['#7c7f87', '#2c2e33', '#c4c7cf']);
-    ffStitches(ctx, 0, -40, 1.3, '#a3e635');
+    // Ur-Raditron: uralter, riesiger Fluchbaum
+    ctx.save();
+    ctx.scale(1.35, 1.35);
+    ctx.translate(0, -1.4);
+    drawCurseTree(ctx, col, true);
+    ctx.restore();
   },
   dragon(ctx, col) {
     drawDragon(ctx, col, ['#c9c1ad', '#5b5446', '#f3efe4', '#8a826e']);
@@ -8620,30 +8477,6 @@ function ffFlames(ctx, pts, c, s = 3) {
     ctx.closePath();
     ctx.fill();
   }
-  ctx.restore();
-}
-// Nähte und Bolzen (Fleischgolem)
-function ffStitches(ctx, x, y, s, glow = null) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(s, s);
-  ctx.strokeStyle = '#1c1917';
-  ctx.lineWidth = 0.9;
-  for (const [x0, y0, x1, y1] of [[-8, -6, 6, 2], [-6, 6, 8, 10], [2, -12, 4, -2]]) {
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-    const n = 5;
-    for (let k = 1; k < n; k++) {
-      const px = x0 + ((x1 - x0) * k) / n, py = y0 + ((y1 - y0) * k) / n;
-      ctx.beginPath();
-      ctx.moveTo(px - 1, py - 1.4);
-      ctx.lineTo(px + 1, py + 1.4);
-      ctx.stroke();
-    }
-  }
-  if (glow) for (const [gx, gy] of [[-10, 0], [10, 2]]) ffGlow(ctx, gx, gy, 2.4, 'rgba(170,255,120,0.9)', 'rgba(20,160,60,0)');
   ctx.restore();
 }
 
