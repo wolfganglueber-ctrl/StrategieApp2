@@ -2994,7 +2994,7 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       ctx.translate(0, 4);
       griffinMount(ctx, col, st);
       rigRider(ctx, col, {
-        armored: st >= 2, kind: st >= 2 ? 'plate' : 'mail', legCol: '#6b4a2e', sign: 'lion', capeCol: col, shield: null, fistAlong: true,
+        armored: st >= 2, kind: st >= 2 ? 'plate' : 'mail', legCol: '#6b4a2e', sign: 'lion', capeCol: null, shield: null, fistAlong: true,
         weapon: 'lance', lanceLen: 44, lanceCol: st >= 4 ? '#3b3b44' : '#f1e3c4', lanceStripe: col.main, pennant: col,
         head: () => {
           face(ctx, 0, 0);
@@ -6950,7 +6950,7 @@ const VK = {
     ffWing(ctx, 2, -23, 1, st >= 5 ? '#fde68a' : '#ffffff', false);
     const L = hasUp('f3a') ? 1.25 : 1;
     rigRider(ctx, col, {
-      kind: st >= 2 ? 'mail' : 'leather', legCol: '#5a4a3a', capeCol: col, scabbard: false, skin: skinOf(),
+      kind: st >= 2 ? 'mail' : 'leather', legCol: '#5a4a3a', capeCol: null, scabbard: false, skin: skinOf(),
       weapon: 'spear', spearLen: 24 * L, spearCol: st >= 4 ? '#3b3b44' : '#d8c49a',
       spearTip: (c, x, y, ang) => {
         thSpear(c, x, y, ang, 0.7, false, null);
@@ -8720,7 +8720,7 @@ const DK = {
     dkWing(ctx, 2, -19, col, false, hasUp('f4') ? 1.15 : 1);
     const L = hasUp('f3a') ? 1.25 : 1;
     rigRider(ctx, col, {
-      armored: st >= 2, kind: st >= 2 ? 'plate' : 'mail', legCol: DK_SKIN[1], skin: DK_SKIN[0], capeCol: col, scabbard: false, scales: st < 2,
+      armored: st >= 2, kind: st >= 2 ? 'plate' : 'mail', legCol: DK_SKIN[1], skin: DK_SKIN[0], capeCol: null, scabbard: false, scales: st < 2,
       weapon: 'spear', spearLen: 28 * L, spearCol: st >= 4 ? '#3b1d0e' : '#d8b37a',
       shield: null,
       tail: (c) => {
