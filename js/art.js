@@ -5945,7 +5945,7 @@ function horse2(ctx, coat, mane, col, opts = {}) {
   if (opts.armored) {
     // Schabracke mit Wappenrand und Fransen
     const bc = opts.barding || col;
-    ctx.fillStyle = cloth(ctx, -16, 14, bc);
+    ctx.fillStyle = opts.mail ? steel(ctx, -16, 14, -22, -2) : cloth(ctx, -16, 14, bc);
     ctx.beginPath();
     ctx.moveTo(-15, -19);
     ctx.quadraticCurveTo(-11, -22.5, -5, -21.3);
@@ -5959,6 +5959,30 @@ function horse2(ctx, coat, mane, col, opts = {}) {
     ctx.closePath();
     ctx.fill();
     outline(ctx, 0.8);
+    if (opts.mail) {
+      // Kettenhemd: Ringreihen, versetzt, mit Glanz oben
+      ctx.save();
+      ctx.clip();
+      ctx.strokeStyle = 'rgba(30,32,38,0.38)';
+      ctx.lineWidth = 0.3;
+      for (let row = 0, y = -21.6; y < -1; y += 1.15, row++) {
+        for (let x = -16.4 + (row % 2) * 0.75; x < 15.4; x += 1.5) {
+          ctx.beginPath();
+          ctx.arc(x, y, 0.62, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.fillRect(-16, -21.6, 31, 4);
+      ctx.restore();
+      // Saum aus Leder
+      ctx.strokeStyle = '#3b2616';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let k = 0; k <= 8; k++) ctx[k ? 'lineTo' : 'moveTo'](14.6 - k * 3.75, k % 2 ? -1.6 : -3.8);
+      ctx.stroke();
+    }
+    if (!opts.mail) {
     // Faltenwurf
     ctx.strokeStyle = 'rgba(0,0,0,0.2)';
     ctx.lineWidth = 0.6;
@@ -5987,6 +6011,7 @@ function horse2(ctx, coat, mane, col, opts = {}) {
       ctx.beginPath();
       ctx.arc(14.6 - k * 3.75, opts.tattered ? -3.8 + hash(k * 5 + 1) * 3.4 : k % 2 ? -1.6 : -3.8, 0.45, 0, Math.PI * 2);
       ctx.fill();
+    }
     }
     // Rosspanzer am Hals (Kanz) und Rossstirn mit Dorn
     ctx.fillStyle = steel(ctx, 9, 18, -32, -20);
@@ -6920,7 +6945,7 @@ const VK = {
     ctx.save();
     ctx.translate(0, 6);
     ffWing(ctx, 0, -24, -1, st >= 5 ? '#fde68a' : '#f4f1ea', true);
-    horse2(ctx, st >= 4 ? '#c9ccd4' : '#f1f1f4', '#d9dde6', col, { armored: hasUp('f3b') || st >= 4, dapple: false, feather: '#ffffff' });
+    horse2(ctx, st >= 4 ? '#c9ccd4' : '#f1f1f4', '#d9dde6', col, { armored: hasUp('f3b') || st >= 4, mail: true, emblem: false, dapple: false, feather: '#ffffff' });
     fdReins(ctx, [-2.4, -24.2]);
     ffWing(ctx, 2, -23, 1, st >= 5 ? '#fde68a' : '#ffffff', false);
     const L = hasUp('f3a') ? 1.25 : 1;
@@ -7067,22 +7092,69 @@ const VK = {
 };
 // Federflügel (Walküre); dir = 1 vorn, −1 hinten
 function ffWing(ctx, x, y, dir, c, far) {
-  // Walkürenflügel: breiter, hoch aufgestellter Schwanenflügel als eine Fläche, Hinterkante aus Federspitzen
+  // Walkürenflügel nach Wolfgangs Vorbild: drei Reihen langer Federn wie Schindeln (jede untere Feder liegt über der oberen,
+  // innere Reihen über den äußeren), Spitzen nach hinten oben, am Ansatz ein eingerollter Bogen (Flügelbug)
+  const gold = c === '#fde68a';
+  const light = gold ? '#fff3c4' : '#ffffff', mid = gold ? '#f6d977' : '#eceae4', dark = gold ? '#a8842a' : '#8f8a80';
   ctx.save();
   ctx.translate(x + 1, y + 1);
-  // flacher angestellt, Flügelspitze mehr nach hinten unten
-  ctx.rotate(-0.42);
-  if (far) ctx.globalAlpha = 0.85;
-  const g = ctx.createLinearGradient(0, 0, -20, -40);
-  g.addColorStop(0, far ? shade(c, -0.22) : shade(c, -0.08));
-  g.addColorStop(1, far ? shade(c, -0.1) : c);
-  ctx.fillStyle = g;
-  wingSilhouette(ctx,
-    [[0, 0], [-3, -18], [-10, -32], [-19, -42]],
-    [[-19, -42], [-24, -37], [-27.4, -31], [-29.4, -24.6], [-29.6, -18], [-28, -12], [-24.6, -7], [-19.6, -3.4], [-13.4, -1], [-6.4, 0.6], [0, 0]],
-    2.4, true);
+  ctx.rotate(-0.18);
+  if (far) ctx.globalAlpha = 0.82;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const feather = (bx, by, ang, len, w) => {
+    const ux = Math.cos(ang), uy = Math.sin(ang), nx = -uy, ny = ux;
+    // leichte Biegung: Spitze sinkt etwas zur Unterseite
+    const tx = bx + ux * len - nx * len * 0.06, ty = by + uy * len - ny * len * 0.06;
+    ctx.fillStyle = grad(ctx, bx, tx, far ? mid : light, far ? dark : mid);
+    ctx.beginPath();
+    ctx.moveTo(bx + nx * w * 0.5, by + ny * w * 0.5);
+    ctx.quadraticCurveTo(bx + ux * len * 0.6 + nx * w * 0.75, by + uy * len * 0.6 + ny * w * 0.75, tx, ty);
+    ctx.quadraticCurveTo(bx + ux * len * 0.75 - nx * w * 0.6, by + uy * len * 0.75 - ny * w * 0.6, bx - nx * w * 0.5, by - ny * w * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.5);
+    // Schraffur an der Unterkante nahe der Spitze
+    ctx.strokeStyle = 'rgba(20,14,10,0.6)';
+    ctx.lineWidth = 0.28;
+    for (let k = 0; k < 3; k++) {
+      const t = 0.55 + k * 0.1;
+      const ex = bx + ux * len * t - nx * w * 0.35, ey = by + uy * len * t - ny * w * 0.35;
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex + nx * w * 0.35 - ux * 0.6, ey + ny * w * 0.35 - uy * 0.6);
+      ctx.stroke();
+    }
+  };
+  const row = (n, b0, b1, a0, a1, l0, l1, w) => {
+    for (let j = 0; j < n; j++) {
+      const t = j / (n - 1);
+      feather(lerp(b0[0], b1[0], t), lerp(b0[1], b1[1], t), lerp(a0, a1, t), lerp(l0, l1, t), w);
+    }
+  };
+  // Schwungfedern (lang), mittlere Reihe, Deckfedern (kurz)
+  row(6, [-11, -19], [-4.5, -1.5], -2.2, -2.95, 26, 15, 5.2);
+  row(6, [-6.5, -15], [-0.8, -0.8], -2.25, -2.95, 16.5, 10, 4.8);
+  row(5, [-2.2, -10.5], [1.6, -0.4], -2.3, -2.9, 9.5, 6, 4.4);
+  // eingerollter Flügelbug am Ansatz
+  ctx.fillStyle = grad(ctx, -4, 5, light, mid);
+  ctx.beginPath();
+  ctx.moveTo(-4.2, -14.6);
+  ctx.quadraticCurveTo(2.8, -13.6, 4.6, -6.6);
+  ctx.quadraticCurveTo(5.4, -1.6, 2.4, 1.2);
+  ctx.lineTo(0.6, -0.2);
+  ctx.quadraticCurveTo(2.6, -2.6, 2, -6);
+  ctx.quadraticCurveTo(0.8, -10.6, -3.6, -12);
+  ctx.closePath();
   ctx.fill();
-  outline(ctx, 0.7);
+  outline(ctx, 0.6);
+  ctx.strokeStyle = 'rgba(20,14,10,0.55)';
+  ctx.lineWidth = 0.28;
+  for (let k = 0; k < 4; k++) {
+    ctx.beginPath();
+    ctx.moveTo(2.6 + k * 0.35, -10 + k * 1.6);
+    ctx.lineTo(3.6 + k * 0.35, -10.4 + k * 1.6);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 // Geschnitzter Drachenkopf (Wikinger-Kriegsgerät)
