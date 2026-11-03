@@ -1,6 +1,6 @@
 {
   "name": "knightyknight",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "description": "Rundenbasiertes Hex-Strategiespiel als Web-App (PWA)",
   "type": "module",
