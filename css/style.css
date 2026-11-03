@@ -442,6 +442,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .enemy-row .ico { width: 12px; height: 12px; }
 }
 .range { width: 100%; accent-color: #fbbf24; margin: 4px 0 2px; }
+.range:disabled { opacity: 0.35; filter: grayscale(1); }
 
 /* Kompakte Anzeige (Handy automatisch oder Einstellung „Schriftgröße im Spiel“ unter 100 %): body.compact, Faktor --ui-zoom.
    Auf dem PC (100 %) gelten die Größen wie bis 0.95. */

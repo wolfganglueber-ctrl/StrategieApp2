@@ -6,7 +6,7 @@ import {
   incomeOf, realmYield, boostedYield, cityBaseYield, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, terrainDefense,
-  canBoost, boostMax, boostStats, canTowerKind, rankXpNeed, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, canStorm, canFuse, fuseGroup, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
+  canBoost, boostMax, boostStats, canTowerKind, rankXpNeed, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, foundSpots, canStorm, canFuse, fuseGroup, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
   unitName, unitCost, factionOf, boostAllCost,
 } from './game.js';
 import { planAction } from './ai.js';
@@ -17,7 +17,7 @@ import {
   UNITS, UNIT_ORDER, TERRAIN, PLAYER_COLORS, NEUTRAL_COLOR, DIFFICULTIES, MAP_SIZES, BIOMES, CITY_MAX_LEVEL,
   upgradeCost, cityDefense, citySupply, canAfford, RES, BASE_RES, RES_INFO, MANA, BUILDINGS, BUILDING_ORDER, CITY_NAMES, citySlots,
   hasBuilding, TECHS, TECH_ORDER, TECH_BRANCHES, TOWER_LEVELS, TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit,
-  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, MAX_SLOTS, CITY_SLOTS, buildingYield, ECO_TECH, ECO_TECH_PCT, PLANT_COST, plantCost, PLANT_KINDS, ECO_BUILDINGS, slotsUsed, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
+  RANK_NAMES, RANK_XP, MAX_RANK, PERKS, PERK_CHOICES, PERK_RANKS, moveCap, TRADE_RATE, MAX_SLOTS, CITY_SLOTS, buildingYield, ECO_TECH, ECO_TECH_PCT, PLANT_COST, FOUND_COST, FOUND_GAP, plantCost, PLANT_KINDS, ECO_BUILDINGS, slotsUsed, PLANT_ROUNDS, CLEAR_WOOD, UP_GROUPS, UNIT_UPS, UP_INDEX, unitUpCost,
   BOOST_ADD, AURA, defenseWords, counterMax, FUSE, TOWER_BOOST_ADD, TOWER_KINDS, TOWER_KIND_ORDER, BOOST_COST, BOOST_STATS, SKILLS, SKILL_COST, skillsFor, boostCost, skillCost,
   FACTIONS, FACTION_ORDER, factionKey, buildingName, buildingDesc, buildingIcon, upText,
 } from './data.js';
@@ -119,7 +119,7 @@ function skirmishConfig(setup) {
   }
   return {
     seed: seedFromCode(code), cols: size.cols, rows: size.rows, biome, fog: !!settings.fog,
-    villageDensity: 0,
+    villageDensity: 0, manualCities: !!setup.manualCities,
     density: (setup.density ?? 80) / 100,
     players: [{ human: true, faction: factionKey(setup.faction) }, ...Array.from({ length: setup.enemies }, (_, i) => ({ ai: setup.diff, faction: enemyFaction(setup, i) }))],
   };
@@ -181,7 +181,7 @@ function saveGame() {
 
 // ---------------------------------------------------------------- Auswahl & Overlay
 function clearSel() {
-  sel = { unitId: null, cityIdx: null, infoIdx: null, placeTower: null, placeType: 'tower', group: null, magic: null, terraform: null, tfKind: 'forest' };
+  sel = { unitId: null, cityIdx: null, infoIdx: null, placeTower: null, placeType: 'tower', group: null, magic: null, terraform: null, tfKind: 'forest', found: null };
 }
 
 // ---------------------------------------------------------------- Gruppen
@@ -500,6 +500,7 @@ function refresh() {
     o.moves = new Set();
     for (const i of getGeoOf().within(S.cities[sel.terraform].idx, 2)) if (terr[i] === sel.terraform && canTerraform(S, S.current, i, terr) === (sel.tfKind === 'clear' ? 'clear' : 'plant')) o.moves.add(i);
   }
+  if (sel.found != null) o.moves = new Set(foundSpots(S, S.current));
   if (sel.placeTower != null) {
     const terr = computeTerritory(S);
     o.moves = new Set();
@@ -545,6 +546,13 @@ function onTap(sx, sy) {
     sel.cityIdx = S.cities[ci].idx;
     cityTab = 'build';
     refresh();
+    return;
+  }
+  if (sel.found != null) {
+    const ok = foundSpots(S, S.current).includes(i);
+    clearSel();
+    if (ok) act({ type: 'found', idx: i }, { after: () => { clearSel(); sel.cityIdx = i; cityTab = 'build'; } });
+    else { toast('Gründen abgebrochen.'); refresh(); }
     return;
   }
   if (sel.placeTower != null) {
@@ -707,7 +715,7 @@ function unitAtScreen(x, y) {
 }
 
 function onHover(x, y, to) {
-  if (!S || $('hud').classList.contains('hidden') || sel.cityIdx != null || sel.placeTower != null) return;
+  if (!S || $('hud').classList.contains('hidden') || sel.cityIdx != null || sel.placeTower != null || sel.found != null) return;
   // Maus wandert auf das gerade aufgeklappte Info-Fenster: stehen lassen (sonst zappelt es auf und zu)
   if (x < 0 && to && $('hud').contains(to)) return;
   // Solange eine Einheit gewählt ist, bleibt ihr Panel stehen; über Gegnern erscheint der Kampf-Tooltip
@@ -1482,6 +1490,17 @@ async function playEvent(ev, f, isAI, pan = true) {
       if (f > 0) { R.ring(ev.idx, '#86efac', 500 * f); sound.play('hammer', { pan: panOf(ev.idx), vol: isAI ? 0.3 : 0.7 }); }
       R.floatText(ev.idx, ev.to === 'pit' ? '⛏️ Grube wird gegraben' : ev.to === 'vine' ? '🍇 Traubenhain wird angelegt' : '🌱 Schonung', '#bbf7d0', 900 * Math.max(f, 0.6));
       break;
+    case 'found': {
+      R.invalidate(true);
+      const mine = S.players[ev.pid].human;
+      if (f > 0) {
+        if (isAI === true) await sleep(R.ensureVisible(ev.idx, 220 * f));
+        R.ring(ev.idx, PLAYER_COLORS[ev.pid].main, 600 * f);
+        sound.play('hammer', { pan: panOf(ev.idx), vol: isAI ? 0.4 : 0.8 });
+      }
+      R.floatText(ev.idx, mine ? '🏘️ Siedlung gegründet' : '🏘️ Neue Siedlung', mine ? '#bbf7d0' : '#fca5a5', 1100 * Math.max(f, 0.6));
+      break;
+    }
     case 'clear':
       R.invalidate(true, ev.idx);
       if (f > 0) { R.dust(ev.idx, 0, { n: 6 }); sound.play('hammer', { pan: panOf(ev.idx), vol: isAI ? 0.3 : 0.8 }); }
@@ -1935,6 +1954,19 @@ function renderCityPanel(panel, ci, occ) {
           }, costEl(unitCost(S, p.id, type), p.res))));
       }
     };
+    // Siedlungen selbst gründen (Startoption): neue Siedlung am Rand des Reichs
+    const foundRow = (list) => {
+      if (!S.config.manualCities) return;
+      const spots = foundSpots(S, p.id).length;
+      list.append(el('div', { class: 'build-row tower-row' },
+        el('span', { class: 'bicon' }, '🏘️'),
+        el('div', { class: 'binfo' }, el('b', {}, 'Siedlung gründen'),
+          el('span', { class: 'muted' }, spots ? `${FOUND_GAP} Felder von einer eigenen Stadt, angrenzend ans Reich, nicht auf Bergen (${spots} Felder möglich)` : 'Gerade kein freies Feld am Rand des Reichs')),
+        el('button', {
+          class: 'btn small', disabled: !spots || !canAfford(p.res, FOUND_COST),
+          onclick: () => { clearSel(); sel.found = ci; refresh(); },
+        }, costEl(FOUND_COST, p.res))));
+    };
     // Felder bearbeiten: Wiese → Wald, Erzgrube oder Traubenhain; Wald → Wiese
     const terraRow = (list) => {
       const growing = (S.plants || []).filter((x) => x.ci === ci).length;
@@ -1948,7 +1980,7 @@ function renderCityPanel(panel, ci, occ) {
             el('button', { class: 'btn small', onclick: pick('clear') }, '🪓 Roden')))));
     };
     const groups = {
-      eco: { title: 'Wirtschaft', fill: (list) => { for (const b of ECO_BUILDINGS) buildingRow(list, b); terraRow(list); } },
+      eco: { title: 'Wirtschaft', fill: (list) => { for (const b of ECO_BUILDINGS) buildingRow(list, b); terraRow(list); foundRow(list); } },
       mil: { title: 'Einheiten', fill: (list) => { for (const b of BUILDING_ORDER.filter((x) => !ECO_BUILDINGS.includes(x))) buildingRow(list, b); structRows(list); } },
     };
     const groupList = (g) => { const list = el('div', { class: 'build-list' }); groups[g].fill(list); return list; };
@@ -2016,6 +2048,13 @@ function renderPanelContent(panel) {
       el('button', { class: 'btn small', onclick: () => { const idx = S.cities[ci].idx; clearSel(); sel.cityIdx = idx; cityTab = 'build'; refresh(); } }, 'Fertig')));
     panel.append(el('div', { class: 'note' }, sel.tfKind === 'clear' ? `Tippe helle Wälder an, um sie zu roden (je +${CLEAR_WOOD} Holz sofort, danach Wiese). Beliebig viele Felder.`
       : `Tippe helle Wiesen an (je ${costText(plantCost(sel.tfKind))}, nach ${PLANT_ROUNDS} Runden ${PLANT_KINDS[sel.tfKind].what}). Beliebig viele Felder.`));
+    return;
+  }
+  if (sel.found != null) {
+    panel.append(el('div', { class: 'city-head' },
+      el('span', { class: 'title' }, '🏘️ Siedlung gründen'),
+      el('button', { class: 'btn small', onclick: () => { clearSel(); refresh(); } }, 'Abbrechen')));
+    panel.append(el('div', { class: 'note' }, `Tippe ein helles Feld an (${costText(FOUND_COST)}). Die neue Siedlung entsteht ${FOUND_GAP} Felder von einer deiner Städte und grenzt an dein Reich.`));
     return;
   }
   if (sel.placeTower != null) {
@@ -2237,7 +2276,9 @@ function showIntro() {
     el('h2', {}, 'Willkommen!'),
     el('p', {}, 'Ziel: Erobere alle Städte deiner Gegner.'),
     el('p', {}, 'Tippe eine Einheit an und dann ein helles Feld, um zu ziehen. Rote Felder zeigen angreifbare Gegner samt Schaden – ein Tipp greift an.'),
-    el('p', {}, 'Stelle eine Einheit auf ein Dorf. Steht sie zu Beginn deines nächsten Zuges noch dort, gehört es dir – samt Gebiet: Wiesen liefern Nahrung, Wälder Holz, Hügel und Berge Erz.'),
+    el('p', {}, S.config.manualCities
+      ? `Neue Siedlungen gründest du selbst: Stadt antippen → Gebäude → Wirtschaft → Siedlung gründen (${costText(FOUND_COST)}). Ihr Gebiet liefert Rohstoffe: Wiesen Nahrung, Wälder Holz, Hügel und Berge Erz.`
+      : 'Stelle eine Einheit auf ein Dorf. Steht sie zu Beginn deines nächsten Zuges noch dort, gehört es dir – samt Gebiet: Wiesen liefern Nahrung, Wälder Holz, Hügel und Berge Erz.'),
     el('p', {}, 'Tippe eine Stadt an, um Einheiten zu rekrutieren oder Gebäude zu bauen. Der 💡-Knopf unten links zeigt dir den nächsten sinnvollen Schritt.'),
     el('button', { class: 'btn primary big', onclick: closeModal }, "Los geht's"),
   );
@@ -2484,6 +2525,10 @@ function renderSetup() {
   $('diffDesc').textContent = `${d.name}: ${d.desc}`;
   $('seedInput').value = setup.code;
   $('citiesRange').value = setup.density;
+  // Siedlungen: automatisch verteilt (Schieber) oder selbst gründen (Schieber ausgegraut, nur Hauptstädte)
+  setup.manualCities = !!setup.manualCities;
+  seg('segCityMode', [[false, 'Siedlungen automatisch'], [true, 'Selbst gründen']], 'manualCities');
+  $('citiesRange').disabled = setup.manualCities;
   updateCitiesInfo();
 }
 // Vorschau: genaue Anzahl Städte dieser Karte (Dörfer halten Abstand, daher passen nicht beliebig viele).
@@ -2491,6 +2536,7 @@ function renderSetup() {
 const citiesCache = new Map();
 let citiesTimer = null;
 function updateCitiesInfo() {
+  if (setup.manualCities) { $('citiesInfo').textContent = `(selbst gründen: nur Hauptstädte, neue Siedlungen über Wirtschaft für ${costText(FOUND_COST)})`; return; }
   const label = `${setup.density} %, Abstand ${Math.round((4 + 4 * (1 - setup.density / 100)) * 10) / 10} Felder`;
   const c = skirmishConfig({ ...setup, code: setup.code || 'A' });
   const key = [c.seed, c.cols, c.rows, c.biome, c.density, c.players.length].join('|');

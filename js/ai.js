@@ -2,13 +2,13 @@
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
 import {
   UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, BASE_RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY, structureLimit,
-  costTotal, ATK_TYPE, DEF_TABLE, DEF_MAX, UNIT_UPS, unitUpCost, boostCost, skillCost, plantCost, slotsUsed, usesSlot,
+  costTotal, ATK_TYPE, DEF_TABLE, DEF_MAX, UNIT_UPS, unitUpCost, boostCost, skillCost, plantCost, slotsUsed, usesSlot, FOUND_COST,
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, terrainDefense, hitDamage, unitRange, unitCap, canRecruit,
   spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, unitUpOptions, unitUpList, canBuild, canPetrify,
   canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage, canTerraform, cityTiles, cityYield, canFuse, sweepTargets, canTowerKind, atkKind,
-  factionOf, unitCost,
+  factionOf, unitCost, foundSpots, tileRes,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -434,6 +434,17 @@ function economyAction(state, ctx, P, pid, rng) {
   for (const u of ctx.mine) {
     const opts = perkOptions(u);
     if (opts.length) return { type: 'perk', unitId: u.id, perk: opts[Math.floor(rng() * opts.length)] };
+  }
+  // Siedlungen selbst gründen: wenn es ruhig ist, das Feld mit den meisten freien Rohstofffeldern ringsum wählen
+  if (state.config?.manualCities && totalDanger <= 10 && canAfford(res, FOUND_COST)) {
+    const spots = foundSpots(state, pid, ctx.territory);
+    if (spots.length) {
+      const geo = geoOf(state);
+      const score = (i) => geo.within(i, 2).reduce((s, j) => s + (j !== i && ctx.territory[j] === -1 ? (tileRes(state, j)?.n || 0) : 0), 0) + rng() * 0.5;
+      const best = spots.map((i) => [i, score(i)]).sort((x, y) => y[1] - x[1])[0][0];
+      memory.ctxKey = '';
+      return { type: 'found', idx: best };
+    }
   }
   // Troll: wer eine Trollhöhle hat, spart darauf
   // Titanen (Drache, Troll): wer die Höhle hat, spart darauf

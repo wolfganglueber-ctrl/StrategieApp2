@@ -548,6 +548,10 @@ export function slotsUsed(city) {
 }
 // Jede Hauptstadt startet mit Bauernhof, Holzfäller und Mine
 export const START_BUILDINGS = ['farm', 'lumber', 'mine'];
+// Startoption „Siedlungen selbst gründen“: nur Hauptstädte auf der Karte, neue Siedlungen kosten je 5 Grundrohstoffe
+// und entstehen genau FOUND_GAP Felder von einer eigenen Stadt (das Reich wächst angrenzend)
+export const FOUND_COST = { food: 5, wood: 5, ore: 5 };
+export const FOUND_GAP = 4;
 // Versorgung: wie viele Einheiten eine Stadt unterhält (bewusst knapp: wenige, aber wertvolle Einheiten)
 export function citySupply(city) {
   return [0, 3, 5, 7, 9, 11][city.level] ?? 11;

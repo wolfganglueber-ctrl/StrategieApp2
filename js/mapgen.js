@@ -199,7 +199,7 @@ function placeCities(rng, geo, terrain, players, villageDensity) {
 
 // density (0–1, Siedlungsdichte, nur mit villageDensity 0): 1 = so viele Städte wie möglich (4 freie Felder Abstand),
 // 0 = 8 freie Felder Abstand; dazwischen gleitend
-export function generateMap({ seed, cols, rows, players, biome = 'mixed', villageDensity = 18, density = 1 }) {
+export function generateMap({ seed, cols, rows, players, biome = 'mixed', villageDensity = 18, density = 1, capsOnly = false }) {
   const bio = BIOMES[biome] || BIOMES.mixed;
   const geo = getGeo(cols, rows);
   let best = null;
@@ -233,6 +233,8 @@ export function generateMap({ seed, cols, rows, players, biome = 'mixed', villag
     }
     best.cities = [...caps, ...kept];
   }
+  // Siedlungen selbst gründen: zu Beginn nur die Hauptstädte
+  if (capsOnly) best.cities = best.cities.filter((c) => c.capital);
   for (const c of best.cities) best.terrain[c.idx] = 'plain';
   // Jede Hauptstadt bekommt einen fairen Rohstoff-Mix in ihrem Gebiet
   const isCity = new Set(best.cities.map((c) => c.idx));

@@ -6,7 +6,7 @@ import {
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
   PERK_RANKS, CAVALRY, buildingYield, plantCost, START_BUILDINGS, slotsUsed, usesSlot, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_ADD, ATK_TYPE, DEF_TABLE, DEF_MAX, SKILLS, skillsFor, boostCost, skillCost,
   BASE_RES, MANA, ECO_TECH, ECO_TECH_PCT, ARCHER_MAX_RANGE, counterMax, FUSE, TOWER_BOOST_ADD, TOWER_KINDS, START_BONUS,
-  FACTIONS, factionKey, UNIT_ORDER,
+  FACTIONS, factionKey, UNIT_ORDER, FOUND_COST, FOUND_GAP,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -26,7 +26,7 @@ export function boostMax(state) {
 */
 export function createGame(config) {
   const n = config.players.length;
-  const map = generateMap({ seed: config.seed, cols: config.cols, rows: config.rows, players: config.mapPlayers ?? n, biome: config.biome, villageDensity: config.villageDensity, density: config.density ?? 1 });
+  const map = generateMap({ seed: config.seed, cols: config.cols, rows: config.rows, players: config.mapPlayers ?? n, biome: config.biome, villageDensity: config.villageDensity, density: config.density ?? 1, capsOnly: !!config.manualCities });
   const geo = getGeo(map.cols, map.rows);
   const state = {
     v: STATE_VERSION,
@@ -582,6 +582,26 @@ export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp
 
 // Gebiet: jedes Feld gehört der nächstgelegenen Stadt in Reichweite (Gleichstand: höhere Stufe).
 // Hauptstädte haben Vorrang: ihre beiden Ringe gehören immer ganz ihnen; das Stadtfeld selbst gehört immer der Stadt.
+// Siedlungen selbst gründen: mögliche Felder einer neuen Siedlung – begehbar (kein Berg, kein Wasser), noch niemandes Gebiet,
+// genau FOUND_GAP Felder von einer eigenen Stadt (das Reich grenzt an) und keiner Stadt näher; kein fremder Trupp darauf
+export function foundSpots(state, pid, territory = computeTerritory(state), occ = buildOcc(state)) {
+  if (!state.config?.manualCities) return [];
+  const geo = geoOf(state);
+  const out = new Set();
+  for (const c of state.cities) {
+    if (c.owner !== pid) continue;
+    for (const j of geo.within(c.idx, FOUND_GAP)) {
+      if (out.has(j) || geo.dist(c.idx, j) !== FOUND_GAP) continue;
+      const t = state.terrain[j];
+      if (!TERRAIN[t].pass || t === 'mountain' || territory[j] !== -1 || state.cityAt[j] !== -1) continue;
+      if (occ[j] && occ[j].owner !== pid) continue;
+      if (state.cities.some((x) => geo.dist(x.idx, j) < FOUND_GAP)) continue;
+      out.add(j);
+    }
+  }
+  return [...out];
+}
+
 export function computeTerritory(state) {
   const geo = geoOf(state);
   const owner = new Int16Array(geo.n).fill(-1);
@@ -1272,6 +1292,17 @@ function applyActionCore(state, a) {
       for (const k of RES) player.res[k] -= cost[k] || 0;
       c.level++;
       ev.push({ k: 'upgrade', idx: a.idx, level: c.level });
+      break;
+    }
+    case 'found': {
+      // neue Siedlung: Stufe 1, ohne Gebäude (wie ein freies Dorf), gehört gleich dem Gründer
+      if (!canAfford(player.res, FOUND_COST) || !foundSpots(state, pid).includes(a.idx)) return null;
+      for (const k of RES) player.res[k] -= FOUND_COST[k] || 0;
+      state.plants = (state.plants || []).filter((x) => x.idx !== a.idx);
+      state.terrain[a.idx] = 'plain';
+      state.cities.push({ idx: a.idx, owner: pid, level: 1, capital: false, buildings: [] });
+      state.cityAt[a.idx] = state.cities.length - 1;
+      ev.push({ k: 'found', idx: a.idx, pid });
       break;
     }
     case 'tower': {

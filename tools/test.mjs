@@ -35,6 +35,19 @@ const t0 = Date.now();
   console.log(`Nebel-Spiel: Runde ${s.turn}, ${towers} Türme, ${techs} Forschungen`);
   check(techs > 0, 'KI forscht nicht');
 }
+// Siedlungen selbst gründen: nur Hauptstädte zu Beginn, KI gründet neue Siedlungen mit Abstand 4 am Reich
+{
+  const s = createGame({ seed: 31, cols: 16, rows: 21, biome: 'mixed', manualCities: true, density: 0.8, villageDensity: 0, players: [{ ai: 3 }, { ai: 4 }, { ai: 5 }] });
+  check(s.cities.every((c) => c.capital), 'Selbst gründen: es gibt freie Dörfer');
+  const geo = getGeo(s.cols, s.rows);
+  playOut(s, mulberry32(5), 40);
+  const founded = s.cities.filter((c) => !c.capital).length;
+  const close = s.cities.some((a, i) => s.cities.some((b, j) => i < j && geo.dist(a.idx, b.idx) < 4));
+  console.log(`Selbst gründen: Runde ${s.turn}, ${founded} gegründete Siedlungen`);
+  check(founded > 0, 'KI gründet keine Siedlungen');
+  check(!close, 'Siedlungen näher als 4 Felder');
+  check(s.cities.every((c) => s.terrain[c.idx] !== 'mountain' && s.terrain[c.idx] !== 'water'), 'Siedlung auf Berg oder Wasser');
+}
 // Reiche KI: Einzel-Verbesserungen, Greifenreiter, alle Werte ganzzahlig
 {
   const s = createGame({ seed: 777, cols: 12, rows: 15, biome: 'plains', players: [{ ai: 6 }, { ai: 6 }] });
