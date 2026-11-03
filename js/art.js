@@ -2044,6 +2044,27 @@ function horse(ctx, coat, mane, col, armored) {
 }
 
 // Greif: Adlerkopf und Schwingen, Löwenleib (Reittier des Greifenreiters)
+// Flügelumriss als eine Fläche: Vorderkante glatt, Hinterkante aus Federspitzen (spitz-runde Enden statt Halbkreise).
+// lead: Punkte der Vorderkante von der Wurzel bis zur Flügelspitze; trail: Punkte der Hinterkante von der Spitze zurück zur Wurzel.
+function wingSilhouette(ctx, lead, trail, tipLen = 3.2) {
+  ctx.beginPath();
+  ctx.moveTo(lead[0][0], lead[0][1]);
+  for (let i = 1; i < lead.length; i++) {
+    const [px, py] = lead[i - 1], [x, y] = lead[i];
+    ctx.quadraticCurveTo((px + x) / 2 + (y - py) * 0.12, (py + y) / 2 - (x - px) * 0.12, x, y);
+  }
+  // Hinterkante: zwischen zwei Punkten eine Federspitze, nach außen und leicht nach hinten gezogen
+  for (let i = 1; i < trail.length; i++) {
+    const [px, py] = trail[i - 1], [x, y] = trail[i];
+    const dx = x - px, dy = y - py, L = Math.hypot(dx, dy) || 1;
+    const nx = dy / L, ny = -dx / L;
+    // runder Federbauch, Spitze zum Körper hin (Federn hängen nach hinten unten), kurzer steiler Rücksprung
+    const tx = px + dx * 0.9 + nx * tipLen, ty = py + dy * 0.9 + ny * tipLen;
+    ctx.quadraticCurveTo(px + dx * 0.35 + nx * tipLen * 1.25, py + dy * 0.35 + ny * tipLen * 1.25, tx, ty);
+    ctx.quadraticCurveTo(px + dx * 0.98 + nx * tipLen * 0.4, py + dy * 0.98 + ny * tipLen * 0.4, x, y);
+  }
+  ctx.closePath();
+}
 // Gefiederter Flügel, nach oben hinten aufgestellt (Wurzel bei 0,0). Von hinten nach vorn: Handschwingen, Armschwingen,
 // zwei Reihen Deckfedern, Flügelbug. eagle: gespreizte „Finger“ an den Handschwingen (Adler), sonst geschlossen und breit (Schwan).
 // pal: { prim, sec, cov, edge, tip }
@@ -2125,11 +2146,23 @@ function griffinMount(ctx, col, st) {
   ctx.lineJoin = 'round';
   const fur = st >= 4 ? '#6e6052' : '#c99a55';
   const feather = st >= 4 ? '#2e2c33' : '#8a5a2e', featherL = st >= 4 ? '#6a6874' : '#e2b86c';
-  // Adlerflügel: dunkle Schwungfedern mit gespreizten Fingern, helle Deckfedern, Flügelbug in Spielerfarbe
-  const eaglePal = st >= 4
-    ? { prim: '#2a2830', sec: '#3a3842', cov: '#5a5862', edge: col.main, tip: '#141318' }
-    : { prim: '#5a3a1c', sec: '#7a5028', cov: '#b98a4a', edge: col.main, tip: '#2e1d0e' };
-  const wing = (ox, oy, sc, dark) => featherWing(ctx, ox, oy, sc, eaglePal, true, dark);
+  // Flügel: Umriss wie bisher (eine Fläche), die Rundungen der Hinterkante als Federspitzen; Struktur folgt später
+  const wing = (ox, oy, sc, dark) => {
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.scale(sc, sc);
+    const g = ctx.createLinearGradient(0, 0, -18, -40);
+    g.addColorStop(0, shade(feather, dark));
+    g.addColorStop(1, shade(featherL, dark));
+    ctx.fillStyle = g;
+    wingSilhouette(ctx,
+      [[0, 0], [-4, -22], [-14, -40], [-21, -44.5]],
+      [[-21, -44.5], [-24.6, -38], [-26, -31], [-26.4, -24.5], [-25.4, -18], [-23.4, -12], [-20, -7], [-15.4, -3.4], [-9.6, -0.6], [0, 0]],
+      3.4);
+    ctx.fill();
+    outline(ctx, 0.8);
+    ctx.restore();
+  };
   // ferner Flügel
   wing(7, -19, 0.92, -0.35);
   const leg = (x, y, talon, farSide) => {
@@ -6964,13 +6997,21 @@ const VK = {
 };
 // Federflügel (Walküre); dir = 1 vorn, −1 hinten
 function ffWing(ctx, x, y, dir, c, far) {
-  // breiter Schwanenflügel (Walküre): viele weiße Schwungfedern, geschlossen
-  // shade() liefert rgb()-Text, featherWing braucht Hex-Farben: daher feste Töne
-  const gold = c === '#fde68a';
-  const pal = gold
-    ? { prim: '#f2d675', sec: '#fde68a', cov: '#fff1b8', edge: '#fff7d6', tip: '#c9a640' }
-    : { prim: '#e6e2d8', sec: c, cov: '#faf8f2', edge: '#ffffff', tip: '#c8c2b4' };
-  featherWing(ctx, x + 2, y + 1, far ? 1.02 : 1.12, pal, false, far ? -0.25 : 0);
+  // Walkürenflügel: breiter, hoch aufgestellter Schwanenflügel als eine Fläche, Hinterkante aus Federspitzen
+  ctx.save();
+  ctx.translate(x + 1, y + 1);
+  if (far) ctx.globalAlpha = 0.85;
+  const g = ctx.createLinearGradient(0, 0, -20, -40);
+  g.addColorStop(0, far ? shade(c, -0.22) : shade(c, -0.08));
+  g.addColorStop(1, far ? shade(c, -0.1) : c);
+  ctx.fillStyle = g;
+  wingSilhouette(ctx,
+    [[0, 0], [-3, -18], [-10, -32], [-19, -42]],
+    [[-19, -42], [-24, -37], [-27.4, -31], [-29.4, -24.6], [-29.6, -18], [-28, -12], [-24.6, -7], [-19.6, -3.4], [-13.4, -1], [-6.4, 0.6], [0, 0]],
+    3.6);
+  ctx.fill();
+  outline(ctx, 0.7);
+  ctx.restore();
 }
 // Geschnitzter Drachenkopf (Wikinger-Kriegsgerät)
 function ffDragonHead(ctx, x, y, s, wood) {
