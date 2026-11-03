@@ -3407,24 +3407,49 @@ function drawBasilisk(ctx, col, pal = null) {
   ctx.fill();
   outline(ctx, 0.7);
   // Hinterbeine
+  // Bein mit Knie bzw. Ellbogen (ohne Trennstrich), Fuß mit drei Krallen nach vorn
   const leg = (x, y, dx, far) => {
-    ctx.strokeStyle = far ? scD : sc;
-    ctx.lineWidth = 4.2;
+    const knee = [x + dx * 0.9, y + 4], foot = [x + dx * 0.35, y + 8.4];
+    limbSmooth(ctx, [[x, y], knee, foot], [4.6, 3.4], far ? scD : sc);
+    ctx.fillStyle = far ? scD : sc;
     ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.quadraticCurveTo(x + dx, y + 2, x + dx * 0.6, y + 8);
-    ctx.stroke();
-    ctx.strokeStyle = '#efe6c8';
-    ctx.lineWidth = 0.9;
-    for (const k of [-1.6, 0, 1.6]) {
+    ctx.ellipse(foot[0] + 1.2, foot[1] + 0.6, 2.8, 1.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    outline(ctx, 0.5);
+    ctx.fillStyle = '#efe6c8';
+    for (const k of [-0.6, 1.2, 3]) {
       ctx.beginPath();
-      ctx.moveTo(x + dx * 0.6 + k, y + 8);
-      ctx.lineTo(x + dx * 0.6 + k * 1.6 + 1, y + 10);
-      ctx.stroke();
+      ctx.moveTo(foot[0] + k, foot[1] + 1.4);
+      ctx.lineTo(foot[0] + k + 1.4, foot[1] + 2.4);
+      ctx.lineTo(foot[0] + k + 1.2, foot[1] + 1);
+      ctx.closePath();
+      ctx.fill();
     }
+  };
+  const neckP = () => {
+    ctx.beginPath();
+    ctx.moveTo(6, -10);
+    ctx.quadraticCurveTo(12, -14, 13, -24);
+    ctx.lineTo(19, -24);
+    ctx.quadraticCurveTo(18, -12, 11, -3);
+    ctx.closePath();
+  };
+  const headP = () => {
+    ctx.beginPath();
+    ctx.moveTo(10, -26);
+    ctx.quadraticCurveTo(13, -33, 20, -32);
+    ctx.quadraticCurveTo(28, -31, 30, -26);
+    ctx.quadraticCurveTo(27, -22, 20, -21);
+    ctx.quadraticCurveTo(13, -21, 10, -26);
+    ctx.closePath();
   };
   leg(-9, -2, -4, true);
   leg(7, -4, 4, true);
+  // Umrisse von Hals und Kopf zuerst, damit an den Übergängen kein Strich bleibt
+  neckP();
+  outline(ctx, 1.6);
+  headP();
+  outline(ctx, 1.8);
   // Rumpf
   ctx.fillStyle = body(-1, -6, 14);
   ctx.beginPath();
@@ -3473,25 +3498,12 @@ function drawBasilisk(ctx, col, pal = null) {
   leg(-6, 0, -3, false);
   leg(8, -1, 3, false);
   // Hals und Kopf, erhoben nach rechts
+  neckP();
   ctx.fillStyle = body(12, -16, 9);
-  ctx.beginPath();
-  ctx.moveTo(6, -10);
-  ctx.quadraticCurveTo(12, -14, 13, -24);
-  ctx.lineTo(19, -24);
-  ctx.quadraticCurveTo(18, -12, 11, -3);
-  ctx.closePath();
   ctx.fill();
-  outline(ctx, 0.8);
+  headP();
   ctx.fillStyle = body(17, -28, 8);
-  ctx.beginPath();
-  ctx.moveTo(10, -26);
-  ctx.quadraticCurveTo(13, -33, 20, -32);
-  ctx.quadraticCurveTo(28, -31, 30, -26);
-  ctx.quadraticCurveTo(27, -22, 20, -21);
-  ctx.quadraticCurveTo(13, -21, 10, -26);
-  ctx.closePath();
   ctx.fill();
-  outline(ctx, 0.9);
   // Maul mit Zähnen und Zunge
   ctx.strokeStyle = scD;
   ctx.lineWidth = 0.9;
@@ -4851,17 +4863,55 @@ function drawDragon(ctx, col, pal = null) {
     ctx.fill();
   };
   wing(4, -24, [[10, -50], [2, -60], [-6, -58], [-12, -50], [-14, -40]], true);
-  // Schwanz
-  ctx.fillStyle = grad(ctx, -34, -6, scL, scD);
+  // Schwanz, Rumpf und Hals: erst alle Umrisse, dann die Füllungen – kein Strich, wo sie ineinander übergehen
+  const tailP = () => {
+    ctx.beginPath();
+    ctx.moveTo(-8, -6);
+    ctx.quadraticCurveTo(-22, -4, -28, 2);
+    ctx.quadraticCurveTo(-33, 6, -30, 8);
+    ctx.quadraticCurveTo(-26, 4, -20, 2.5);
+    ctx.quadraticCurveTo(-12, 1, -6, 0);
+    ctx.closePath();
+  };
+  const bodyP = () => {
+    ctx.beginPath();
+    ctx.moveTo(-12, -8);
+    ctx.quadraticCurveTo(-12, -24, 0, -26);
+    ctx.quadraticCurveTo(10, -26, 13, -18);
+    ctx.quadraticCurveTo(14, -6, 4, -3);
+    ctx.quadraticCurveTo(-8, -1, -12, -8);
+    ctx.closePath();
+  };
+  const neckP = () => {
+    ctx.beginPath();
+    ctx.moveTo(6, -24);
+    ctx.quadraticCurveTo(10, -38, 18, -42);
+    ctx.lineTo(23, -38);
+    ctx.quadraticCurveTo(16, -32, 13, -17);
+    ctx.closePath();
+  };
+  // Hinterbein: Oberschenkel, Sprunggelenk nach hinten, Fuß nach vorn (Glieder ohne Trennstrich)
+  limbSmooth(ctx, [[-5, -6], [-10.6, 0.4], [-6.4, 5]], [5.4, 4], shade(sc, -0.25));
+  ctx.fillStyle = grad(ctx, -12, 0, scL, scD);
   ctx.beginPath();
-  ctx.moveTo(-8, -6);
-  ctx.quadraticCurveTo(-22, -4, -28, 2);
-  ctx.quadraticCurveTo(-33, 6, -30, 8);
-  ctx.quadraticCurveTo(-26, 4, -20, 2.5);
-  ctx.quadraticCurveTo(-12, 1, -6, 0);
-  ctx.closePath();
+  ctx.ellipse(-6, -9, 6.6, 8, -0.3, 0, Math.PI * 2);
   ctx.fill();
   outline(ctx, 0.8);
+  ctx.fillStyle = scD;
+  ctx.beginPath();
+  ctx.moveTo(-9, 3.6);
+  ctx.quadraticCurveTo(-4, 3, -1, 6);
+  ctx.lineTo(-10, 6.4);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.5);
+  for (const [path, w] of [[tailP, 1.6], [bodyP, 2], [neckP, 1.8]]) {
+    path();
+    outline(ctx, w);
+  }
+  tailP();
+  ctx.fillStyle = grad(ctx, -34, -6, scL, scD);
+  ctx.fill();
   ctx.fillStyle = scD;
   ctx.beginPath();
   ctx.moveTo(-30, 8);
@@ -4869,43 +4919,14 @@ function drawDragon(ctx, col, pal = null) {
   ctx.lineTo(-31, 4.5);
   ctx.closePath();
   ctx.fill();
-  // Hinterbein
-  ctx.fillStyle = grad(ctx, -12, 0, scL, scD);
-  ctx.beginPath();
-  ctx.ellipse(-6, -8, 7, 8.5, -0.3, 0, Math.PI * 2);
-  ctx.fill();
-  outline(ctx, 0.8);
-  ctx.fillStyle = scD;
-  ctx.beginPath();
-  ctx.moveTo(-9, -2);
-  ctx.lineTo(-3, 0);
-  ctx.lineTo(-1, 6);
-  ctx.lineTo(-10, 6);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#efe7d6';
-  for (const cx of [-10, -6.5, -3]) {
-    ctx.beginPath();
-    ctx.moveTo(cx, 6);
-    ctx.lineTo(cx + 1.4, 7.6);
-    ctx.lineTo(cx + 2.4, 6);
-    ctx.fill();
-  }
   // Rumpf
   const bg = ctx.createLinearGradient(0, -30, 0, -2);
   bg.addColorStop(0, scL);
   bg.addColorStop(0.5, sc);
   bg.addColorStop(1, scD);
+  bodyP();
   ctx.fillStyle = bg;
-  ctx.beginPath();
-  ctx.moveTo(-12, -8);
-  ctx.quadraticCurveTo(-12, -24, 0, -26);
-  ctx.quadraticCurveTo(10, -26, 13, -18);
-  ctx.quadraticCurveTo(14, -6, 4, -3);
-  ctx.quadraticCurveTo(-8, -1, -12, -8);
-  ctx.closePath();
   ctx.fill();
-  outline(ctx, 1);
   // Bauchschuppen
   ctx.fillStyle = grad(ctx, 2, 14, '#f0c987', '#a8763a');
   ctx.beginPath();
@@ -4931,15 +4952,9 @@ function drawDragon(ctx, col, pal = null) {
     ctx.fill();
   }
   // Hals
+  neckP();
   ctx.fillStyle = grad(ctx, 6, 22, scL, scD);
-  ctx.beginPath();
-  ctx.moveTo(6, -24);
-  ctx.quadraticCurveTo(10, -38, 18, -42);
-  ctx.lineTo(23, -38);
-  ctx.quadraticCurveTo(16, -32, 13, -17);
-  ctx.closePath();
   ctx.fill();
-  outline(ctx, 0.9);
   ctx.fillStyle = belly;
   ctx.beginPath();
   ctx.moveTo(13, -17);
@@ -5018,19 +5033,18 @@ function drawDragon(ctx, col, pal = null) {
   ctx.shadowBlur = 0;
   ctx.fillStyle = '#1a0a05';
   ctx.fillRect(23.3, -43.4, 0.5, 1.6);
-  // Vorderbein
-  ctx.fillStyle = grad(ctx, 6, 14, scL, scD);
+  // Vorderbein: Oberarm nach hinten unten, Ellbogen, Unterarm nach vorn unten, Pranke mit Krallen (ohne Trennstrich)
+  limbSmooth(ctx, [[9, -12], [6.4, -4], [10, 3.6]], [5.6, 4], sc);
+  ctx.fillStyle = grad(ctx, 7, 15, scL, scD);
   ctx.beginPath();
-  ctx.moveTo(7, -10);
-  ctx.quadraticCurveTo(12, -8, 11, 0);
-  ctx.lineTo(13, 6);
-  ctx.lineTo(6, 6);
-  ctx.lineTo(6.5, -2);
+  ctx.moveTo(7.6, 2.4);
+  ctx.quadraticCurveTo(12, 1.6, 14.4, 5.6);
+  ctx.lineTo(7, 6.2);
   ctx.closePath();
   ctx.fill();
-  outline(ctx, 0.8);
+  outline(ctx, 0.6);
   ctx.fillStyle = '#efe7d6';
-  for (const cx of [6.5, 9.2, 11.8]) {
+  for (const cx of [7.4, 10, 12.6]) {
     ctx.beginPath();
     ctx.moveTo(cx, 6);
     ctx.lineTo(cx + 1.3, 7.6);
