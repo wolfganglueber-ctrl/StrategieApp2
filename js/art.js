@@ -4332,14 +4332,6 @@ function drawTroll2(ctx, col, v = {}) {
   // rechtes Bein hinten im Schatten (dunkel, zuerst), linkes Bein vorn hell
   leg([6, -17], [10.4, -7.6], [7.4, 0], true);
   leg([-6, -17], [-9.6, -7], [-8.2, 0], false);
-  if (giant) {
-    // zweiter Kopf hinter dem ersten, wächst aus der Schulter
-    ctx.fillStyle = sk;
-    ctx.beginPath();
-    ctx.ellipse(1, -54, 6, 5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    trollHead(2, -58.6);
-  }
   // Rumpf: Buckel hinten oben, mächtige Brust, Bauch
   const torsoP = () => {
     ctx.beginPath();
@@ -4477,6 +4469,14 @@ function drawTroll2(ctx, col, v = {}) {
   ctx.closePath();
   ctx.fill();
   trollHead(14, -54);
+  if (giant) {
+    // zweiter Kopf links davor: wächst aus der linken Schulter und überdeckt den rechten Kopf
+    ctx.fillStyle = sk;
+    ctx.beginPath();
+    ctx.ellipse(1.4, -53.4, 6.4, 4.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    trollHead(2, -58.6);
+  }
   // linker Arm vor dem Körper: Oberarm hängt, Ellbogen außen, Unterarm nach vorn zur Faust am Stiel
   const F = at(0.27), E = [-19.4, -31.6];
   limb([[-10, -46], E, F], [9.4, 7.6, 6.4], grad(ctx, -24, -4, skL, sk));
