@@ -5061,8 +5061,8 @@ function drawDragon(ctx, col, pal = null) {
   // eine Keule: runder Oberschenkel, Vorderkante läuft bis zu den Zehen, Ferse unter dem Schenkel eingeknickt
   ctx.fillStyle = grad(ctx, -11, 2, scL, scD);
   ctx.beginPath();
-  ctx.moveTo(-5.4, 5.6);
-  ctx.quadraticCurveTo(-6.4, 1.2, -3.6, -2.4);
+  ctx.moveTo(-1.6, 5.6);
+  ctx.quadraticCurveTo(-1.6, 0.4, -3.6, -2.4);
   ctx.quadraticCurveTo(-6.4, -2.2, -8.8, -3.6);
   ctx.bezierCurveTo(-11.8, -6.4, -9, -12.8, -4, -12.6);
   ctx.bezierCurveTo(1, -12.4, 3.8, -6.4, 3.6, -2);
