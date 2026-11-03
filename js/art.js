@@ -4862,114 +4862,118 @@ function drawDragon(ctx, col, pal = null) {
     ctx.arc(tips[0][0], tips[0][1], 1.2, 0, Math.PI * 2);
     ctx.fill();
   };
-  wing(4, -24, [[10, -50], [2, -60], [-6, -58], [-12, -50], [-14, -40]], true);
-  // Schwanz, Rumpf und Hals: erst alle Umrisse, dann die Füllungen – kein Strich, wo sie ineinander übergehen
+  // Haltung nach Wolfgangs Vorbild: aufrechter Rumpf, Hüfte hinten unten, Brust vorn oben, Hals steigt aus der Brust,
+  // Flügel setzen am oberen Rücken an, Schwanz beginnt an der Hüfte und schwingt hinten nach oben zur Pfeilspitze.
+  // Flügel hinter dem Körper (beide am oberen Rücken)
+  wing(2, -27, [[6, -52], [-4, -62], [-14, -60], [-22, -52], [-25, -42], [-20, -34]], true);
+  wing(0, -25, [[0, -50], [-12, -62], [-22, -58], [-29, -48], [-30, -37], [-23, -30]], false);
   const tailP = () => {
     ctx.beginPath();
-    ctx.moveTo(-8, -6);
-    ctx.quadraticCurveTo(-22, -4, -28, 2);
-    ctx.quadraticCurveTo(-33, 6, -30, 8);
-    ctx.quadraticCurveTo(-26, 4, -20, 2.5);
-    ctx.quadraticCurveTo(-12, 1, -6, 0);
+    ctx.moveTo(-6, -10);
+    ctx.bezierCurveTo(-16, -6, -22, 4, -30, 0);
+    ctx.bezierCurveTo(-36, -3, -36, -12, -33, -20);
+    ctx.lineTo(-31, -19.4);
+    ctx.bezierCurveTo(-33.6, -12, -33, -6, -29, -4);
+    ctx.bezierCurveTo(-22, -1, -16, 0, -4, -2);
     ctx.closePath();
   };
   const bodyP = () => {
     ctx.beginPath();
-    ctx.moveTo(-12, -8);
-    ctx.quadraticCurveTo(-12, -24, 0, -26);
-    ctx.quadraticCurveTo(10, -26, 13, -18);
-    ctx.quadraticCurveTo(14, -6, 4, -3);
-    ctx.quadraticCurveTo(-8, -1, -12, -8);
+    ctx.moveTo(-8, -3);
+    ctx.quadraticCurveTo(-12, -14, -8, -22);
+    ctx.quadraticCurveTo(-3, -30, 5, -30);
+    ctx.quadraticCurveTo(13, -28, 13, -20);
+    ctx.quadraticCurveTo(12, -8, 5, -2);
+    ctx.quadraticCurveTo(-2, 0, -8, -3);
     ctx.closePath();
   };
   const neckP = () => {
     ctx.beginPath();
-    ctx.moveTo(6, -24);
-    ctx.quadraticCurveTo(10, -38, 18, -42);
-    ctx.lineTo(23, -38);
-    ctx.quadraticCurveTo(16, -32, 13, -17);
+    ctx.moveTo(4, -27);
+    ctx.quadraticCurveTo(9, -40, 17, -43);
+    ctx.lineTo(22.6, -38.6);
+    ctx.quadraticCurveTo(15, -33, 13, -20);
     ctx.closePath();
   };
-  // Hinterbein: Oberschenkel, Sprunggelenk nach hinten, Fuß nach vorn (Glieder ohne Trennstrich)
-  limbSmooth(ctx, [[-5, -6], [-10.6, 0.4], [-6.4, 5]], [5.4, 4], shade(sc, -0.25));
-  ctx.fillStyle = grad(ctx, -12, 0, scL, scD);
-  ctx.beginPath();
-  ctx.ellipse(-6, -9, 6.6, 8, -0.3, 0, Math.PI * 2);
-  ctx.fill();
-  outline(ctx, 0.8);
-  ctx.fillStyle = scD;
-  ctx.beginPath();
-  ctx.moveTo(-9, 3.6);
-  ctx.quadraticCurveTo(-4, 3, -1, 6);
-  ctx.lineTo(-10, 6.4);
-  ctx.closePath();
-  ctx.fill();
-  outline(ctx, 0.5);
+  // ferne Gliedmaßen dunkel und zuerst
+  limbSmooth(ctx, [[-1, -9], [4, -4], [-1, 1.6], [4.6, 5]], [6, 4.4, 3.6], shade(sc, -0.45));
+  limbSmooth(ctx, [[9, -20], [12.4, -13.6], [15.6, -10.4]], [3.8, 3], shade(sc, -0.45));
+  // Umrisse von Schwanz, Rumpf und Hals, dann Füllungen
   for (const [path, w] of [[tailP, 1.6], [bodyP, 2], [neckP, 1.8]]) {
     path();
     outline(ctx, w);
   }
   tailP();
-  ctx.fillStyle = grad(ctx, -34, -6, scL, scD);
+  ctx.fillStyle = grad(ctx, -36, -4, scL, scD);
   ctx.fill();
+  // Schwanzspitze: Pfeil nach oben
   ctx.fillStyle = scD;
   ctx.beginPath();
-  ctx.moveTo(-30, 8);
-  ctx.lineTo(-35, 10);
-  ctx.lineTo(-31, 4.5);
+  ctx.moveTo(-32, -19.6);
+  ctx.lineTo(-36.6, -21.4);
+  ctx.lineTo(-31.4, -27);
+  ctx.lineTo(-28, -21);
   ctx.closePath();
   ctx.fill();
-  // Rumpf
-  const bg = ctx.createLinearGradient(0, -30, 0, -2);
+  outline(ctx, 0.6);
+  // Stacheln auf dem Schwanz
+  for (const [sx, sy, a] of [[-13, -6.6, -0.5], [-19, -2.6, -0.2], [-25, -0.6, 0.2], [-31.6, -5.6, 1.1], [-33.4, -12, 1.4]]) {
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(a);
+    ctx.fillStyle = scD;
+    ctx.beginPath();
+    ctx.moveTo(-1.4, 0.4);
+    ctx.lineTo(0, -3);
+    ctx.lineTo(1.4, 0.4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  bodyP();
+  const bg = ctx.createLinearGradient(-10, -30, 12, -2);
   bg.addColorStop(0, scL);
   bg.addColorStop(0.5, sc);
   bg.addColorStop(1, scD);
-  bodyP();
   ctx.fillStyle = bg;
   ctx.fill();
-  // Bauchschuppen
-  ctx.fillStyle = grad(ctx, 2, 14, '#f0c987', '#a8763a');
-  ctx.beginPath();
-  ctx.moveTo(4, -4);
-  ctx.quadraticCurveTo(13, -7, 12, -19);
-  ctx.quadraticCurveTo(8, -12, 2, -8);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(90,50,20,0.6)';
-  ctx.lineWidth = 0.5;
-  for (let k = 0; k < 4; k++) {
-    ctx.beginPath();
-    ctx.moveTo(4 + k * 2, -5 - k * 3);
-    ctx.lineTo(9 + k * 0.8, -6 - k * 3);
-    ctx.stroke();
-  }
-  // Schuppenmuster
+  // Schuppenmuster auf Rücken und Flanke
   ctx.fillStyle = 'rgba(0,0,0,0.22)';
   for (let k = 0; k < 9; k++) {
-    const px = -9 + (k % 3) * 5 + (Math.floor(k / 3) % 2) * 2.5, py = -20 + Math.floor(k / 3) * 4.5;
+    const px = -7 + (k % 3) * 4 + (Math.floor(k / 3) % 2) * 2, py = -22 + Math.floor(k / 3) * 5;
     ctx.beginPath();
-    ctx.arc(px, py, 1.6, 0, Math.PI);
+    ctx.arc(px, py, 1.5, 0, Math.PI);
     ctx.fill();
   }
-  // Hals
   neckP();
-  ctx.fillStyle = grad(ctx, 6, 22, scL, scD);
+  ctx.fillStyle = grad(ctx, 4, 22, scL, scD);
   ctx.fill();
+  // Bauchplatten von der Kehle über Brust und Bauch bis zur Hüfte
   ctx.fillStyle = belly;
   ctx.beginPath();
-  ctx.moveTo(13, -17);
-  ctx.quadraticCurveTo(16, -31, 22, -37);
-  ctx.lineTo(20.5, -38.5);
-  ctx.quadraticCurveTo(14, -32, 11.5, -19);
+  ctx.moveTo(21.4, -38.2);
+  ctx.quadraticCurveTo(15, -32, 12.6, -22);
+  ctx.quadraticCurveTo(11.6, -9, 5, -2.6);
+  ctx.lineTo(2.6, -3.4);
+  ctx.quadraticCurveTo(8.6, -10, 9.4, -22);
+  ctx.quadraticCurveTo(12, -32, 19.6, -39.4);
   ctx.closePath();
   ctx.fill();
-  // Rückenstacheln
-  ctx.fillStyle = scD;
-  for (const [sx, sy] of [[-6, -23], [-1, -25.5], [4, -26], [8, -31], [11, -37], [15, -41]]) {
+  ctx.strokeStyle = 'rgba(90,50,20,0.55)';
+  ctx.lineWidth = 0.5;
+  for (const [x0, y0, x1, y1] of [[18, -36, 20.4, -34.6], [15, -31.6, 17.6, -30.4], [12.4, -26, 15, -25.4], [10.4, -20, 13, -19.8], [9.6, -14, 12.2, -14.4], [7.6, -8.4, 10, -9.4], [4.6, -4.4, 6.6, -5.6]]) {
     ctx.beginPath();
-    ctx.moveTo(sx - 1.8, sy + 0.8);
-    ctx.lineTo(sx - 0.6, sy - 3.6);
-    ctx.lineTo(sx + 1.8, sy + 0.6);
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+  }
+  // Rückenstacheln vom Hinterkopf über Nacken und Rücken
+  ctx.fillStyle = scD;
+  for (const [sx, sy] of [[-10, -14], [-9.6, -20], [-6, -26], [-1, -29.4], [5, -31], [8.6, -36], [12.4, -40.4]]) {
+    ctx.beginPath();
+    ctx.moveTo(sx - 1.6, sy + 0.8);
+    ctx.lineTo(sx - 1.4, sy - 3.4);
+    ctx.lineTo(sx + 1.6, sy + 0.4);
     ctx.closePath();
     ctx.fill();
   }
@@ -5033,26 +5037,32 @@ function drawDragon(ctx, col, pal = null) {
   ctx.shadowBlur = 0;
   ctx.fillStyle = '#1a0a05';
   ctx.fillRect(23.3, -43.4, 0.5, 1.6);
-  // Vorderbein: Oberarm nach hinten unten, Ellbogen, Unterarm nach vorn unten, Pranke mit Krallen (ohne Trennstrich)
-  limbSmooth(ctx, [[9, -12], [6.4, -4], [10, 3.6]], [5.6, 4], sc);
-  ctx.fillStyle = grad(ctx, 7, 15, scL, scD);
+  // nahes Hinterbein: kräftiger Oberschenkel an der Hüfte, Knie nach vorn, Sprunggelenk nach hinten, Fuß flach nach vorn
+  limbSmooth(ctx, [[-3, -9], [3, -4.4], [-2.6, 1.8], [3.6, 5.6]], [7.4, 5, 4], sc);
+  ctx.fillStyle = grad(ctx, -10, 4, scL, scD);
   ctx.beginPath();
-  ctx.moveTo(7.6, 2.4);
-  ctx.quadraticCurveTo(12, 1.6, 14.4, 5.6);
-  ctx.lineTo(7, 6.2);
-  ctx.closePath();
+  ctx.ellipse(-3, -9.4, 6, 7.4, -0.5, 0, Math.PI * 2);
   ctx.fill();
-  outline(ctx, 0.6);
+  outline(ctx, 0.8);
   ctx.fillStyle = '#efe7d6';
-  for (const cx of [7.4, 10, 12.6]) {
+  for (const cx of [3.4, 5.6, 7.8]) {
     ctx.beginPath();
-    ctx.moveTo(cx, 6);
-    ctx.lineTo(cx + 1.3, 7.6);
-    ctx.lineTo(cx + 2.2, 6);
+    ctx.moveTo(cx, 5.4);
+    ctx.lineTo(cx + 1.3, 7.2);
+    ctx.lineTo(cx + 2, 5.4);
     ctx.fill();
   }
-  // Vorderer Flügel
-  wing(1, -22, [[-6, -46], [-20, -60], [-28, -56], [-33, -46], [-30, -36], [-22, -30]], false);
+  // nahes Vorderbein: kurzer Arm an der Brust, Ellbogen nach unten, Pranke mit Krallen nach vorn
+  limbSmooth(ctx, [[10, -21], [9.6, -13.6], [14.4, -10.6]], [4.4, 3.4], sc);
+  ctx.fillStyle = '#efe7d6';
+  for (const [dx, dy] of [[1.6, -1.2], [2.2, 0.2], [1.6, 1.6]]) {
+    ctx.beginPath();
+    ctx.moveTo(15, -10.6 + dy * 0.6);
+    ctx.lineTo(15 + dx * 1.2, -10.6 + dy);
+    ctx.lineTo(15, -10 + dy * 0.6);
+    ctx.fill();
+  }
+
 }
 
 // Mauerabschnitt zwischen zwei benachbarten Steinwällen (Weltkoordinaten der Feldmitten)
