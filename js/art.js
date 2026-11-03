@@ -3039,7 +3039,7 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       break;
     }
     case 'catapult':
-      drawCatapult(ctx, col);
+      drawCatapult(ctx, col, null, kingdomCrew(col));
       break;
     case 'mage': {
       // Magier: Robe in Spielerfarbe mit Goldsaum, Stab mit Kristall (Kriegsmagier Feuer, Heiliger Hüter Gold), langer Bart, Spitzhut
@@ -3128,14 +3128,74 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       drawBasilisk(ctx, col);
       break;
     case 'trebuchet':
-      drawTrebuchet(ctx, col);
+      drawTrebuchet(ctx, col, null, kingdomCrew(col));
       break;
   }
   ctx.restore();
 }
 
 // Katapult (Holz und Eisen über pal umfärbbar, für die Völker)
-function drawCatapult(ctx, col, pal = null) {
+// Holzmaserung auf einem Balken: feine dunkle Fasern und ein paar Astlöcher
+function siegeGrain(ctx, x0, y0, x1, y1, w) {
+  if (w < 1.8) return;
+  const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+  ctx.strokeStyle = 'rgba(50,28,10,0.35)';
+  ctx.lineWidth = 0.22;
+  for (const o of [-0.22, 0.12, 0.3]) {
+    ctx.beginPath();
+    ctx.moveTo(x0 + dx * 0.06 + nx * w * o, y0 + dy * 0.06 + ny * w * o);
+    ctx.quadraticCurveTo(x0 + dx * 0.5 + nx * w * (o + 0.08), y0 + dy * 0.5 + ny * w * (o + 0.08), x0 + dx * 0.94 + nx * w * o, y0 + dy * 0.94 + ny * w * o);
+    ctx.stroke();
+  }
+  if (L > 14) {
+    ctx.fillStyle = 'rgba(50,28,10,0.45)';
+    ctx.beginPath();
+    ctx.ellipse(x0 + dx * 0.37, y0 + dy * 0.37, Math.min(1.1, w * 0.3), w * 0.16, Math.atan2(dy, dx), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+// Bediener je Volk für die Belagerungswaffen
+function kingdomCrew(col) {
+  const st = FIGST.stage;
+  return { kind: st >= 4 ? 'mail' : 'leather', trouser: '#4a3a2e', head: (ctx) => { face(ctx, 0, 0); helmet(ctx, 0, st >= 4 ? -1.2 : 0, st >= 4 ? 'kettle' : 'hood', col); } };
+}
+function vikingCrew() {
+  const st = FIGST.stage;
+  return { kind: st >= 4 ? 'mail' : 'leather', trouser: '#4a3f2e', boot: '#4a3828', bare: true, head: (ctx) => { face(ctx, 0, 0); if (st >= 2) ffHornHelm(ctx, 0, -0.6, false); else hair(ctx, 0, 0, '#c08a3a'); } };
+}
+function dragonCrew() {
+  const st = FIGST.stage;
+  return { kind: st >= 4 ? 'mail' : 'leather', trouser: DK_SKIN[1], boot: DK_SKIN[1], bare: true, skin: DK_SKIN[0], tail: (c) => dkTail(c, -2, -4, 12), head: (ctx) => { dkHead(ctx, 0, 0); if (st >= 2) dkHelm(ctx, 0, -1); } };
+}
+function witchCrew(col) {
+  const st = FIGST.stage;
+  return { robe: st >= 4 ? '#0b0612' : '#2a1838', head: (ctx) => ffHood(ctx, 0, 0.6, col, '#a3e635', st >= 2) };
+}
+// Bediener einer Belagerungswaffe mit Gelenken, kleiner gezeichnet (Maßstab 0,78), steht bei x auf dem Boden.
+// look: { kind, trouser, boot, skin, bare, sleeve, robe, tail, head(ctx) }; hands: [nahe Hand, ferne Hand] in Figurkoordinaten,
+// elbows optional; grip: Griffwinkel der Fäuste
+function siegeCrew(ctx, col, x, look, hands, elbows = null, grip = 0) {
+  const S = 0.78;
+  const toL = ([hx, hy]) => [(hx - x) / S, hy / S];
+  const hN = toL(hands[0]), hF = toL(hands[1]);
+  const eN = elbows ? toL(elbows[0]) : null, eF = elbows ? toL(elbows[1]) : null;
+  const skin = look.skin || skinOf();
+  const sleeve = look.sleeve || look.robe || col.main;
+  ctx.save();
+  ctx.translate(x, 0);
+  ctx.scale(S, S);
+  rigBody(ctx, col, {
+    kind: look.kind, trouser: look.trouser, boot: look.boot, robe: look.robe, tail: look.tail,
+    feet: [[-3.2, 4.6], [3.6, 4.6]],
+    // rechter Arm hinter dem Körper
+    backArm: () => rigArm(ctx, [3.9, -19.8], hN, { sleeve, bare: look.bare, skin, elbow: eN || undefined, bend: 1, grip }),
+  });
+  rigHeadOn(ctx, () => look.head(ctx), skin);
+  rigArm(ctx, [-3.9, -19.8], hF, { sleeve, bare: look.bare, skin, elbow: eF || undefined, bend: 1, grip });
+  rigFist(ctx, hN, grip, false, skin, eN || [hN[0] - 3, hN[1] + 3]);
+  ctx.restore();
+}
+function drawCatapult(ctx, col, pal = null, crew = null) {
   const [wood, woodD, iron] = pal || ['#9a6634', '#5c3b1b', '#4b4f55'];
   const beam = (x0, y0, x1, y1, w, c = wood) => {
     ctx.strokeStyle = 'rgba(20,14,10,0.85)';
@@ -3153,7 +3213,7 @@ function drawCatapult(ctx, col, pal = null) {
     ctx.beginPath();
     ctx.moveTo(x0, y0 - w * 0.2);
     ctx.lineTo(x1, y1 - w * 0.2);
-    ctx.stroke();
+    ctx.stroke();    siegeGrain(ctx, x0, y0, x1, y1, w);
   };
   const wheel = (x, y, r, far) => {
     ctx.fillStyle = far ? shade(woodD, -0.2) : grad(ctx, x - r, x + r, shade(wood, 0.25), woodD);
@@ -3209,6 +3269,38 @@ function drawCatapult(ctx, col, pal = null) {
   }
   // Wurfarm mit Schale und Stein
   beam(11, -6, -12, -33, 2.6, woodD);
+  // gedrehtes Seilbündel (Torsion) am Fuß des Wurfarms
+  ctx.fillStyle = grad(ctx, 7, 14, '#d8c79e', '#7a6440');
+  ctx.beginPath();
+  ctx.ellipse(10.6, -6.2, 2.6, 3.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  outline(ctx, 0.5);
+  ctx.strokeStyle = 'rgba(90,65,30,0.8)';
+  ctx.lineWidth = 0.35;
+  for (let k = -2; k <= 2; k++) {
+    ctx.beginPath();
+    ctx.moveTo(8.4, -6.2 + k * 1.2 - 0.6);
+    ctx.lineTo(12.8, -6.2 + k * 1.2 + 0.6);
+    ctx.stroke();
+  }
+  // Spannkurbel links am Rahmen
+  ctx.fillStyle = iron;
+  ctx.beginPath();
+  ctx.arc(-14.2, -7.6, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+  outline(ctx, 0.4);
+  ctx.strokeStyle = iron;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-14.2, -7.6);
+  ctx.lineTo(-16.6, -11.6);
+  ctx.stroke();
+  ctx.strokeStyle = woodD;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(-16.6, -11.6);
+  ctx.lineTo(-17.8, -11.2);
+  ctx.stroke();
   ctx.strokeStyle = '#d8c79e';
   ctx.lineWidth = 0.7;
   ctx.beginPath();
@@ -3266,6 +3358,8 @@ function drawCatapult(ctx, col, pal = null) {
   outline(ctx, 0.5);
   wheel(-11, 1.5, 6.2, false);
   wheel(10, 1.5, 6.2, false);
+  // Bediener an der Kurbel
+  if (crew) siegeCrew(ctx, col, -21.5, crew, [[-17, -11.6], [-17.6, -10.8]], [[-17.6, -15.2], [-21, -12.4]], -1.2);
 }
 
 // Basilisk: geschuppte Riesenechse mit Kamm in Spielerfarbe und glühendem Versteinerungsblick
@@ -3462,7 +3556,7 @@ function drawBasilisk(ctx, col, pal = null) {
 }
 
 // Tribok: hohes Gestell, langer Wurfarm mit Schlinge, schwerer Gegengewichtskasten
-function drawTrebuchet(ctx, col, pal = null) {
+function drawTrebuchet(ctx, col, pal = null, crew = null) {
   const [wood, woodD, iron] = pal || ['#9a6634', '#5c3b1b', '#4b4f55'];
   const beam = (x0, y0, x1, y1, w, c = wood) => {
     ctx.lineCap = 'round';
@@ -3480,7 +3574,7 @@ function drawTrebuchet(ctx, col, pal = null) {
     ctx.beginPath();
     ctx.moveTo(x0 - w * 0.2, y0 - w * 0.2);
     ctx.lineTo(x1 - w * 0.2, y1 - w * 0.2);
-    ctx.stroke();
+    ctx.stroke();    siegeGrain(ctx, x0, y0, x1, y1, w);
   };
   // Hinteres Gestell (dunkler)
   beam(-12, -4, -2, -46, 3, woodD);
@@ -3585,6 +3679,16 @@ function drawTrebuchet(ctx, col, pal = null) {
   ctx.closePath();
   ctx.fill();
   outline(ctx, 0.6);
+  if (crew) {
+    // Auslöseseil vom Pfosten zum Bediener, der sich zurücklehnt und zieht
+    ctx.strokeStyle = '#d8c79e';
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(-16, -12);
+    ctx.quadraticCurveTo(-19, -10.6, -21.6, -11.2);
+    ctx.stroke();
+    siegeCrew(ctx, col, -26, crew, [[-21.4, -11.4], [-22.6, -11]], [[-22.4, -15.6], [-25.6, -12]], 1.57);
+  }
 }
 
 // Burghof: Pflaster auf den 6 Burgfeldern um den Bergfried
@@ -6979,14 +7083,14 @@ const VK = {
     ctx.restore();
   },
   catapult(ctx, col) {
-    drawCatapult(ctx, col, ['#6b4a2e', '#3a2616', '#3a3f45']);
+    drawCatapult(ctx, col, ['#6b4a2e', '#3a2616', '#3a3f45'], vikingCrew());
     // Schilde am Gestell und Drachenkopf vorn
     ffVikingShield(ctx, -8, -2, 4, col);
     ffVikingShield(ctx, 3, -2, 4, col);
     ffDragonHead(ctx, 13, -10, 0.6, '#6b4a2e');
   },
   trebuchet(ctx, col) {
-    drawTrebuchet(ctx, col, ['#6b4a2e', '#3a2616', '#3a3f45']);
+    drawTrebuchet(ctx, col, ['#6b4a2e', '#3a2616', '#3a3f45'], vikingCrew());
     ffVikingShield(ctx, -6, 0, 4.2, col);
     ffVikingShield(ctx, 4, 0, 4.2, col);
   },
@@ -7933,9 +8037,16 @@ const WT = {
     ctx.fillRect(-3, -10, 6, 4);
     outline(ctx, 0.4);
     if (st >= 5) ffSkull(ctx, 0, -8, 2.2, '#a3e635');
+    // Kultist rührt mit einer langen Kelle im Kessel
+    ffLine(ctx, -13.6, -21, -3, -13.2, 1, '#3b2a1a');
+    ctx.fillStyle = '#3a3f45';
+    ctx.beginPath();
+    ctx.ellipse(-2.6, -13.4, 1.8, 0.9, 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    siegeCrew(ctx, col, -17, witchCrew(col), [[-12.8, -20.4], [-10.6, -18.8]], [[-13.6, -14.6], [-16, -14.2]], 0.64 + Math.PI / 2);
   },
   trebuchet(ctx, col) {
-    drawTrebuchet(ctx, col, ['#cfc4a8', '#6f6551', '#3b2f4a']);
+    drawTrebuchet(ctx, col, ['#cfc4a8', '#6f6551', '#3b2f4a'], witchCrew(col));
     ffSkull(ctx, -2, -6, 2.6, '#a3e635');
   },
   mage(ctx, col) {
@@ -8741,11 +8852,11 @@ const DK = {
     ctx.restore();
   },
   catapult(ctx, col) {
-    drawCatapult(ctx, col, ['#3a302c', '#171210', '#7a2e12']);
+    drawCatapult(ctx, col, ['#3a302c', '#171210', '#7a2e12'], dragonCrew());
     ffGlow(ctx, -13.5, -36.5, 5, 'rgba(255,160,40,0.95)', 'rgba(220,40,0,0)');
   },
   trebuchet(ctx, col) {
-    drawTrebuchet(ctx, col, ['#3a302c', '#171210', '#7a2e12']);
+    drawTrebuchet(ctx, col, ['#3a302c', '#171210', '#7a2e12'], dragonCrew());
   },
   mage(ctx, col) {
     // Drachenpriester: Robe, Drachenschädel-Kopfputz, Flammenstab, Flamme in der erhobenen Hand
