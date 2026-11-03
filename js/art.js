@@ -4907,10 +4907,12 @@ function rigArm(ctx, s, h, o = {}) {
 // Bein von der Hüfte zur Ferse; Fuß zeigt nach rechts. o: { l1, l2, bend, trouser, armored, boot }
 function rigLeg(ctx, hip, foot, o = {}) {
   const l1 = o.l1 ?? 6.8, l2 = o.l2 ?? 6.6;
-  const k = rigJoint(hip, foot, l1, l2, o.bend ?? -1);
+  // Schienbein endet am Knöchel über der Sohle, der Schuh deckt das Ende ganz ab
+  const ankle = [foot[0], foot[1] - 1.3];
+  const k = rigJoint(hip, ankle, l1, l2 - 1.3, o.bend ?? -1);
   const up = o.armored ? '#aab2bc' : o.trouser || '#4a3a2e';
   const lo = o.armored ? '#b9c1ca' : o.boot || '#5a3a22';
-  rigLimb(ctx, hip, k, foot, 3.6, 2.9, 2.4, up, lo, o.armored ? (j) => {
+  rigLimb(ctx, hip, k, ankle, 3.6, 2.9, 2.3, up, lo, o.armored ? (j) => {
     ctx.fillStyle = steel(ctx, j[0] - 2, j[0] + 2, j[1] - 2, j[1] + 2);
     ctx.beginPath();
     ctx.arc(j[0] + 0.3, j[1], 1.7, 0, Math.PI * 2);
@@ -4918,16 +4920,21 @@ function rigLeg(ctx, hip, foot, o = {}) {
     outline(ctx, 0.4);
     shine(ctx, j[0] - 0.2, j[1] - 0.5, 0.4, 0.7, 0.7);
   } : null);
-  // Stiefel bzw. Eisenschuh nach vorn
-  ctx.fillStyle = o.armored ? steel(ctx, foot[0] - 2, foot[0] + 4, foot[1] - 2, foot[1] + 1) : grad(ctx, foot[0] - 2, foot[0] + 4, '#7a5236', '#2e1d12');
+  // flacher Schuh bzw. Eisenschuh nach vorn: Ferse rund, Spann niedrig, Sohle am Boden
+  const fx = foot[0], fy = foot[1];
+  ctx.fillStyle = o.armored ? steel(ctx, fx - 2, fx + 4, fy - 2, fy + 1) : grad(ctx, fx - 2, fx + 4, '#7a5236', '#2e1d12');
   ctx.beginPath();
-  ctx.moveTo(foot[0] - 1.4, foot[1] - 1.4);
-  ctx.lineTo(foot[0] + 1.2, foot[1] - 1.4);
-  ctx.quadraticCurveTo(foot[0] + 3.8, foot[1] - 0.6, foot[0] + 3.8, foot[1] + 0.8);
-  ctx.lineTo(foot[0] - 1.6, foot[1] + 0.8);
+  ctx.moveTo(fx - 1.9, fy + 0.8);
+  ctx.lineTo(fx - 1.9, fy - 0.4);
+  ctx.quadraticCurveTo(fx - 1.9, fy - 1.3, fx - 0.6, fy - 1.3);
+  ctx.lineTo(fx + 0.9, fy - 1.3);
+  ctx.quadraticCurveTo(fx + 3.9, fy - 0.7, fx + 3.9, fy + 0.8);
   ctx.closePath();
   ctx.fill();
   outline(ctx, 0.5);
+  // Sohle
+  ctx.fillStyle = 'rgba(20,12,6,0.55)';
+  ctx.fillRect(fx - 1.9, fy + 0.25, 5.8, 0.55);
   return k;
 }
 // Kopf kleiner gezeichnet (natürlichere Proportionen): Gesicht und Helm/Haare in einem Maßstab
@@ -5262,7 +5269,7 @@ function thHaft(ctx, at, c = ffWood()) {
   ffLine(ctx, x0, y0, x1, y1, 1.8, c);
 }
 
-// Wächter mit Gelenken: Speer senkrecht neben dem Körper (Fuß am Boden), rechter Oberarm hängt, Unterarm nach vorn zur Faust;
+// Wächter mit Gelenken: Speer senkrecht neben dem Körper (Fuß am Boden), rechter Arm hinter dem Körper, Unterarm nach vorn zur Faust;
 // linker Arm trägt den Schild vor dem Körper (vom Schild verdeckt). Grundgerüst wie rigTwoHand (gleiche Schultern, Beine, Kopf).
 // o: { kind, trouser, boot, skin, sleeve, bare, armored, armoredLegs, cape, tail, body, head, spearTop, spear(ctx, x, yTop), shield(ctx) }
 function rigGuard(ctx, col, o) {
@@ -5272,6 +5279,8 @@ function rigGuard(ctx, col, o) {
   const armOpt = (elbow) => ({ sleeve: o.sleeve || col.main, bare: o.bare, armored: o.armored, skin, elbow, grip: 0 });
   if (o.cape) cape(ctx, 0, 2, o.cape, 21, 8.5);
   if (o.tail) o.tail(ctx);
+  // rechter Arm liegt auf der abgewandten Seite: Oberarm vom Körper verdeckt, nur Unterarm und Faust sichtbar
+  rigArm(ctx, shN, hand, armOpt(elbow));
   rigLeg(ctx, [-2.3, -8], [-3.4, 4.6], { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
   rigLeg(ctx, [2.3, -8], [3.2, 4.6], { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
   torso(ctx, 0, 0.2, col, o.kind || 'tunic');
@@ -5284,7 +5293,7 @@ function rigGuard(ctx, col, o) {
   const top = o.spearTop ?? -40;
   ffLine(ctx, SX, 5.6, SX, top, 1.8, o.haft || ffWood());
   o.spear(ctx, SX, top);
-  rigArm(ctx, shN, hand, armOpt(elbow));
+  rigFist(ctx, hand, 0, o.armored, skin, elbow);
   o.shield(ctx);
 }
 // Reiter mit Gelenken auf einem Reittier (Pferderahmen: Sattel bei y ≈ −21).
@@ -7087,57 +7096,282 @@ const WT = {
     ctx.restore();
   },
   defender(ctx, col) {
-    // Lehmgolem: kantiger Körper aus Lehm, Rune auf der Brust
-    const st = FIGST.stage;
-    const clay = st >= 4 ? ['#8a8f99', '#3f444d'] : ['#c08a5a', '#6b4426'];
-    const block = (x, y, w, h, r = 1.5) => {
-      ctx.fillStyle = grad(ctx, x, x + w, clay[0], clay[1]);
+    // Lehmgolem: massiger Körper ohne Waffe; mit der Entwicklung andere Haut (Lehm → gebrannt → Granit → Obsidian) und Rüstung
+    const st = Math.min(FIGST.stage, 5);
+    const SK = [
+      ['#c99060', '#7a4a26', '#4a2a14'],
+      ['#b9774a', '#6e3f20', '#3f2210'],
+      ['#aca59e', '#615a53', '#36312c'],
+      ['#aca59e', '#615a53', '#36312c'],
+      ['#8e8984', '#4c4743', '#26231f'],
+      ['#56456a', '#241a30', '#0d0814'],
+    ][st];
+    const glow = st >= 5 ? '#fbbf24' : '#a3e635';
+    const ironBand = (x0, y0, x1, y1, w) => {
+      ctx.strokeStyle = '#1c1917';
+      ctx.lineWidth = w + 0.9;
+      ctx.lineCap = 'butt';
       ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h);
-      ctx.fill();
-      outline(ctx, 0.7);
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+      ctx.strokeStyle = steel(ctx, x0, x1, y0 - w, y1 + w);
+      ctx.lineWidth = w;
+      ctx.stroke();
+      ctx.fillStyle = '#d6d3d1';
+      for (let t = 0.15; t < 1; t += 0.35) {
+        ctx.beginPath();
+        ctx.arc(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 0.45, 0, Math.PI * 2);
+        ctx.fill();
+      }
     };
-    block(-6.5, -6, 5, 13);
-    block(1.5, -6, 5, 13);
-    block(-8, -24, 16, 19, 3);
-    block(-3.6, -31, 7.2, 7, 2);
-    ctx.fillStyle = '#a3e635';
-    ctx.fillRect(-2, -28.6, 1.4, 1.2);
-    ctx.fillRect(1, -28.6, 1.4, 1.2);
-    // Arme bis zum Boden mit großen Fäusten
-    block(-12.5, -22, 5, 15);
-    block(7.5, -22, 5, 15);
-    block(-13.5, -8, 7, 6, 2);
-    block(6.5, -8, 7, 6, 2);
-    // Rune
-    ctx.strokeStyle = st >= 5 ? '#fde047' : '#a3e635';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, -21);
-    ctx.lineTo(0, -10);
-    ctx.moveTo(-3, -18);
-    ctx.lineTo(3, -13);
-    ctx.moveTo(3, -18);
-    ctx.lineTo(-3, -13);
-    ctx.stroke();
-    if (st >= 5) ffGlow(ctx, 0, -15, 6, 'rgba(250,230,90,0.7)', 'rgba(200,160,0,0)');
-    // Steinplatte als Schild (Stufe 1, Schildwall größer), Dorn (Stufe 2, Pikenier lang)
-    if (st >= 1 || hasUp('d3a')) block(-16, -26, 5, hasUp('d3a') ? 28 : 20, 1);
-    if (st >= 2) {
-      const L = hasUp('d3b') ? 14 : 7;
-      ctx.fillStyle = grad(ctx, 9, 13, '#e7e5e4', '#78716c');
+    const crack = (pts) => {
+      ctx.strokeStyle = st >= 5 ? glow : SK[2];
+      ctx.lineWidth = st >= 5 ? 0.55 : 0.45;
+      ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(8.5, -7);
-      ctx.lineTo(10.5, -7 - L);
-      ctx.lineTo(12.5, -7);
+      ctx.moveTo(pts[0], pts[1]);
+      for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
+      ctx.stroke();
+    };
+    const fist = (x, y, r) => {
+      ctx.fillStyle = grad(ctx, x - r, x + r, SK[0], SK[1]);
+      ctx.beginPath();
+      ctx.ellipse(x, y, r, r * 0.9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      outline(ctx, 0.6);
+      // grobe Fingerwülste
+      ctx.strokeStyle = SK[2];
+      ctx.lineWidth = 0.45;
+      for (let k = -1; k <= 1; k++) {
+        ctx.beginPath();
+        ctx.moveTo(x + k * r * 0.45, y + r * 0.1);
+        ctx.lineTo(x + k * r * 0.45, y + r * 0.8);
+        ctx.stroke();
+      }
+      if (st >= 3) {
+        ctx.fillStyle = steel(ctx, x - r, x + r, y - r, y);
+        ctx.fillRect(x - r * 0.95, y - r * 0.9, r * 1.9, r * 0.55);
+        outline(ctx, 0.35);
+      }
+    };
+    // hinterer Arm (rechts) vom Rumpf verdeckt, nur Unterarm und Faust sichtbar
+    rigLimb(ctx, [5.5, -19], [9.4, -12], [10, -4.4], 5, 4.6, 5, SK[1], SK[1]);
+    fist(10.2, -2.6, 3.3);
+    // kurze, säulenartige Beine mit Steinfüßen
+    for (const [hx, fx] of [[-3.4, -4.2], [3.4, 4]]) {
+      rigLimb(ctx, [hx, -8], [hx - 0.3, -2], [fx, 2.6], 5.8, 5.2, 5.4, SK[1], SK[0]);
+      ctx.fillStyle = grad(ctx, fx - 3.4, fx + 3.6, SK[0], SK[2]);
+      ctx.beginPath();
+      ctx.moveTo(fx - 3.2, 5.4);
+      ctx.lineTo(fx - 3, 2.2);
+      ctx.quadraticCurveTo(fx, 1, fx + 3.6, 2.6);
+      ctx.lineTo(fx + 3.8, 5.4);
       ctx.closePath();
       ctx.fill();
-      outline(ctx, 0.5);
+      outline(ctx, 0.6);
+      if (st >= 4) {
+        ctx.fillStyle = steel(ctx, fx - 3, fx + 3, 1, 4);
+        ctx.fillRect(fx - 3, 2.2, 6.6, 1.4);
+        outline(ctx, 0.35);
+      }
     }
-    // Spielerfarbe als Tuch um den Leib
+    // Rumpf: breiter Buckel oben, schmalere Hüfte, leicht nach vorn gebeugt
+    ctx.fillStyle = grad(ctx, -10, 10, SK[0], SK[1]);
+    ctx.beginPath();
+    ctx.moveTo(-5.6, -6.5);
+    ctx.quadraticCurveTo(-9.4, -12, -9.8, -18.5);
+    ctx.quadraticCurveTo(-9.6, -25.6, -2, -26.6);
+    ctx.quadraticCurveTo(6.8, -27.2, 9, -20.5);
+    ctx.quadraticCurveTo(9.6, -12.5, 5.8, -6.5);
+    ctx.quadraticCurveTo(0, -4.8, -5.6, -6.5);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.8);
+    // Brustplatten-Wölbung und Bauchkante
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(-7.4, -21);
+    ctx.quadraticCurveTo(-3, -24.6, 3.6, -23.4);
+    ctx.stroke();
+    ctx.strokeStyle = SK[2];
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(-6.2, -14.6);
+    ctx.quadraticCurveTo(0, -12.4, 6.6, -14.8);
+    ctx.stroke();
+    // Oberfläche je Stufe
+    if (st === 0) {
+      // nasser Lehm: Fingerstriche
+      ctx.strokeStyle = 'rgba(255,230,200,0.35)';
+      ctx.lineWidth = 0.5;
+      for (const [x, y] of [[-6, -18], [-4.6, -10], [4.6, -19], [3.2, -10.5]]) {
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.quadraticCurveTo(x + 1.2, y + 1.4, x + 0.6, y + 3);
+        ctx.stroke();
+      }
+    }
+    if (st === 1) {
+      // eingebackene Steine
+      for (const [x, y, r] of [[-6.4, -17, 1.3], [-3.2, -9.6, 1], [5.8, -18.6, 1.1], [4.4, -9.8, 1.4], [-1, -21.5, 0.9]]) {
+        ctx.fillStyle = grad(ctx, x - r, x + r, '#d6d3d1', '#78716c');
+        ctx.beginPath();
+        ctx.ellipse(x, y, r, r * 0.8, 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        outline(ctx, 0.3);
+      }
+    }
+    if (st >= 2 && st < 5) {
+      // Granit-Sprenkel
+      ctx.fillStyle = 'rgba(30,25,20,0.35)';
+      for (let k = 0; k < 18; k++) {
+        const x = -8 + ((k * 37) % 16), y = -24 + ((k * 23) % 17);
+        ctx.fillRect(x, y, 0.5, 0.5);
+      }
+    }
+    crack([-8.2, -19.5, -6.4, -17.4, -6.9, -15]);
+    crack([6.5, -22.5, 5.2, -19.8, 6.2, -17.6, 5.4, -15.6]);
+    crack([-2.4, -8, -1.2, -9.8, -1.8, -11.2]);
+    // Eisenbänder (Stufe 3) bzw. Brustpanzer (ab Stufe 4)
+    if (st === 3) {
+      ironBand(-9.2, -19.6, 8.8, -17.2, 1.6);
+      ironBand(-6.4, -9.2, 6.4, -9.4, 1.6);
+    }
+    if (st >= 4) {
+      ctx.fillStyle = steel(ctx, -8, 8, -25, -11);
+      ctx.beginPath();
+      ctx.moveTo(-7.8, -22.4);
+      ctx.quadraticCurveTo(0, -26, 7.8, -22.6);
+      ctx.lineTo(7, -13.2);
+      ctx.quadraticCurveTo(0, -10.8, -7, -13.2);
+      ctx.closePath();
+      ctx.fill();
+      outline(ctx, 0.6);
+      ctx.strokeStyle = st >= 5 ? '#d9ad3c' : 'rgba(30,30,35,0.6)';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(-7.4, -16.4);
+      ctx.quadraticCurveTo(0, -14, 7.2, -16.4);
+      ctx.stroke();
+      ctx.fillStyle = '#e7e5e4';
+      for (const [x, y] of [[-6.6, -21.2], [6.6, -21.4], [-6.2, -14], [6.2, -14]]) {
+        ctx.beginPath();
+        ctx.arc(x, y, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      shine(ctx, -3.6, -21.4, 2.2, 0.8, 0.5);
+    }
+    // Rune auf der Brust (ab Stufe 2 leuchtend)
+    ctx.strokeStyle = st >= 2 ? glow : SK[2];
+    ctx.lineWidth = 0.9;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, -21);
+    ctx.lineTo(0, -15.6);
+    ctx.moveTo(-2.2, -20.2);
+    ctx.lineTo(0, -18.4);
+    ctx.lineTo(2.2, -20.2);
+    ctx.stroke();
+    if (st >= 2) ffGlow(ctx, 0, -18.4, st >= 5 ? 6 : 4, st >= 5 ? 'rgba(250,200,60,0.6)' : 'rgba(163,230,53,0.45)', 'rgba(0,0,0,0)');
+    // Spielerfarbe als Tuch um die Hüfte
     ctx.fillStyle = col.main;
-    ctx.fillRect(-8, -9, 16, 2.6);
+    ctx.beginPath();
+    ctx.moveTo(-6, -8.6);
+    ctx.quadraticCurveTo(0, -6.6, 6.2, -8.6);
+    ctx.lineTo(5.8, -6.2);
+    ctx.quadraticCurveTo(0, -4.4, -5.6, -6.2);
+    ctx.closePath();
+    ctx.fill();
     outline(ctx, 0.4);
+    ctx.beginPath();
+    ctx.moveTo(-2.6, -6);
+    ctx.lineTo(-1.2, -1.6);
+    ctx.lineTo(0.6, -5.4);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.35);
+    // kleiner Kopf tief zwischen den Schultern, Stirnwulst, glühende Augenschlitze
+    ctx.fillStyle = grad(ctx, -2, 6, SK[0], SK[1]);
+    ctx.beginPath();
+    ctx.ellipse(1.6, -26.6, 3.6, 3.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    outline(ctx, 0.6);
+    ctx.fillStyle = SK[2];
+    ctx.beginPath();
+    ctx.moveTo(-1.8, -27.8);
+    ctx.quadraticCurveTo(1.8, -29.6, 5.2, -27.6);
+    ctx.lineTo(5, -26.8);
+    ctx.quadraticCurveTo(1.8, -28.2, -1.8, -27);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, -26.6, 1.5, 0.75);
+    ctx.fillRect(2.8, -26.6, 1.5, 0.75);
+    ffGlow(ctx, 2.1, -26.2, 2.6, st >= 5 ? 'rgba(250,200,60,0.55)' : 'rgba(163,230,53,0.4)', 'rgba(0,0,0,0)');
+    if (st >= 4) {
+      // Eisenkappe
+      ctx.fillStyle = steel(ctx, -2, 5, -30, -27);
+      ctx.beginPath();
+      ctx.moveTo(-2, -27.6);
+      ctx.quadraticCurveTo(1.6, -31.8, 5.2, -27.6);
+      ctx.quadraticCurveTo(1.6, -29, -2, -27.6);
+      ctx.closePath();
+      ctx.fill();
+      outline(ctx, 0.4);
+    }
+    // vorderer Arm (links) vor dem Rumpf: Schulterbrocken, Arm hängt fast bis zum Knie
+    rigLimb(ctx, [-6.6, -20.4], [-10.2, -12.6], [-10.6, -4.8], 5.6, 5, 5.4, SK[0], SK[0]);
+    crack([-11.2, -16, -10, -14.4, -10.8, -12.8]);
+    if (st >= 3) {
+      // Armschiene
+      ctx.save();
+      ctx.translate(-10.4, -8.6);
+      ctx.rotate(0.05);
+      ctx.fillStyle = steel(ctx, -3, 3, -2, 2);
+      ctx.fillRect(-3, -2.2, 6, 3.6);
+      outline(ctx, 0.4);
+      ctx.restore();
+    }
+    // Schildwall: dicke Steinplatte als Panzer auf dem Unterarm
+    if (hasUp('d3a')) {
+      ctx.fillStyle = st >= 4 ? steel(ctx, -15, -6, -16, 0) : grad(ctx, -15, -6, SK[0], SK[2]);
+      ctx.beginPath();
+      ctx.moveTo(-14.4, -15);
+      ctx.lineTo(-7.2, -15.6);
+      ctx.lineTo(-6.8, -3.6);
+      ctx.lineTo(-14, -3);
+      ctx.closePath();
+      ctx.fill();
+      outline(ctx, 0.6);
+    }
+    fist(-10.8, -2.8, 3.5);
+    // Schulterbrocken (ab Stufe 4 Schulterpanzer), Pikenier: Kristalle wachsen aus den Schultern
+    if (hasUp('d3b')) {
+      for (const [x, y, h, a] of [[-7.4, -24, 5, -0.4], [-4.6, -25.6, 6.4, -0.1], [6.8, -24.6, 4.6, 0.4]]) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(a);
+        ctx.fillStyle = grad(ctx, -1.2, 1.2, st >= 5 ? '#fde68a' : '#d9f99d', st >= 5 ? '#b45309' : '#4d7c0f');
+        ctx.beginPath();
+        ctx.moveTo(-1.2, 0);
+        ctx.lineTo(0, -h);
+        ctx.lineTo(1.2, 0);
+        ctx.closePath();
+        ctx.fill();
+        outline(ctx, 0.35);
+        ctx.restore();
+      }
+    }
+    ctx.fillStyle = st >= 4 ? steel(ctx, -11, -3, -25, -17) : grad(ctx, -11, -3, SK[0], SK[1]);
+    ctx.beginPath();
+    ctx.ellipse(-7, -21, 4.2, 3.4, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+    outline(ctx, 0.6);
+    if (st >= 4) shine(ctx, -8, -22.4, 1.6, 0.6, 0.6);
+    else crack([-9.6, -22, -8, -20.6, -8.4, -19.2]);
+    if (st >= 5) ffGlow(ctx, 0, -14, 12, 'rgba(250,190,60,0.25)', 'rgba(0,0,0,0)');
   },
   knight(ctx, col) {
     // Hexenritter auf schwarzem Ross, spitzer Helm, Flammenlanze
