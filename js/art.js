@@ -5074,17 +5074,32 @@ function drawDragon(ctx, col, pal = null) {
   ctx.fill();
   outline(ctx, 0.8);
   // nahes Vorderbein: von der Brust gerade nach unten, Pranke am Boden
-  limbSmooth(ctx, [[13.4, -8.6], [15.4, -1.6], [16.4, 5]], [5, 3.8], sc);
+  limbSmooth(ctx, [[13.4, -8.6], [15.4, -1.6], [16.2, 3.6]], [5, 3.8], sc);
+  // Pranke nach vorn, Zehen am Boden
+  ctx.fillStyle = sc;
+  ctx.beginPath();
+  ctx.moveTo(14.2, 2.6);
+  ctx.quadraticCurveTo(17, 2.6, 18.8, 4.4);
+  ctx.quadraticCurveTo(19.6, 5.7, 18.2, 5.7);
+  ctx.lineTo(14.4, 5.7);
+  ctx.quadraticCurveTo(13.6, 4.2, 14.2, 2.6);
+  ctx.fill();
+  outline(ctx, 0.8);
+  // Krallen vorn an den Zehenspitzen, nach vorn gebogen bis zum Boden
   ctx.fillStyle = '#efe7d6';
-  for (const fx of [1.2, 16.4]) {
-    for (const k of [0, 1.8, 3.6]) {
-      ctx.beginPath();
-      ctx.moveTo(fx + k, 5.4);
-      ctx.lineTo(fx + k + 1.3, 7.2);
-      ctx.lineTo(fx + k + 2, 5.4);
-      ctx.fill();
-    }
-  }
+  const claw = (x, y) => {
+    ctx.beginPath();
+    ctx.moveTo(x, y - 0.8);
+    ctx.quadraticCurveTo(x + 1.5, y - 0.7, x + 1.9, y + 0.6);
+    ctx.lineTo(x, y + 0.6);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.4);
+  };
+  claw(4.2, 5.1);
+  claw(5.6, 5.1);
+  claw(17.2, 5.1);
+  claw(18.6, 5.1);
 
 }
 
