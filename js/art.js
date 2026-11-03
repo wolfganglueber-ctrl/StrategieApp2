@@ -4819,20 +4819,21 @@ function drawCurseTree(ctx, col) {
   // Gesicht im Stamm: hohle glühende Augen und klaffender Mund
   ctx.fillStyle = '#05030a';
   ctx.beginPath();
-  ctx.ellipse(-2.6, -44, 2.2, 1.6, 0.2, 0, Math.PI * 2);
-  ctx.ellipse(4.4, -44, 2.2, 1.6, -0.2, 0, Math.PI * 2);
+  // Gesicht etwas nach rechts gedreht: fernes Auge kleiner, alles zur rechten Stammseite verschoben
+  ctx.ellipse(0.8, -44, 1.6, 1.3, 0.2, 0, Math.PI * 2);
+  ctx.ellipse(6.6, -44, 2.2, 1.6, -0.2, 0, Math.PI * 2);
   ctx.fill();
-  ffGlow(ctx, -2.6, -44, 2.4, st >= 5 ? 'rgba(250,220,80,0.95)' : 'rgba(190,255,120,0.95)', 'rgba(20,160,60,0)');
-  ffGlow(ctx, 4.4, -44, 2.4, st >= 5 ? 'rgba(250,220,80,0.95)' : 'rgba(190,255,120,0.95)', 'rgba(20,160,60,0)');
+  ffGlow(ctx, 0.8, -44, 1.8, st >= 5 ? 'rgba(250,220,80,0.95)' : 'rgba(190,255,120,0.95)', 'rgba(20,160,60,0)');
+  ffGlow(ctx, 6.6, -44, 2.4, st >= 5 ? 'rgba(250,220,80,0.95)' : 'rgba(190,255,120,0.95)', 'rgba(20,160,60,0)');
   ctx.fillStyle = '#05030a';
   ctx.beginPath();
-  ctx.moveTo(-4, -37);
-  ctx.quadraticCurveTo(1, -40, 6, -37);
-  ctx.quadraticCurveTo(1, -31, -4, -37);
+  ctx.moveTo(-0.6, -37);
+  ctx.quadraticCurveTo(4, -40, 8.6, -37);
+  ctx.quadraticCurveTo(4.4, -31, -0.6, -37);
   ctx.closePath();
   ctx.fill();
   ctx.fillStyle = '#c8b89a';
-  for (const tx of [-2, 0.6, 3.4]) {
+  for (const tx of [1.2, 3.8, 6.6]) {
     ctx.beginPath();
     ctx.moveTo(tx - 0.6, -37.6);
     ctx.lineTo(tx, -35.4);
@@ -4897,19 +4898,19 @@ function drawCurseTree(ctx, col) {
   if (st >= 4) ffRaven(ctx, 14.6, -66.6);
   // vorderer Astarm (links) wie beim Lehmgolem: setzt seitlich an der Schulter des Stamms an und hängt bis zum Knie herab,
   // ein knorriger Astknoten deckt das Schultergelenk, unten Krallenzweige
-  branch([[-8.6, -46], [-14, -34], [-13.4, -21]], 6.4, 4, bark[0]);
-  for (const [dx, dy] of [[-3, 5], [-0.6, 6], [2, 5]]) branch([[-13.4, -21], [-13.4 + dx, -21 + dy]], 1.8, 0.7, bark[0]);
+  branch([[-8.4, -42], [-14, -31], [-13.4, -19]], 6.4, 4, bark[0]);
+  for (const [dx, dy] of [[-3, 5], [-0.6, 6], [2, 5]]) branch([[-13.4, -19], [-13.4 + dx, -19 + dy]], 1.8, 0.7, bark[0]);
   ctx.fillStyle = barkG(-14, -4);
   ctx.beginPath();
-  ctx.ellipse(-8.6, -47, 4.6, 3.8, -0.3, 0, Math.PI * 2);
+  ctx.ellipse(-8.4, -43, 4.6, 3.8, -0.3, 0, Math.PI * 2);
   ctx.fill();
   outline(ctx, 0.7);
   ctx.strokeStyle = 'rgba(10,6,4,0.55)';
   ctx.lineWidth = 0.5;
   ctx.beginPath();
-  ctx.ellipse(-8.6, -47, 2, 1.4, -0.3, 0, Math.PI * 2);
+  ctx.ellipse(-8.4, -43, 2, 1.4, -0.3, 0, Math.PI * 2);
   ctx.stroke();
-  ffGlow(ctx, -13.4, -15, 3, 'rgba(190,255,120,0.85)', 'rgba(20,160,60,0)');
+  ffGlow(ctx, -13.4, -13, 3, 'rgba(190,255,120,0.85)', 'rgba(20,160,60,0)');
 }
 
 // Drache: dunkle Schuppen, Flügelhäute in Spielerfarbe, glühendes Maul
