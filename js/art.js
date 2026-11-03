@@ -6900,16 +6900,50 @@ function ffWolf(ctx, coat, armored, eyes = '#fde047') {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   const dark = shade(coat, -0.45), light = shade(coat, 0.35);
-  const leg = (x, y, far, back) => {
-    ffLine(ctx, x, y, x + (back ? -2 : 1.5), y + 6, 3.4, far ? shade(coat, -0.5) : shade(coat, -0.2));
-    ffLine(ctx, x + (back ? -2 : 1.5), y + 6, x + (back ? -1 : 2.5), y + 12.5, 2.6, far ? shade(coat, -0.5) : shade(coat, -0.2));
-    ctx.fillStyle = '#1c1612';
+  // Beine nach Wolfgangs Wolf-Vorbild (blaue Linien): Vorderbein fast gerade, leicht nach vorn geneigt;
+  // Hinterbein mit kräftigem Oberschenkel, Sprunggelenk spitz nach hinten, Mittelfuß senkrecht, Pfote nach vorn
+  const hindLeg = (dx, c) => {
+    ctx.save();
+    ctx.translate(dx, 0);
+    ctx.fillStyle = c;
     ctx.beginPath();
-    ctx.ellipse(x + (back ? 0 : 3.4), y + 13, 2.2, 1.1, 0, 0, Math.PI * 2);
+    ctx.moveTo(-6.3, -13.2);
+    ctx.quadraticCurveTo(-3.2, -9.2, -6.4, -5);
+    ctx.quadraticCurveTo(-9, -2.6, -10.6, -1);
+    ctx.lineTo(-10.6, 2.2);
+    ctx.quadraticCurveTo(-8.4, 2.4, -7.8, 3.2);
+    ctx.quadraticCurveTo(-7.6, 4, -8.8, 4);
+    ctx.lineTo(-12.8, 4);
+    ctx.quadraticCurveTo(-13.2, 2.6, -12.8, 0.6);
+    ctx.lineTo(-13.8, -2.6);
+    ctx.quadraticCurveTo(-11, -5.6, -11.6, -10);
+    ctx.quadraticCurveTo(-10, -14.6, -6.3, -13.2);
+    ctx.closePath();
     ctx.fill();
+    outline(ctx, 0.7);
+    ctx.restore();
   };
-  leg(-10, -10, true, true);
-  leg(7, -10, true, false);
+  const foreLeg = (dx, c) => {
+    ctx.save();
+    ctx.translate(dx, 0);
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.moveTo(5.6, -12);
+    ctx.lineTo(7.6, -0.4);
+    ctx.lineTo(7.8, 4);
+    ctx.lineTo(11.4, 4);
+    ctx.quadraticCurveTo(12, 3.2, 11, 2.8);
+    ctx.lineTo(10, 2.6);
+    ctx.lineTo(10.2, -0.4);
+    ctx.lineTo(10, -12);
+    ctx.quadraticCurveTo(8, -14.6, 5.6, -12);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.7);
+    ctx.restore();
+  };
+  hindLeg(2.6, shade(coat, -0.5));
+  foreLeg(-3, shade(coat, -0.5));
   // buschiger Schwanz: dicke Rute mit zottigen Haarspitzen, hängt im Bogen herab
   ctx.fillStyle = grad(ctx, -27, -12, light, coat);
   ctx.beginPath();
@@ -7010,8 +7044,8 @@ function ffWolf(ctx, coat, armored, eyes = '#fde047') {
   ctx.beginPath();
   ctx.ellipse(20.6, -28.3, 1.2, 0.7, -0.2, 0, Math.PI * 2);
   ctx.fill();
-  leg(-9, -10, false, true);
-  leg(8, -10, false, false);
+  hindLeg(0, shade(coat, -0.2));
+  foreLeg(0, shade(coat, -0.2));
   if (armored) {
     // Eisenkragen mit Dornen und Rückenplatte
     ctx.fillStyle = steel(ctx, 8, 16, -26, -18);
