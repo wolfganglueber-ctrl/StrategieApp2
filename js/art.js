@@ -2712,80 +2712,89 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       break;
     }
     case 'archer': {
-      // Köcher mit Pfeilen auf dem Rücken
-      ctx.save();
-      ctx.translate(-4.5, -15);
-      ctx.rotate(-0.4);
-      ctx.fillStyle = grad(ctx, -2, 2, '#9a6334', '#4d2c12');
-      ctx.fillRect(-2.2, -8, 4.4, 13);
-      outline(ctx, 0.6);
-      for (const fx of [-1.3, 0, 1.3]) {
-        ctx.strokeStyle = '#6b4a2b';
-        ctx.lineWidth = 0.5;
+      // Bogenschütze im Vollauszug (Vorbild Langbogenschütze): Körper zum Betrachter, Kopf zum Ziel gedreht,
+      // Bogenarm gestreckt, Zugarm mit hohem Ellbogen nach hinten, Zughand am Kinn
+      const st = FIGST.stage;
+      const skin = skinOf();
+      const sleeve = st >= 4 ? '#9aa3ad' : col.main;
+      rigBody(ctx, col, {
+        feet: [[-4.2, 4.6], [4.4, 4.6]], trouser: '#3d4a2e', kind: st >= 4 ? 'mail' : 'leather',
+        back: (c) => {
+          // Köcher schräg auf dem Rücken, Pfeile ragen über die linke Schulter
+          c.save();
+          c.translate(-4.6, -20.4);
+          c.rotate(-0.4);
+          c.fillStyle = grad(c, -2, 2, '#9a6334', '#4d2c12');
+          c.fillRect(-2.2, -6, 4.4, 13);
+          outline(c, 0.6);
+          for (const fx of [-1.3, 0, 1.3]) {
+            ffLine(c, fx, -6, fx, -9.5, 0.5, '#6b4a2b');
+            c.fillStyle = fx === 0 ? col.light : '#f5f5f5';
+            c.fillRect(fx - 0.6, -11, 1.2, 2.5);
+          }
+          c.restore();
+        },
+      });
+      const H = [14.4, -22.4], E = [9.2, -21.6], D = [-2.6, -22.6], DE = [-8.6, -23.4];
+      const br = hasUp('a3a') ? 18 : 14;
+      // Bogen: Wurfarme biegen sich vom Schützen weg, Spitzen leicht zurückgebogen
+      const T1 = [H[0] - 4.2, H[1] - br], T2 = [H[0] - 4.2, H[1] + br];
+      const bowPath = () => {
         ctx.beginPath();
-        ctx.moveTo(fx, -8);
-        ctx.lineTo(fx, -11);
-        ctx.stroke();
-        ctx.fillStyle = fx === 0 ? col.light : '#f5f5f5';
-        ctx.fillRect(fx - 0.6, -12.5, 1.2, 2.5);
-      }
-      ctx.restore();
-      legs(ctx, 0, 6, '#3d4a2e');
-      torso(ctx, 0, 6, col, 'leather');
-      face(ctx, 0, -20.5);
-      helmet(ctx, 0, -20.5, 'hood', col);
-      // Langbogen gespannt, Pfeil eingelegt
-      ctx.strokeStyle = 'rgba(20,14,10,0.85)';
-      ctx.lineWidth = 3;
+        ctx.moveTo(T1[0] - 0.8, T1[1] + 0.6);
+        ctx.quadraticCurveTo(H[0] + 4.6, H[1] - br * 0.55, H[0] + 0.6, H[1]);
+        ctx.quadraticCurveTo(H[0] + 4.6, H[1] + br * 0.55, T2[0] - 0.8, T2[1] - 0.6);
+      };
+      // Sehne zur Zughand
+      ffLine(ctx, T1[0], T1[1], D[0] + 0.6, D[1], 0.45, 'rgba(255,255,255,0.9)');
+      ffLine(ctx, T2[0], T2[1], D[0] + 0.6, D[1], 0.45, 'rgba(255,255,255,0.9)');
       ctx.lineCap = 'round';
-      // Langbogenschütze: deutlich größerer Bogen
-      const br = hasUp('a3a') ? 19 : 14;
-      ctx.beginPath();
-      ctx.arc(3, -13, br, -1.2, 1.2);
+      bowPath();
+      ctx.strokeStyle = 'rgba(20,14,10,0.9)';
+      ctx.lineWidth = 2.6;
       ctx.stroke();
-      ctx.strokeStyle = grad(ctx, 0, 17, FIGST.stage >= 4 ? '#5b3a22' : '#b77a3e', FIGST.stage >= 4 ? '#24140a' : '#6b3d14');
-      ctx.lineWidth = 2;
+      bowPath();
+      ctx.strokeStyle = grad(ctx, H[0] - 4, H[0] + 4, st >= 4 ? '#5b3a22' : '#c08a4a', st >= 4 ? '#24140a' : '#6b3d14');
+      ctx.lineWidth = 1.6;
       ctx.stroke();
-      const tx = 3 + br * Math.cos(-1.2), ty = -13 + br * Math.sin(-1.2), by = -13 + br * Math.sin(1.2);
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-      ctx.lineWidth = 0.6;
+      rigHeadOn(ctx, () => {
+        face(ctx, 0, 0);
+        helmet(ctx, 0, 0, 'hood', col);
+      }, skin);
+      // Pfeil vom Kinn über die Bogenhand hinaus
+      const AX = H[0] + 6;
+      ffLine(ctx, D[0] - 1, D[1], AX - 2.5, H[1] - 0.3, 0.9, '#4a3420');
+      ctx.fillStyle = steel(ctx, AX - 3, AX + 1);
       ctx.beginPath();
-      ctx.moveTo(tx, ty);
-      ctx.lineTo(-1, -13);
-      ctx.lineTo(tx, by);
-      ctx.stroke();
-      ctx.strokeStyle = '#4a3420';
-      ctx.lineWidth = 1.1;
-      ctx.beginPath();
-      ctx.moveTo(-1, -13);
-      ctx.lineTo(21, -13);
-      ctx.stroke();
-      ctx.fillStyle = steel(ctx, 20, 24);
-      ctx.beginPath();
-      ctx.moveTo(23.5, -13);
-      ctx.lineTo(20, -15);
-      ctx.lineTo(20, -11);
+      ctx.moveTo(AX + 0.6, H[1] - 0.3);
+      ctx.lineTo(AX - 2.8, H[1] - 2);
+      ctx.lineTo(AX - 2.8, H[1] + 1.4);
+      ctx.closePath();
       ctx.fill();
+      outline(ctx, 0.35);
       if (hasUp('a3b')) {
-        // Brandpfeil: Flamme an der Spitze
-        const fg = ctx.createRadialGradient(24, -14, 0.3, 24, -14, 5);
+        const fg = ctx.createRadialGradient(AX, H[1] - 1.5, 0.3, AX, H[1] - 1.5, 5);
         fg.addColorStop(0, 'rgba(255,250,200,1)');
         fg.addColorStop(0.4, 'rgba(255,140,30,0.9)');
         fg.addColorStop(1, 'rgba(220,40,0,0)');
         ctx.fillStyle = fg;
         ctx.beginPath();
-        ctx.ellipse(24, -15, 3.2, 5, 0.2, 0, Math.PI * 2);
+        ctx.ellipse(AX, H[1] - 2, 3.2, 5, 0.2, 0, Math.PI * 2);
         ctx.fill();
       }
+      // Bogenarm gestreckt, Faust um den Griff
+      rigArm(ctx, [3.9, -19.8], H, { sleeve, armored: st >= 4, skin, elbow: E, grip: 0 });
+      // Zugarm: Oberarm waagerecht nach hinten, Unterarm zurück zum Kinn, Befiederung vor der Hand
       ctx.fillStyle = col.light;
       ctx.beginPath();
-      ctx.moveTo(-1, -13);
-      ctx.lineTo(1.5, -14.8);
-      ctx.lineTo(2.5, -13);
-      ctx.lineTo(1.5, -11.2);
+      ctx.moveTo(D[0] - 1, D[1]);
+      ctx.lineTo(D[0] - 3.4, D[1] - 1.6);
+      ctx.lineTo(D[0] - 4.4, D[1]);
+      ctx.lineTo(D[0] - 3.4, D[1] + 1.6);
+      ctx.closePath();
       ctx.fill();
-      arm(ctx, 4.5, -14.5, 15.5, -13.2, col.main);
-      arm(ctx, -3.5, -14.5, -0.5, -13, col.main);
+      outline(ctx, 0.3);
+      rigArm(ctx, [-3.9, -19.8], D, { sleeve, armored: st >= 4, skin, elbow: DE, grip: 0 });
       break;
     }
     case 'defender': {
@@ -5269,6 +5278,23 @@ function thHaft(ctx, at, c = ffWood()) {
   ffLine(ctx, x0, y0, x1, y1, 1.8, c);
 }
 
+// Gelenk-Grundkörper für Figuren mit frei gestellten Armen (Schützen u. a.): Rücken, Umhang, Schwanz, Beine, Rumpf/Robe.
+// o: { back, cape, tail, feet: [[x, y], [x, y]], trouser, boot, armoredLegs, robe, kind, body }
+function rigBody(ctx, col, o) {
+  if (o.back) o.back(ctx);
+  if (o.cape) cape(ctx, 0, 2, o.cape, 21, 8.5);
+  if (o.tail) o.tail(ctx);
+  const [fl, fr] = o.feet || [[-2.9, 4.6], [3.4, 4.6]];
+  rigLeg(ctx, [-2.3, -8], fl, { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
+  rigLeg(ctx, [2.3, -8], fr, { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
+  if (o.robe) ffRobe(ctx, 0, col, o.robe);
+  else torso(ctx, 0, 0.2, col, o.kind || 'tunic');
+  if (o.body) o.body(ctx);
+}
+function rigHeadOn(ctx, draw, neck) {
+  rigNeck(ctx, 0, -23.2, -21, neck);
+  rigHead(ctx, 0, -25.6, 0.86, draw);
+}
 // Wächter mit Gelenken: Speer senkrecht neben dem Körper (Fuß am Boden), rechter Arm hinter dem Körper, Unterarm nach vorn zur Faust;
 // linker Arm trägt den Schild vor dem Körper (vom Schild verdeckt). Grundgerüst wie rigTwoHand (gleiche Schultern, Beine, Kopf).
 // o: { kind, trouser, boot, skin, sleeve, bare, armored, armoredLegs, cape, tail, body, head, spearTop, spear(ctx, x, yTop), shield(ctx) }
@@ -6408,26 +6434,39 @@ const VK = {
     });
   },
   archer(ctx, col) {
+    // Axtwerfer beim Ausholen (Vorbild Wurfaxt-Werfer): Wurfarm hoch hinter dem Kopf, Axt nach hinten gekippt,
+    // vorderer Arm zeigt zum Ziel, Schritt nach vorn
     const st = FIGST.stage;
-    legs(ctx, 0, 6, '#4a3f2e');
-    torso(ctx, 0, 6, col, st >= 4 ? 'mail' : 'leather');
-    ffFur(ctx, 0, -14.5, 6.5, '#8b7355');
-    // Gürtel mit Wurfäxten (mehr mit der Entwicklung)
-    const n = Math.min(3, 1 + Math.floor(st / 2));
-    for (let k = 0; k < n; k++) {
-      ffLine(ctx, -4 + k * 2.2, -8, -5 + k * 2.2, -1, 1, ffWood());
-      ffAxe(ctx, -5 + k * 2.2, -1, 1.7, 0.4);
-    }
-    face(ctx, 0, -20.5);
-    if (st >= 2) ffHornHelm(ctx, 0, -21, false);
-    else hair(ctx, 0, -20.5, '#b07a2a');
-    // Wurfarm hinter dem Kopf ausgeholt
-    arm(ctx, 4.5, -15, 7, -24, skinOf());
+    const skin = skinOf();
+    rigBody(ctx, col, {
+      feet: [[-4.6, 4.6], [4.6, 4.6]], trouser: '#4a3f2e', boot: '#4a3828', kind: st >= 4 ? 'mail' : 'leather',
+      body: (c) => {
+        // Gürtel mit Wurfäxten (mehr mit der Entwicklung)
+        const n = Math.min(3, 1 + Math.floor(st / 2));
+        for (let k = 0; k < n; k++) {
+          // an der linken Hüfte, Stiel nach unten, Kopf oben am Gürtel
+          ffLine(c, -6.8 + k * 1.6, -9.4, -7.6 + k * 1.6, -3.4, 1, ffWood());
+          ffAxe(c, -6.8 + k * 1.6, -9.6, -1.7, 0.4);
+        }
+      },
+    });
+    ffFur(ctx, 0, -20.4, 7, '#8b7355');
+    // Wurfarm: Oberarm nach hinten oben, Unterarm senkrecht, Faust hinter dem Kopf
+    const S = [-3.9, -19.8], E = [-8.8, -23.6], H = [-6.4, -29.6];
     const big = hasUp('a3a') ? 1.25 : 1;
-    ffLine(ctx, 7, -24, 4, -31, 1.4, ffWood());
-    ffAxe(ctx, 4, -31, -2.1, 0.85 * big);
-    if (hasUp('a3b')) ffGlow(ctx, 4, -33, 5, 'rgba(255,170,40,0.9)', 'rgba(220,40,0,0)');
-    arm(ctx, -4, -15, 6, -14, col.main);
+    const A = [H[0] - 5.4 * big, H[1] - 3.4 * big], ang = Math.atan2(A[1] - H[1], A[0] - H[0]);
+    rigArm(ctx, S, H, { bare: true, skin, elbow: E, grip: ang + Math.PI / 2 });
+    ffLine(ctx, H[0] + 1.6, H[1] + 1, A[0], A[1], 1.4, ffWood());
+    ffAxe(ctx, A[0], A[1], ang, 0.85 * big);
+    if (hasUp('a3b')) ffGlow(ctx, A[0], A[1] - 1, 5, 'rgba(255,170,40,0.9)', 'rgba(220,40,0,0)');
+    rigFist(ctx, H, ang + Math.PI / 2, false, skin, E);
+    rigHeadOn(ctx, () => {
+      face(ctx, 0, 0);
+      if (st >= 2) ffHornHelm(ctx, 0, -0.6, false);
+      else hair(ctx, 0, 0, '#b07a2a');
+    }, skin);
+    // vorderer Arm zeigt zum Ziel
+    rigArm(ctx, [3.9, -19.8], [13.4, -22.6], { bare: true, skin, elbow: [8.8, -21.4] });
   },
   rider(ctx, col) {
     const st = FIGST.stage;
@@ -7059,18 +7098,23 @@ const WT = {
     if (st >= 5) ffGlow(ctx, 0, -6, 9, 'rgba(163,230,53,0.25)', 'rgba(60,120,0,0)');
   },
   archer(ctx, col) {
-    // Irrlichtwerfer: wirft grüne Geisterlichter
+    // Irrlichtwerfer: hebt das Irrlicht auf der Hand nach vorn oben, die andere Hand ruht am Gürtel
     const st = FIGST.stage;
-    ffRobe(ctx, 0, col, st >= 4 ? '#0b0612' : '#25304a');
-    face(ctx, 0, -20.5);
-    ffWitchHat(ctx, 0, -22, col, 0.85);
-    arm(ctx, 4.5, -15, 9, -24, '#25304a');
+    const robe = st >= 4 ? '#0b0612' : '#25304a';
+    const skin = skinOf();
     const big = hasUp('a3a') ? 1.35 : 1;
     const c = hasUp('a3b') ? ['rgba(240,120,255,0.95)', 'rgba(120,0,200,0)'] : ['rgba(170,255,120,0.95)', 'rgba(20,160,60,0)'];
-    ffGlow(ctx, 11, -27, 5 * big, c[0], c[1]);
-    // weitere Irrlichter schweben um sie (mehr mit der Entwicklung)
+    rigBody(ctx, col, { robe, feet: [[-2.9, 4.6], [3.6, 4.6]] });
+    // weitere Irrlichter schweben hinter ihr (mehr mit der Entwicklung)
     for (let k = 0; k < Math.min(3, Math.floor((st + 1) / 2)); k++) ffGlow(ctx, -9 + k * 3, -30 - k * 4, 2.2, c[0], c[1]);
-    arm(ctx, -4, -15, -7, -8, '#25304a');
+    rigArm(ctx, [-3.9, -19.8], [-4.4, -10.2], { sleeve: robe, skin, elbow: [-7, -14.8], grip: 0 });
+    rigHeadOn(ctx, () => {
+      face(ctx, 0, 0);
+      ffWitchHat(ctx, 0, -1.5, col, 0.85);
+    }, skin);
+    rigArm(ctx, [3.9, -19.8], [11.2, -26.2], { sleeve: robe, skin, elbow: [9, -20.8], grip: 0 });
+    ffGlow(ctx, 12, -30.2, 5 * big, c[0], c[1]);
+    ffGlow(ctx, 12, -30.2, 1.6 * big, 'rgba(255,255,255,0.95)', 'rgba(255,255,255,0)');
   },
   rider(ctx, col) {
     // Nachtmahrreiter: schwarzes Ross mit violetter Flammenmähne
@@ -8214,16 +8258,31 @@ const DK = {
     });
   },
   archer(ctx, col) {
-    // Feuerspucker: speit Flammen statt zu schießen
+    // Feuerspucker (Vorbild Feuerspucker auf dem Markt): Fackel in der vorgestreckten Hand, speit die Flamme darüber,
+    // andere Faust in die Hüfte gestemmt
     const st = FIGST.stage;
-    dkBody(ctx, col, st >= 4 ? 'mail' : 'leather');
-    arm(ctx, 4.5, -14, 8, -9, skinOf());
-    arm(ctx, -4, -14, -6, -6, skinOf());
-    dkHead(ctx, 0, -21);
-    if (st >= 2) dkHelm(ctx, 0, -22);
+    const skin = DK_SKIN[0];
+    rigBody(ctx, col, {
+      feet: [[-3.8, 4.6], [4.2, 4.6]], trouser: DK_SKIN[1], boot: DK_SKIN[1], kind: st >= 4 ? 'mail' : 'leather',
+      tail: (c) => dkTail(c, -2, -4, 14),
+    });
+    rigArm(ctx, [-3.9, -19.8], [-4.8, -11], { bare: true, skin, elbow: [-8.4, -15.2], grip: 0 });
+    rigHeadOn(ctx, () => {
+      dkHead(ctx, 0, 0);
+      if (st >= 2) dkHelm(ctx, 0, -1);
+    }, skin);
+    // Fackel
+    const H = [11, -19.6];
+    ffLine(ctx, H[0] - 1, H[1] + 4, H[0] + 0.6, H[1] - 3.4, 1.3, '#5a3a1e');
+    ctx.fillStyle = '#3b2a1a';
+    ctx.fillRect(H[0] - 0.4, H[1] - 4.6, 2, 1.8);
+    rigArm(ctx, [3.9, -19.8], H, { bare: true, skin, elbow: [7.8, -15], grip: -0.2 });
     const L = hasUp('a3a') ? 1.4 : 1;
     const c = hasUp('a3b') ? ['rgba(120,200,255,0.95)', 'rgba(30,60,255,0)'] : ['rgba(255,190,60,0.95)', 'rgba(230,50,0,0)'];
-    for (let k = 0; k < 4; k++) ffGlow(ctx, 11 + k * 3.6 * L, -21 - k * 1.2, 2.2 + k * 1.1 * L, c[0], c[1]);
+    ffGlow(ctx, H[0] + 0.8, H[1] - 6, 2.4, c[0], c[1]);
+    // Flammenstoß vom Maul über die Fackel nach vorn
+    for (let k = 0; k < 5; k++) ffGlow(ctx, 7 + k * 3.4 * L, -25.4 + k * 0.4, 1.6 + k * 1.1 * L, c[0], c[1]);
+    ffGlow(ctx, 9, -25.2, 1.4, 'rgba(255,255,230,0.95)', 'rgba(255,255,255,0)');
   },
   rider(ctx, col) {
     const st = FIGST.stage;
