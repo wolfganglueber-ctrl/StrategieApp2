@@ -3407,21 +3407,27 @@ function drawBasilisk(ctx, col, pal = null) {
   ctx.fill();
   outline(ctx, 0.7);
   // Hinterbeine
-  // Bein mit Knie bzw. Ellbogen (ohne Trennstrich), Fuß mit drei Krallen nach vorn
+  // Beine wie beim Wolf-Vorbild: Hinterbein mit Oberschenkel nach vorn, Sprunggelenk nach hinten, Mittelfuß senkrecht;
+  // Vorderbein fast gerade, leicht nach vorn; Fuß nach vorn mit Krallen an den Zehenspitzen (ohne Trennstrich)
   const leg = (x, y, dx, far) => {
-    const knee = [x + dx * 0.9, y + 4], foot = [x + dx * 0.35, y + 8.4];
-    limbSmooth(ctx, [[x, y], knee, foot], [4.6, 3.4], far ? scD : sc);
-    ctx.fillStyle = far ? scD : sc;
+    const hind = dx < 0, c = far ? scD : sc;
+    const pts = hind
+      ? [[x, y], [x + 2.6, y + 3.8], [x - 1.2, y + 6.6], [x - 1, y + 8.8]]
+      : [[x, y], [x + 1, y + 5], [x + 1.4, y + 8.8]];
+    limbSmooth(ctx, pts, hind ? [5, 3.6, 2.8] : [4.2, 3.2], c);
+    const [ax, ay] = pts[pts.length - 1];
+    ctx.fillStyle = c;
     ctx.beginPath();
-    ctx.ellipse(foot[0] + 1.2, foot[1] + 0.6, 2.8, 1.3, 0, 0, Math.PI * 2);
+    ctx.ellipse(ax + 1.4, ay + 0.5, 2.6, 1.1, 0, 0, Math.PI * 2);
     ctx.fill();
     outline(ctx, 0.5);
     ctx.fillStyle = '#efe6c8';
-    for (const k of [-0.6, 1.2, 3]) {
+    for (const k of [0, 1.1]) {
+      const cx = ax + 2.6 + k, cy = ay + 0.6;
       ctx.beginPath();
-      ctx.moveTo(foot[0] + k, foot[1] + 1.4);
-      ctx.lineTo(foot[0] + k + 1.4, foot[1] + 2.4);
-      ctx.lineTo(foot[0] + k + 1.2, foot[1] + 1);
+      ctx.moveTo(cx, cy - 0.7);
+      ctx.quadraticCurveTo(cx + 1.3, cy - 0.6, cx + 1.6, cy + 0.6);
+      ctx.lineTo(cx, cy + 0.6);
       ctx.closePath();
       ctx.fill();
     }
