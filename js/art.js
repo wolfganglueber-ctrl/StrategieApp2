@@ -5314,13 +5314,14 @@ function riderJavelins(ctx, c = '#7a5530') {
     ctx.fill();
   }
 }
-// Schwarzer Ritter (Taverne) aller Völker: großer Krieger auf dem Berserker-Gerüst (rigTwoHand, Maßstab 1,3),
+// Schwarzer Ritter (Taverne) aller Völker: großer Krieger auf dem Berserker-Gerüst (rigTwoHand, Maßstab 1,6),
 // lange Stangenwaffe beidhändig über der rechten Schulter (reicht über 2 Felder). o: Optionen für rigTwoHand plus
 // head(ctx), blade(c, x, y, ang) am oberen Ende, haftCol, spikes (Dornen auf den Schulterplatten)
 function rigBlackKnight(ctx, col, o) {
   ctx.save();
-  ctx.scale(1.45, 1.45);
-  ctx.translate(0, -1.2);
+  // so groß wie der bisherige Schwarze Ritter: etwa 1,6-mal ein Krieger, Füße auf dem Sockel
+  ctx.scale(1.6, 1.6);
+  ctx.translate(0, -2.6);
   const pauldron = (c, x, y, dir) => {
     c.fillStyle = o.armorCol ? grad(c, x - 3.4, x + 3.4, '#6a707a', '#0d0e11') : steel(c, x - 3.4, x + 3.4, y - 2, y + 2);
     c.beginPath();
