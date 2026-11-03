@@ -2789,54 +2789,25 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       break;
     }
     case 'defender': {
-      // Speer hinter dem Schild
-      ctx.strokeStyle = 'rgba(20,14,10,0.8)';
-      ctx.lineWidth = 2.6;
-      ctx.lineCap = 'round';
-      // Pikenier: viel längere Pike
-      const pk = hasUp('d3b') ? -16 : 0;
-      ctx.beginPath();
-      ctx.moveTo(8, 6);
-      ctx.lineTo(8, -38 + pk);
-      ctx.stroke();
-      ctx.strokeStyle = grad(ctx, 7, 9, '#a87a4c', '#5a3d22');
-      ctx.lineWidth = 1.7;
-      ctx.stroke();
-      ctx.fillStyle = steel(ctx, 6, 10, -46 + pk, -38 + pk);
-      ctx.beginPath();
-      ctx.moveTo(8, -47 + pk);
-      ctx.quadraticCurveTo(11, -41 + pk, 9.3, -38 + pk);
-      ctx.lineTo(6.7, -38 + pk);
-      ctx.quadraticCurveTo(5, -41 + pk, 8, -47 + pk);
-      ctx.fill();
-      outline(ctx, 0.6);
-      if (FIGST.stage >= 2) {
-        // Hellebarden-Beil
-        ctx.fillStyle = steel(ctx, 8, 13, -40 + pk, -34 + pk);
-        ctx.beginPath();
-        ctx.moveTo(8.5, -40 + pk);
-        ctx.quadraticCurveTo(14.5, -38 + pk, 13, -32 + pk);
-        ctx.lineTo(8.5, -34 + pk);
-        ctx.closePath();
-        ctx.fill();
-        outline(ctx, 0.5);
-      }
-      ctx.fillStyle = col.main;
-      ctx.beginPath();
-      ctx.moveTo(8, -31 + pk / 2);
-      ctx.lineTo(13, -29 + pk / 2);
-      ctx.lineTo(8, -26.5 + pk / 2);
-      ctx.fill();
-      cape(ctx, 0, 6, col, 18, 7);
-      legs(ctx, 0, 6, '#3a3f46');
-      torso(ctx, 0, 6, col, 'plate');
-      arm(ctx, 4.8, -14, 8, -11, '#9aa3ad', true);
-      face(ctx, 0, -20.5);
-      helmet(ctx, 0, -21, FIGST.stage >= 4 ? 'great' : 'nasal', col);
-      // Pavese (Stufe 1) und Schildwall: größere Schilde
-      if (hasUp('d3a')) kiteShield(ctx, -5, -24, 16, 31, col, 'cross');
-      else if (FIGST.stage >= 1) kiteShield(ctx, -4.8, -22.5, 14.5, 28, col, 'cross');
-      else kiteShield(ctx, -4.5, -21, 13, 26, col, 'cross');
+      // Wächter: Speer (ab Stufe 2 Hellebarde, Pikenier lang) senkrecht in der rechten Faust, Drachenschild vor dem Körper
+      const st = FIGST.stage;
+      const pk = hasUp('d3b') ? -14 : 0;
+      rigGuard(ctx, col, {
+        kind: 'plate', cape: col, trouser: '#3a3f46', sleeve: '#9aa3ad', armored: st >= 3, armoredLegs: st >= 3, spearTop: -40 + pk,
+        head: () => {
+          face(ctx, 0, 0);
+          helmet(ctx, 0, -1, st >= 4 ? 'great' : 'nasal', col);
+        },
+        spear: (c, x, y) => {
+          if (st >= 2) thHalberd(c, x, y, -Math.PI / 2, st >= 5 ? 1.15 : 1, false);
+          else thSpear(c, x, y, -Math.PI / 2, 1, false, col);
+        },
+        shield: (c) => {
+          if (hasUp('d3a')) kiteShield(c, -5, -22.4, 16, 31, col, 'cross');
+          else if (st >= 1) kiteShield(c, -4.8, -21.6, 14.5, 28, col, 'cross');
+          else kiteShield(c, -4.5, -20.6, 13, 26, col, 'cross');
+        },
+      });
       break;
     }
     case 'rider': {
@@ -5291,6 +5262,31 @@ function thHaft(ctx, at, c = ffWood()) {
   ffLine(ctx, x0, y0, x1, y1, 1.8, c);
 }
 
+// Wächter mit Gelenken: Speer senkrecht neben dem Körper (Fuß am Boden), rechter Oberarm hängt, Unterarm nach vorn zur Faust;
+// linker Arm trägt den Schild vor dem Körper (vom Schild verdeckt). Grundgerüst wie rigTwoHand (gleiche Schultern, Beine, Kopf).
+// o: { kind, trouser, boot, skin, sleeve, bare, armored, armoredLegs, cape, tail, body, head, spearTop, spear(ctx, x, yTop), shield(ctx) }
+function rigGuard(ctx, col, o) {
+  const skin = o.skin || skinOf();
+  const shN = [3.9, -19.8], shF = [-3.9, -19.8];
+  const SX = 10.2, hand = [SX, -12.2], elbow = [5.4, -13.6];
+  const armOpt = (elbow) => ({ sleeve: o.sleeve || col.main, bare: o.bare, armored: o.armored, skin, elbow, grip: 0 });
+  if (o.cape) cape(ctx, 0, 2, o.cape, 21, 8.5);
+  if (o.tail) o.tail(ctx);
+  rigLeg(ctx, [-2.3, -8], [-3.4, 4.6], { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
+  rigLeg(ctx, [2.3, -8], [3.2, 4.6], { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
+  torso(ctx, 0, 0.2, col, o.kind || 'tunic');
+  if (o.body) o.body(ctx);
+  // linker Arm angewinkelt zum Schildgriff (wird vom Schild verdeckt)
+  rigArm(ctx, shF, [-3.2, -10.4], { ...armOpt([-6.4, -14.4]), grip: Math.PI / 2 });
+  rigNeck(ctx, 0, -23.2, -21, o.armored ? '#9aa3ad' : skin);
+  rigHead(ctx, 0, -25.6, 0.86, () => o.head(ctx));
+  // Speerschaft vom Boden bis zur Spitze, dann rechter Arm, Faust umschließt den Schaft
+  const top = o.spearTop ?? -40;
+  ffLine(ctx, SX, 5.6, SX, top, 1.8, o.haft || ffWood());
+  o.spear(ctx, SX, top);
+  rigArm(ctx, shN, hand, armOpt(elbow));
+  o.shield(ctx);
+}
 // Reiter mit Gelenken auf einem Reittier (Pferderahmen: Sattel bei y ≈ −21).
 // o: { armored, kind (Rumpf), legCol, skin, head(ctx) im Kopf-Maßstab, weapon: 'sword' | 'lance', lanceLen, lanceCol, lanceStripe,
 //      lanceTip(ctx, x, y, ang), pennant, shield: [w, h, sign, col], sign (Waffenrock), capeCol, tattered, sleeve, scabbard }
@@ -6451,29 +6447,26 @@ const VK = {
     ctx.restore();
   },
   defender(ctx, col) {
-    // Schildmaid: großer Rundschild, Speer, Zöpfe
+    // Schildmaid: Speer senkrecht in der rechten Faust (ab Stufe 2 mit Bartaxt-Blatt), großer Rundschild, Zöpfe
     const st = FIGST.stage;
     const pk = hasUp('d3b') ? -14 : 0;
-    ffLine(ctx, 8, 6, 8, -40 + pk, 1.7, ffWood());
-    ctx.fillStyle = steel(ctx, 6, 10, -48 + pk, -40 + pk);
-    ctx.beginPath();
-    ctx.moveTo(8, -49 + pk);
-    ctx.quadraticCurveTo(10.6, -43 + pk, 9.2, -40 + pk);
-    ctx.lineTo(6.8, -40 + pk);
-    ctx.quadraticCurveTo(5.4, -43 + pk, 8, -49 + pk);
-    ctx.fill();
-    outline(ctx, 0.6);
-    if (st >= 2) ffAxe(ctx, 8, -38 + pk, -Math.PI / 2, 0.55);
-    cape(ctx, 0, 6, col, 18, 7);
-    legs(ctx, 0, 6, '#4a3f36');
-    torso(ctx, 0, 6, col, st >= 4 ? 'mail' : 'leather');
-    arm(ctx, 4.8, -14, 8, -11, skinOf());
-    face(ctx, 0, -20.5, false);
-    ffBraids(ctx, 0, -20.5, st >= 5 ? '#fde68a' : '#e0b04a');
-    if (st >= 4) ffHornHelm(ctx, 0, -21.3, false);
-    // Schildwall: zwei Schilde, sonst einer (ab Stufe 1 größer)
-    if (hasUp('d3a')) ffVikingShield(ctx, -5.5, -17, 9, col);
-    ffVikingShield(ctx, -4.5, -9, hasUp('d3a') ? 9 : st >= 1 ? 9.5 : 8.2, col);
+    rigGuard(ctx, col, {
+      kind: st >= 4 ? 'mail' : 'leather', trouser: '#4a3f36', boot: '#4a3828', bare: true, spearTop: -40 + pk,
+      head: () => {
+        face(ctx, 0, 0, false);
+        ffBraids(ctx, 0, 0, st >= 5 ? '#fde68a' : '#e0b04a');
+        if (st >= 4) ffHornHelm(ctx, 0, -0.8, false);
+      },
+      spear: (c, x, y) => {
+        thSpear(c, x, y, -Math.PI / 2, 1, false, null);
+        if (st >= 2) ffAxe(c, x, y + 4, -Math.PI / 2, 0.55);
+      },
+      shield: (c) => {
+        // Schildwall: zwei Schilde, sonst einer (ab Stufe 1 größer)
+        if (hasUp('d3a')) ffVikingShield(c, -5.5, -17, 9, col);
+        ffVikingShield(c, -4.5, -9.6, hasUp('d3a') ? 9 : st >= 1 ? 9.5 : 8.2, col);
+      },
+    });
   },
   knight(ctx, col) {
     // Berserker: zu Fuß, Bärenfell über dem Kopf; Gelenk-Figur mit natürlicher Haltung
@@ -8021,31 +8014,28 @@ const DK = {
     ctx.restore();
   },
   defender(ctx, col) {
-    // Schuppenwächter: hoher Schuppenschild und Speer
+    // Schuppenwächter: Speer senkrecht in der rechten Faust, hoher Schuppenschild vor dem Körper, Schwanz
     const st = FIGST.stage;
     const pk = hasUp('d3b') ? -14 : 0;
-    ffLine(ctx, 8, 6, 8, -40 + pk, 1.7, '#7a5530');
-    ctx.fillStyle = steel(ctx, 6, 10, -48 + pk, -40 + pk);
-    ctx.beginPath();
-    ctx.moveTo(8, -49 + pk);
-    ctx.quadraticCurveTo(10.6, -43 + pk, 9.2, -40 + pk);
-    ctx.lineTo(6.8, -40 + pk);
-    ctx.quadraticCurveTo(5.4, -43 + pk, 8, -49 + pk);
-    ctx.fill();
-    outline(ctx, 0.6);
-    dkBody(ctx, col, st >= 4 ? 'plate' : 'mail');
-    arm(ctx, 4.8, -14, 8, -11, skinOf());
-    dkHead(ctx, 0, -21);
-    if (st >= 2) dkHelm(ctx, 0, -22);
-    // Schuppenschild
-    const w = hasUp('d3a') ? 16 : st >= 1 ? 14.5 : 13, h = hasUp('d3a') ? 31 : st >= 1 ? 28 : 26;
-    kiteShield(ctx, -4.8, -22.5, w, h, col, 'none');
-    ctx.fillStyle = 'rgba(20,10,0,0.25)';
-    for (let r = 0; r < 4; r++) for (let c = 0; c < 2; c++) {
-      ctx.beginPath();
-      ctx.arc(-7.5 + c * 5 + (r % 2) * 2.5, -16 + r * 5, 2, 0, Math.PI);
-      ctx.fill();
-    }
+    rigGuard(ctx, col, {
+      kind: st >= 4 ? 'plate' : 'mail', trouser: DK_SKIN[1], boot: DK_SKIN[1], bare: true, armored: st >= 4, skin: DK_SKIN[0], spearTop: -40 + pk, haft: '#7a5530',
+      tail: (c) => dkTail(c, -2, -4, 14),
+      head: () => {
+        dkHead(ctx, 0, 0);
+        if (st >= 2) dkHelm(ctx, 0, -1);
+      },
+      spear: (c, x, y) => thSpear(c, x, y, -Math.PI / 2, st >= 5 ? 1.15 : 1, st >= 2, col),
+      shield: (c) => {
+        const w = hasUp('d3a') ? 16 : st >= 1 ? 14.5 : 13, h = hasUp('d3a') ? 31 : st >= 1 ? 28 : 26;
+        kiteShield(c, -4.8, -21.6, w, h, col, 'none');
+        c.fillStyle = 'rgba(20,10,0,0.25)';
+        for (let r = 0; r < 4; r++) for (let k = 0; k < 2; k++) {
+          c.beginPath();
+          c.arc(-7.5 + k * 5 + (r % 2) * 2.5, -15 + r * 5, 2, 0, Math.PI);
+          c.fill();
+        }
+      },
+    });
   },
   knight(ctx, col) {
     // Drachenritter auf flügellosem Drachen
