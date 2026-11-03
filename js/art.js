@@ -2841,40 +2841,20 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       break;
     }
     case 'griffin': {
+      // Greifenreiter mit Gelenken (Ritter-Gerüst): eingelegte Lanze mit Wimpel, Drachenschild, Helm ab Stufe 1, Platte ab 2
+      const st = FIGST.stage;
       ctx.save();
       ctx.translate(0, 4);
-      // Greifenreiter: wächst wie der Ritter mit (Helm ab Stufe 1, Plattenrüstung ab 2, schwarz ab 4)
-      const st = FIGST.stage;
       griffinMount(ctx, col, st);
-      ctx.fillStyle = st >= 2 ? steel(ctx, -3, 2) : cloth(ctx, -3, 2, col);
-      ctx.fillRect(-2.6, -22, 3.6, 9);
-      torso(ctx, -1, -11, col, st >= 2 ? 'plate' : 'mail');
-      face(ctx, -1, -37.5);
-      if (st >= 1) helmet(ctx, -1, -38, 'great', col);
-      else hair(ctx, -1, -37.5, '#c08a3a');
-      kiteShield(ctx, -7.5, -32, 8, 13, col, 'chevron');
-      // Lanze mit Wimpel
-      const lx = 25, ly = -45;
-      ctx.strokeStyle = 'rgba(20,14,10,0.8)';
-      ctx.lineWidth = 3;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(-10, -17);
-      ctx.lineTo(lx, ly);
-      ctx.stroke();
-      ctx.strokeStyle = grad(ctx, -10, lx, st >= 4 ? '#6b6b75' : '#f1e3c4', st >= 4 ? '#1b1b20' : '#8a6a3a');
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.fillStyle = col.main;
-      ctx.beginPath();
-      ctx.moveTo(lx - 5, ly + 4);
-      ctx.lineTo(lx - 12, ly - 1);
-      ctx.lineTo(lx - 9, ly + 3);
-      ctx.lineTo(lx - 13, ly + 5);
-      ctx.closePath();
-      ctx.fill();
-      outline(ctx, 0.5);
-      arm(ctx, 2.8, -30, 5, -26, st >= 2 ? '#9aa3ad' : col.main, st >= 2);
+      rigRider(ctx, col, {
+        armored: st >= 2, kind: st >= 2 ? 'plate' : 'mail', legCol: '#6b4a2e', sign: 'lion', capeCol: col,
+        weapon: 'lance', lanceLen: 44, lanceCol: st >= 4 ? '#3b3b44' : '#f1e3c4', lanceStripe: col.main, pennant: col,
+        head: () => {
+          face(ctx, 0, 0);
+          if (st >= 1) helmet(ctx, 0, -0.5, 'great', col);
+          else hair(ctx, 0, 0, '#c08a3a');
+        },
+      });
       ctx.restore();
       break;
     }
@@ -6785,34 +6765,43 @@ const VK = {
     ctx.restore();
   },
   griffin(ctx, col) {
-    // Walküre auf geflügeltem Ross
+    // Walküre mit Gelenken auf geflügeltem Ross: Speer mit Bartaxt-Klinge schräg nach vorn, Flügelhelm, Zöpfe, Umhang
     const st = FIGST.stage;
+    const hc = st >= 5 ? '#fde68a' : '#e0b04a';
     ctx.save();
-    ctx.translate(0, 4);
-    ffWing(ctx, 0, -22, -1, st >= 5 ? '#fde68a' : '#f4f1ea', true);
-    horse(ctx, st >= 4 ? '#c9ccd4' : '#f1f1f4', '#d9dde6', col, hasUp('f3b') || st >= 4);
-    ffWing(ctx, 2, -21, 1, st >= 5 ? '#fde68a' : '#ffffff', false);
-    ffRiderBody(ctx, col, st >= 2 ? 'mail' : 'leather', '#5a4a3a');
-    face(ctx, -1, -37.5, false);
-    ffBraids(ctx, -1, -37.5);
-    if (st >= 1) {
-      ffHornHelm(ctx, -1, -38.5, false);
-      // Flügelhelm
-      for (const sx of [-1, 1]) {
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.moveTo(-1 + sx * 4, -40);
-        ctx.quadraticCurveTo(-1 + sx * 9, -46, -1 + sx * 8, -50);
-        ctx.quadraticCurveTo(-1 + sx * 6, -45, -1 + sx * 3.5, -43);
-        ctx.fill();
-        outline(ctx, 0.5);
-      }
-    }
-    ffVikingShield(ctx, -7.5, -29, 5.5, col);
+    ctx.translate(0, 6);
+    ffWing(ctx, 0, -24, -1, st >= 5 ? '#fde68a' : '#f4f1ea', true);
+    horse2(ctx, st >= 4 ? '#c9ccd4' : '#f1f1f4', '#d9dde6', col, { armored: hasUp('f3b') || st >= 4, dapple: false, feather: '#ffffff' });
+    fdReins(ctx, [-2.4, -24.2]);
+    ffWing(ctx, 2, -23, 1, st >= 5 ? '#fde68a' : '#ffffff', false);
     const L = hasUp('f3a') ? 1.25 : 1;
-    ffLine(ctx, -10, -17, -10 + 34 * L, -17 - 27 * L, 1.8, st >= 4 ? '#3b3b44' : '#d8c49a');
-    ffAxe(ctx, -10 + 34 * L, -17 - 27 * L, -0.67, 0.5);
-    arm(ctx, 2.8, -30, 5, -26, col.main);
+    rigRider(ctx, col, {
+      kind: st >= 2 ? 'mail' : 'leather', legCol: '#5a4a3a', capeCol: col, scabbard: false, skin: skinOf(),
+      weapon: 'spear', spearLen: 24 * L, spearCol: st >= 4 ? '#3b3b44' : '#d8c49a',
+      spearTip: (c, x, y, ang) => {
+        thSpear(c, x, y, ang, 0.7, false, null);
+        ffAxe(c, x - Math.cos(ang) * 1.5, y - Math.sin(ang) * 1.5, ang, 0.45);
+      },
+      shield: null,
+      head: () => {
+        ffBraids(ctx, 0, 0, hc, [1], false);
+        face(ctx, 0, 0, false);
+        ffBraids(ctx, 0, 0, hc, [-1], true);
+        if (st >= 1) {
+          ffHornHelm(ctx, 0, -0.8, false);
+          // Flügel am Helm
+          for (const sx of [-1, 1]) {
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.moveTo(sx * 4, -2.6);
+            ctx.quadraticCurveTo(sx * 9, -8.6, sx * 8, -12.6);
+            ctx.quadraticCurveTo(sx * 6, -7.6, sx * 3.5, -5.6);
+            ctx.fill();
+            outline(ctx, 0.5);
+          }
+        }
+      },
+    });
     ctx.restore();
   },
   catapult(ctx, col) {
@@ -7570,11 +7559,15 @@ const WT = {
     ctx.restore();
   },
   griffin(ctx, col) {
-    // Besenhexe: fliegt auf dem Besen
+    // Besenhexe mit Gelenken: sitzt seitlich auf dem Besen (Beine vorn herab), hält den Stiel mit der rechten Hand
+    // (Arm hinter dem Körper), die linke Hand ist zur Zaubergeste erhoben
     const st = FIGST.stage;
+    const dress = '#3b2a55', skin = skinOf();
+    const glow = hasUp('f3a') || st >= 5 ? ['rgba(190,255,120,0.95)', 'rgba(40,160,40,0)'] : ['rgba(216,180,254,0.95)', 'rgba(120,0,200,0)'];
     ctx.save();
     ctx.translate(0, -6);
-    // Besen
+    // Besen: Stiel schräg nach vorn oben, Reisigbündel hinten mit Bindung
+    const by = (x) => -2 - (x + 14) * 12 / 34;
     ffLine(ctx, -14, -2, 20, -14, 1.6, '#7a5530');
     ctx.fillStyle = grad(ctx, -24, -12, '#e8c46a', '#9a7a2a');
     ctx.beginPath();
@@ -7585,43 +7578,72 @@ const WT = {
     ctx.closePath();
     ctx.fill();
     outline(ctx, 0.6);
+    ctx.strokeStyle = 'rgba(90,60,20,0.6)';
+    ctx.lineWidth = 0.35;
+    for (let k = 0; k < 4; k++) {
+      ctx.beginPath();
+      ctx.moveTo(-13.5, -3.6 + k * 1.1);
+      ctx.lineTo(-24.4, -3.4 + k * 2.2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#5a3a1e';
+    ctx.fillRect(-14.2, -4.8, 1.6, 5.6);
     if (hasUp('f3a') || st >= 5) ffFlames(ctx, [[-26, -2], [-27, 2]], '#a3e635', 3.4);
     if (hasUp('f3b')) {
       ctx.fillStyle = steel(ctx, -14, -9, -6, 2);
-      ctx.fillRect(-14, -5.2, 4, 6);
+      ctx.fillRect(-12, -5.6, 4, 5.4);
       outline(ctx, 0.5);
     }
-    // Hexe seitlich sitzend
-    ctx.fillStyle = grad(ctx, -6, 6, '#3b2a55', '#140a20');
-    ctx.beginPath();
-    ctx.moveTo(-4, -10);
-    ctx.quadraticCurveTo(-8, -2, -3, 3);
-    ctx.lineTo(5, 0);
-    ctx.quadraticCurveTo(4, -6, 3, -10);
-    ctx.closePath();
-    ctx.fill();
-    outline(ctx, 0.6);
-    cape(ctx, 0, 0, col, 16, 7);
-    torso(ctx, 0, 0, col, st >= 2 ? 'mail' : 'tunic');
-    arm(ctx, 4.5, -20, 9, -14, '#3b2a55');
-    face(ctx, 0, -26.5);
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-3.6, -27);
-    ctx.quadraticCurveTo(-7, -20, -5, -14);
-    ctx.stroke();
-    ffWitchHat(ctx, 0, -28.5, col);
     if (st >= 4) {
       // schwarze Katze hinten auf dem Besen
       ctx.fillStyle = '#0b0b0f';
       ctx.beginPath();
-      ctx.ellipse(-10, -5.5, 3, 2.2, 0, 0, Math.PI * 2);
-      ctx.arc(-8, -8, 1.6, 0, Math.PI * 2);
+      ctx.ellipse(-9, by(-9) - 1.8, 2.6, 1.8, 0, 0, Math.PI * 2);
+      ctx.arc(-7, by(-7) - 3.6, 1.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#fde047';
-      ctx.fillRect(-7.6, -8.4, 0.8, 0.6);
+      ctx.fillRect(-6.6, by(-7) - 4, 0.8, 0.6);
     }
+    // rechter Arm hinter dem Körper, Faust am Stiel vorn
+    const H = [9.4, by(9.4)], E = [7.2, -14.6], ang = Math.atan2(-12, 34);
+    rigArm(ctx, [3.9, -20.1], H, { sleeve: dress, skin, elbow: E, grip: ang + Math.PI / 2 });
+    // Beine seitlich vorn herab, Rock darüber
+    rigLeg(ctx, [-2.2, -8.6], [3.2, -1], { trouser: '#1c1424', boot: '#140a20', l1: 6.2, l2: 6.2 });
+    rigLeg(ctx, [1.6, -8.6], [6.8, -1.6], { trouser: '#1c1424', boot: '#140a20', l1: 6.2, l2: 6.2 });
+    ctx.fillStyle = grad(ctx, -6, 8, shade(dress, 0.3), dress);
+    ctx.beginPath();
+    ctx.moveTo(-5.4, -12.6);
+    ctx.lineTo(5.4, -12.6);
+    ctx.quadraticCurveTo(8.6, -9.4, 9.4, -4.8);
+    ctx.lineTo(6.6, -5.4);
+    ctx.lineTo(5.2, -3.8);
+    ctx.lineTo(3.4, -5.2);
+    ctx.lineTo(1.6, -3.8);
+    ctx.quadraticCurveTo(-4, -5.2, -5.8, -7.8);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.6);
+    ffBodice(ctx, col, dress);
+    if (st >= 2) {
+      // Kettenhemd unter dem Mieder (Stufe 2)
+      fdScales(ctx, 0, -17.4, 4.6, 3, 'rgba(180,190,200,0.5)', 0.7);
+    }
+    rigHeadOn(ctx, () => {
+      // langes dunkles Haar hinter dem Gesicht
+      ctx.fillStyle = '#1c1424';
+      ctx.beginPath();
+      ctx.moveTo(-3.8, -1);
+      ctx.quadraticCurveTo(-7, 6, -4.4, 10.4);
+      ctx.quadraticCurveTo(-2.4, 6, -1, 2);
+      ctx.closePath();
+      ctx.fill();
+      face(ctx, 0, 0);
+      ffWitchHat(ctx, 0, -0.4, col);
+    }, skin);
+    // linke Hand erhoben mit Zauberlicht
+    const LH = [-6.4, -22.2];
+    rigArm(ctx, [-3.9, -20.1], LH, { sleeve: dress, skin, elbow: [-7.8, -14.8] });
+    ffGlow(ctx, LH[0] - 0.4, LH[1] - 3.4, 3.2, glow[0], glow[1]);
     ctx.restore();
   },
   catapult(ctx, col) {
@@ -8462,19 +8484,33 @@ const DK = {
     ctx.restore();
   },
   griffin(ctx, col) {
-    // Wyvernreiter
+    // Wyvernreiter mit Gelenken: langer Speer schräg nach vorn, Umhang, Echsenschwanz
     const st = FIGST.stage;
     ctx.save();
-    ctx.translate(0, 4);
+    ctx.translate(0, 6);
     dkWing(ctx, -2, -20, col, true, hasUp('f4') ? 1.15 : 1);
     dkRaptor(ctx, st >= 4 ? '#3f1d0e' : '#9a3412', hasUp('f3b'));
     dkWing(ctx, 2, -19, col, false, hasUp('f4') ? 1.15 : 1);
-    ffRiderBody(ctx, col, st >= 2 ? 'plate' : 'mail', DK_SKIN[1]);
-    dkHead(ctx, -1, -37.5);
-    if (st >= 1) dkHelm(ctx, -1, -38.5);
     const L = hasUp('f3a') ? 1.25 : 1;
-    ffLine(ctx, -10, -17, -10 + 34 * L, -17 - 27 * L, 1.8, st >= 4 ? '#3b1d0e' : '#d8b37a');
-    arm(ctx, 2.8, -30, 5, -26, col.main);
+    rigRider(ctx, col, {
+      armored: st >= 2, kind: st >= 2 ? 'plate' : 'mail', legCol: DK_SKIN[1], skin: DK_SKIN[0], capeCol: col, scabbard: false, scales: st < 2,
+      weapon: 'spear', spearLen: 28 * L, spearCol: st >= 4 ? '#3b1d0e' : '#d8b37a',
+      shield: null,
+      tail: (c) => {
+        c.fillStyle = grad(c, -8, -2, DK_SKIN[0], DK_SKIN[1]);
+        c.beginPath();
+        c.moveTo(-3, -22);
+        c.quadraticCurveTo(-8, -18, -7.5, -10);
+        c.quadraticCurveTo(-6, -15, -1.5, -20);
+        c.closePath();
+        c.fill();
+        outline(c, 0.5);
+      },
+      head: () => {
+        dkHead(ctx, 0, 0);
+        if (st >= 1) dkHelm(ctx, 0, -1);
+      },
+    });
     ctx.restore();
   },
   catapult(ctx, col) {
