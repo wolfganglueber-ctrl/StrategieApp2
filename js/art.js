@@ -1445,12 +1445,12 @@ function torso(ctx, x, y, col, kind = 'tunic', shoulders = [-1, 1]) {
       }
     }
     ctx.restore();
-  } else if (kind === 'plate') {
-    ctx.fillStyle = steel(ctx, x - 6, x + 6, top, waist);
+  } else if (kind === 'plate' || kind === 'darkplate') {
+    ctx.fillStyle = kind === 'darkplate' ? grad(ctx, x - 6, x + 6, '#6a707a', '#0d0e11') : steel(ctx, x - 6, x + 6, top, waist);
     body();
     ctx.fill();
     outline(ctx, 0.8);
-    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.strokeStyle = kind === 'darkplate' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.75)';
     ctx.lineWidth = 0.7;
     ctx.beginPath();
     ctx.moveTo(x - 0.4, top + 1);
@@ -1545,9 +1545,9 @@ function torso(ctx, x, y, col, kind = 'tunic', shoulders = [-1, 1]) {
   ctx.fillStyle = '#e9c45a';
   ctx.fillRect(x - 1, waist - 1.2, 2, 2.4);
   // Schulterstücke (shoulders: welche Seiten; beim Reiter nur die vordere, sonst ragt hinten ein Knubbel heraus)
-  if (kind === 'plate' || kind === 'mail') {
+  if (kind === 'plate' || kind === 'mail' || kind === 'darkplate') {
     for (const sx of shoulders) {
-      ctx.fillStyle = steel(ctx, x + sx * 6 - 3, x + sx * 6 + 3, top, top + 4);
+      ctx.fillStyle = kind === 'darkplate' ? grad(ctx, x + sx * 6 - 3, x + sx * 6 + 3, '#6a707a', '#0d0e11') : steel(ctx, x + sx * 6 - 3, x + sx * 6 + 3, top, top + 4);
       ctx.beginPath();
       ctx.ellipse(x + sx * 5.6, top + 2.2, 3, 2.4, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -3857,258 +3857,43 @@ export function drawCastle(ctx, city, x, y, H, col) {
 // Gepanzerter Schwarzer Ritter: Fußritter in tiefschwarzer Platte, Teufelshörner am Helm, glühender Sehschlitz,
 // große Streitaxt beidhändig schräg vor dem Körper. Entwicklung: Dornen (2), Turmschild auf dem Rücken (3b), rote Runen (5)
 function drawBlackKnight(ctx, col) {
+  // Gepanzerter Schwarzer Ritter: dunkle Platte, Helm mit Teufelshörnern und glühendem Sehschlitz, Mondsichelaxt
   const st = FIGST.stage;
-  const plate = (x0, x1) => grad(ctx, x0, x1, '#6a707a', '#0d0e11');
-  const limb = (x0, y0, x1, y1, w) => {
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = 'rgba(8,8,10,0.95)';
-    ctx.lineWidth = w + 1.4;
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-    ctx.strokeStyle = plate(Math.min(x0, x1) - 2, Math.max(x0, x1) + 2);
-    ctx.lineWidth = w;
-    ctx.stroke();
-  };
-  const ball = (x, y, r) => {
-    const g = ctx.createRadialGradient(x - r * 0.4, y - r * 0.4, r * 0.1, x, y, r);
-    g.addColorStop(0, '#7a808a');
-    g.addColorStop(1, '#0d0e11');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-    outline(ctx, 0.6);
-  };
-  // Umhang in Spielerfarbe, zerfetzter Saum
-  ctx.fillStyle = cloth(ctx, -12, 10, col);
-  ctx.beginPath();
-  ctx.moveTo(-9, -38);
-  ctx.quadraticCurveTo(-15, -18, -13, 2);
-  for (let k = 0; k < 6; k++) ctx.lineTo(-13 + (k + 0.5) * 4, k % 2 ? 2 : -1.5);
-  ctx.lineTo(11, 2);
-  ctx.quadraticCurveTo(12, -18, 7, -38);
-  ctx.closePath();
-  ctx.fill();
-  outline(ctx, 0.7);
-  // Bollwerk der Finsternis: Turmschild auf dem Rücken
-  if (FIGST.ups.has('x3b')) {
-    ctx.fillStyle = plate(-18, -8);
-    ctx.beginPath();
-    ctx.roundRect(-18, -35, 9, 21, 2);
-    ctx.fill();
-    outline(ctx, 0.8);
-    ctx.fillStyle = col.main;
-    ctx.beginPath();
-    ctx.moveTo(-13.5, -31); ctx.lineTo(-11.3, -25); ctx.lineTo(-13.5, -19); ctx.lineTo(-15.7, -25);
-    ctx.closePath();
-    ctx.fill();
-  }
-  // Beine: Beinschienen, Kniekacheln, spitze Eisenschuhe
-  for (const x of [-4.5, 3.5]) {
-    ctx.fillStyle = plate(x - 3, x + 3);
-    ctx.beginPath();
-    ctx.moveTo(x - 3, -16);
-    ctx.lineTo(x + 3, -16);
-    ctx.lineTo(x + 2.4, 1);
-    ctx.lineTo(x - 2.4, 1);
-    ctx.closePath();
-    ctx.fill();
-    outline(ctx, 0.7);
-    ball(x, -8, 2.2);
-    ctx.fillStyle = '#0b0c0e';
-    ctx.beginPath();
-    ctx.moveTo(x - 3, 1);
-    ctx.lineTo(x + 5, 2.5);
-    ctx.lineTo(x - 3, 3.6);
-    ctx.closePath();
-    ctx.fill();
-  }
-  // Beintaschen (Plattenrock)
-  ctx.fillStyle = plate(-9, 8);
-  ctx.beginPath();
-  ctx.moveTo(-8, -20);
-  ctx.lineTo(7, -20);
-  ctx.lineTo(9, -11);
-  ctx.lineTo(-10, -11);
-  ctx.closePath();
-  ctx.fill();
-  outline(ctx, 0.8);
-  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-  ctx.lineWidth = 0.6;
-  ctx.beginPath();
-  ctx.moveTo(-9, -15.5);
-  ctx.lineTo(8, -15.5);
-  ctx.moveTo(-0.5, -20);
-  ctx.lineTo(-0.5, -11);
-  ctx.stroke();
-  // Brustpanzer: breite Schultern, schmale Taille, Mittelgrat
-  ctx.fillStyle = plate(-10, 9);
-  ctx.beginPath();
-  ctx.moveTo(-10, -39);
-  ctx.quadraticCurveTo(-0.5, -43, 9, -39);
-  ctx.quadraticCurveTo(8, -28, 6, -20);
-  ctx.lineTo(-7, -20);
-  ctx.quadraticCurveTo(-9, -28, -10, -39);
-  ctx.closePath();
-  ctx.fill();
-  outline(ctx, 1);
-  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-  ctx.lineWidth = 0.7;
-  ctx.beginPath();
-  ctx.moveTo(-0.5, -41);
-  ctx.lineTo(-0.5, -21);
-  ctx.moveTo(-7, -27);
-  ctx.quadraticCurveTo(-0.5, -24.5, 6, -27);
-  ctx.stroke();
-  if (st >= 5) {
-    ctx.strokeStyle = 'rgba(248,80,80,0.95)';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(-5, -37); ctx.lineTo(-3.5, -32); ctx.lineTo(-5.5, -29);
-    ctx.moveTo(4, -37); ctx.lineTo(2.5, -32); ctx.lineTo(4.5, -29);
-    ctx.stroke();
-  }
-  // Gürtel in Spielerfarbe mit Totenkopfschnalle
-  ctx.fillStyle = col.main;
-  ctx.fillRect(-7.5, -21.5, 14, 2.6);
-  outline(ctx, 0.5);
-  ctx.fillStyle = '#e7e2d3';
-  ctx.beginPath();
-  ctx.arc(-0.5, -20.2, 1.5, 0, Math.PI * 2);
-  ctx.fill();
-  // Halsberge und Helm mit Teufelshörnern
-  ctx.fillStyle = plate(-5, 4);
-  ctx.fillRect(-4, -43, 7, 3);
-  ctx.fillStyle = plate(-6, 5);
-  ctx.beginPath();
-  ctx.roundRect(-5.5, -53, 10, 11, [4.5, 4.5, 1.5, 1.5]);
-  ctx.fill();
-  outline(ctx, 0.9);
-  for (const dir of [-1, 1]) {
-    const bx = -0.5 + dir * 4.6;
-    ctx.fillStyle = grad(ctx, bx - 3, bx + 3, '#991b1b', '#200606');
-    ctx.beginPath();
-    ctx.moveTo(bx - dir * 0.4, -50.5);
-    ctx.quadraticCurveTo(bx + dir * 6.5, -52, bx + dir * 5, -60.5);
-    ctx.quadraticCurveTo(bx + dir * 3.2, -55, bx - dir * 0.6, -47.5);
-    ctx.closePath();
-    ctx.fill();
-    outline(ctx, 0.5);
-  }
-  ctx.fillStyle = 'rgba(239,68,68,0.35)';
-  ctx.beginPath();
-  ctx.ellipse(-0.5, -47.4, 6, 2.2, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#ff5a4a';
-  ctx.fillRect(-4.3, -48, 7.6, 1.2);
-  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-  ctx.lineWidth = 0.6;
-  ctx.beginPath();
-  ctx.moveTo(-0.5, -52.5);
-  ctx.lineTo(-0.5, -48.6);
-  ctx.stroke();
-  // Streitaxt beidhändig schräg vor dem Körper: Schaft von unten links nach oben rechts, Mondsichelklinge oben
-  const ax0 = -11, ay0 = -3, ax1 = 15, ay1 = -63;
-  const at = (t) => [ax0 + (ax1 - ax0) * t, ay0 + (ay1 - ay0) * t];
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = 'rgba(10,8,6,0.95)';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(ax0, ay0);
-  ctx.lineTo(ax1, ay1);
-  ctx.stroke();
-  ctx.strokeStyle = grad(ctx, ax0, ax1, '#6b4426', '#2a180b');
-  ctx.lineWidth = 1.9;
-  ctx.stroke();
-  // Metallbeschläge am Schaft
-  for (const t of [0.05, 0.82]) {
-    const [x, y] = at(t);
-    ctx.fillStyle = '#8b9099';
-    ctx.beginPath();
-    ctx.arc(x, y, 1.3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // Klinge
-  const [bx, by] = at(0.88);
-  ctx.save();
-  ctx.translate(bx, by);
-  ctx.rotate(Math.atan2(ay1 - ay0, ax1 - ax0)); // Klinge zeigt vom Körper weg nach rechts
-  const bg = ctx.createLinearGradient(0, -2, 0, 13);
-  bg.addColorStop(0, '#4b5058');
-  bg.addColorStop(0.45, '#9aa1ab');
-  bg.addColorStop(1, '#eef0f3');
-  ctx.fillStyle = bg;
-  ctx.beginPath();
-  ctx.moveTo(-1.5, -1);
-  ctx.lineTo(-6, 3);
-  ctx.quadraticCurveTo(-8, 9, -5.5, 13);
-  ctx.quadraticCurveTo(0, 9.5, 5.5, 13);
-  ctx.quadraticCurveTo(8, 9, 6, 3);
-  ctx.lineTo(1.5, -1);
-  ctx.closePath();
-  ctx.fill();
-  outline(ctx, 0.8);
-  ctx.strokeStyle = '#e5e7eb';
-  ctx.lineWidth = 0.7;
-  ctx.beginPath();
-  ctx.moveTo(-5.5, 13);
-  ctx.quadraticCurveTo(0, 9.5, 5.5, 13);
-  ctx.stroke();
-  // eingeätzte rote Rune
-  ctx.strokeStyle = 'rgba(220,38,38,0.85)';
-  ctx.lineWidth = 0.7;
-  ctx.beginPath();
-  ctx.moveTo(-2, 3.5);
-  ctx.lineTo(0, 7);
-  ctx.lineTo(2, 3.5);
-  ctx.moveTo(0, 7);
-  ctx.lineTo(0, 9.5);
-  ctx.stroke();
-  // Dorn auf der Rückseite
-  ctx.fillStyle = '#2a2d33';
-  ctx.beginPath();
-  ctx.moveTo(-1.6, -1);
-  ctx.lineTo(0, -6.5);
-  ctx.lineTo(1.6, -1);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-  // Arme: Oberarm, Ellbogenkachel, Unterarm, Panzerhandschuh am Schaft
-  const [hLx, hLy] = at(0.22), [hRx, hRy] = at(0.5);
-  for (const [sx, sy, ex, ey, hx, hy] of [[-9, -37, -12, -28, hLx, hLy], [8, -37, 10.5, -29, hRx, hRy]]) {
-    limb(sx, sy, ex, ey, 3.8);
-    limb(ex, ey, hx, hy, 3.4);
-    ball(ex, ey, 1.9);
-  }
-  for (const [hx, hy] of [[hLx, hLy], [hRx, hRy]]) {
-    ctx.fillStyle = plate(hx - 2.5, hx + 2.5);
-    ctx.beginPath();
-    ctx.roundRect(hx - 2.4, hy - 2, 4.8, 4, 1.4);
-    ctx.fill();
-    outline(ctx, 0.6);
-  }
-  // Schulterplatten, ab Dornenrüstung mit Dornen
-  for (const [x, dir] of [[-10, -1], [8.5, 1]]) {
-    ctx.fillStyle = plate(x - 5, x + 5);
-    ctx.beginPath();
-    ctx.ellipse(x, -38, 5, 3.4, dir * 0.35, 0, Math.PI * 2);
-    ctx.fill();
-    outline(ctx, 0.8);
-    if (st >= 2) {
-      ctx.fillStyle = '#16171a';
-      for (const k of [-1, 0, 1]) {
-        const px = x + k * 2.2, py = -40.5 + Math.abs(k) * 0.8;
+  rigBlackKnight(ctx, col, {
+    kind: 'darkplate', armored: true, armoredLegs: true, armorCol: '#3a3f47', skin: '#2c3036', fistArmored: false,
+    cape: col, spikes: st >= 2,
+    head: () => {
+      ctx.save();
+      ctx.translate(0.5, 47.5 - 0.6);
+      const plate = (x0, x1) => grad(ctx, x0, x1, '#6a707a', '#0d0e11');
+      ctx.fillStyle = plate(-5, 4);
+      ctx.fillRect(-4, -43, 7, 3);
+      ctx.fillStyle = plate(-6, 5);
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -53, 10, 11, [4.5, 4.5, 1.5, 1.5]);
+      ctx.fill();
+      outline(ctx, 0.9);
+      for (const dir of [-1, 1]) {
+        const bx = -0.5 + dir * 4.6;
+        ctx.fillStyle = grad(ctx, bx - 3, bx + 3, '#991b1b', '#200606');
         ctx.beginPath();
-        ctx.moveTo(px - 0.9, py + 0.8);
-        ctx.lineTo(px + dir * 0.5, py - 3.4);
-        ctx.lineTo(px + 0.9, py + 0.8);
+        ctx.moveTo(bx - dir * 0.4, -50.5);
+        ctx.quadraticCurveTo(bx + dir * 6.5, -52, bx + dir * 5, -60.5);
+        ctx.quadraticCurveTo(bx + dir * 3.2, -55, bx - dir * 0.6, -47.5);
         ctx.closePath();
         ctx.fill();
+        outline(ctx, 0.5);
       }
-    }
-  }
+      ctx.fillStyle = 'rgba(239,68,68,0.35)';
+      ctx.beginPath();
+      ctx.ellipse(-0.5, -47.4, 6, 2.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ff5a4a';
+      ctx.fillRect(-4.3, -48, 7.6, 1.2);
+      ctx.restore();
+    },
+    blade: (c, x, y, ang) => bkCrescent(c, x, y, ang, st >= 5 ? 'rgba(250,204,21,0.95)' : 'rgba(220,38,38,0.85)'),
+  });
 }
 
 // Riesentroll: aus 5 Trollen verschmolzen – moosgrüne Steinhaut, zwei Köpfe, Hauer, riesige Steinkeule, Knochenkette
@@ -5039,10 +4824,10 @@ function rigArm(ctx, s, h, o = {}) {
   // Ellbogen fest vorgegeben (z. B. Lanze unter der Achsel) oder berechnet
   const e = o.elbow || rigJoint(s, h, l1, l2, o.bend ?? 1);
   const skin = o.skin || skinOf();
-  const up = o.armored ? '#aab2bc' : o.bare ? skin : o.sleeve, lo = o.armored ? '#b9c1ca' : o.bare || o.short ? skin : o.sleeve;
+  const up = o.armored ? o.armorCol || '#aab2bc' : o.bare ? skin : o.sleeve, lo = o.armored ? o.armorCol || '#b9c1ca' : o.bare || o.short ? skin : o.sleeve;
   rigLimb(ctx, s, e, h, 3.2, 2.5, 2.1, up, lo, o.armored ? (j) => {
-    // Ellbogenkachel
-    ctx.fillStyle = steel(ctx, j[0] - 2, j[0] + 2, j[1] - 2, j[1] + 2);
+    // Ellbogenkachel (bei dunkler Rüstung dunkel)
+    ctx.fillStyle = o.armorCol ? grad(ctx, j[0] - 2, j[0] + 2, '#6a707a', '#16181c') : steel(ctx, j[0] - 2, j[0] + 2, j[1] - 2, j[1] + 2);
     ctx.beginPath();
     ctx.arc(j[0], j[1], 1.5, 0, Math.PI * 2);
     ctx.fill();
@@ -5058,7 +4843,7 @@ function rigArm(ctx, s, h, o = {}) {
     ctx.fillStyle = o.cuff;
     ctx.fill();
   }
-  rigFist(ctx, h, o.grip ?? Math.atan2(h[1] - e[1], h[0] - e[0]), o.armored, skin, e);
+  rigFist(ctx, h, o.grip ?? Math.atan2(h[1] - e[1], h[0] - e[0]), o.fistArmored ?? o.armored, skin, e);
   return e;
 }
 // Bein von der Hüfte zur Ferse; Fuß zeigt nach rechts. o: { l1, l2, bend, trouser, armored, boot }
@@ -5067,10 +4852,10 @@ function rigLeg(ctx, hip, foot, o = {}) {
   // Schienbein endet am Knöchel über der Sohle, der Schuh deckt das Ende ganz ab
   const ankle = [foot[0], foot[1] - 1.3];
   const k = rigJoint(hip, ankle, l1, l2 - 1.3, o.bend ?? -1);
-  const up = o.armored ? '#aab2bc' : o.trouser || '#4a3a2e';
-  const lo = o.armored ? '#b9c1ca' : o.boot || '#5a3a22';
+  const up = o.armored ? o.armorCol || '#aab2bc' : o.trouser || '#4a3a2e';
+  const lo = o.armored ? o.armorCol || '#b9c1ca' : o.boot || '#5a3a22';
   rigLimb(ctx, hip, k, ankle, 3.6, 2.9, 2.3, up, lo, o.armored ? (j) => {
-    ctx.fillStyle = steel(ctx, j[0] - 2, j[0] + 2, j[1] - 2, j[1] + 2);
+    ctx.fillStyle = o.armorCol ? grad(ctx, j[0] - 2, j[0] + 2, '#6a707a', '#16181c') : steel(ctx, j[0] - 2, j[0] + 2, j[1] - 2, j[1] + 2);
     ctx.beginPath();
     ctx.arc(j[0] + 0.3, j[1], 1.7, 0, Math.PI * 2);
     ctx.fill();
@@ -5163,12 +4948,12 @@ function rigTwoHand(ctx, col, o) {
   const ang = Math.atan2(TH.y1 - TH.y0, TH.x1 - TH.x0), gAng = ang + Math.PI / 2;
   const shN = [3.9, -19.8], shF = [-3.9, -19.8];
   const farH = thAt(0.26), farE = [-4.4, -14.2], nearH = thAt(0.47), nearE = [8.8, -15.6];
-  const armOpt = (elbow, decor = null) => ({ sleeve: o.sleeve || col.main, bare: o.bare, armored: o.armored, skin, elbow, grip: gAng, decor });
+  const armOpt = (elbow, decor = null) => ({ sleeve: o.sleeve || col.main, bare: o.bare, armored: o.armored, armorCol: o.armorCol, fistArmored: o.fistArmored, skin, elbow, grip: gAng, decor });
   if (o.back) o.back(ctx);
   if (o.cape) cape(ctx, 0, 2, o.cape, 21, 8.5);
   if (o.tail) o.tail(ctx);
-  rigLeg(ctx, [-2.3, -8], [-2.9, 4.6], { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
-  rigLeg(ctx, [2.3, -8], [3.4, 4.6], { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
+  rigLeg(ctx, [-2.3, -8], [-2.9, 4.6], { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, armorCol: o.armorCol, l1: 6.6, l2: 6.4 });
+  rigLeg(ctx, [2.3, -8], [3.4, 4.6], { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, armorCol: o.armorCol, l1: 6.6, l2: 6.4 });
   if (o.robe) {
     ffRobe(ctx, 0, col, o.robe);
     ffBodice(ctx, col, o.robe);
@@ -5202,8 +4987,8 @@ function rigTwoHand(ctx, col, o) {
   // rechter Arm hinter dem Stiel, dann Waffe, dann beide Fäuste darüber
   rigArm(ctx, shN, nearH, armOpt(nearE, o.decor));
   o.weapon(ctx, thAt, ang);
-  rigFist(ctx, farH, gAng, o.armored, skin, farE);
-  rigFist(ctx, nearH, gAng, o.armored, skin, nearE);
+  rigFist(ctx, farH, gAng, o.fistArmored ?? o.armored, skin, farE);
+  rigFist(ctx, nearH, gAng, o.fistArmored ?? o.armored, skin, nearE);
 }
 // Langschwert entlang der Haltelinie: langer Griff für zwei Hände, Parierstange, Klinge
 function thLongsword(ctx, at, ang, big = false) {
@@ -5528,6 +5313,99 @@ function riderJavelins(ctx, c = '#7a5530') {
     ctx.closePath();
     ctx.fill();
   }
+}
+// Schwarzer Ritter (Taverne) aller Völker: großer Krieger auf dem Berserker-Gerüst (rigTwoHand, Maßstab 1,3),
+// lange Stangenwaffe beidhändig über der rechten Schulter (reicht über 2 Felder). o: Optionen für rigTwoHand plus
+// head(ctx), blade(c, x, y, ang) am oberen Ende, haftCol, spikes (Dornen auf den Schulterplatten)
+function rigBlackKnight(ctx, col, o) {
+  ctx.save();
+  ctx.scale(1.45, 1.45);
+  ctx.translate(0, -1.2);
+  const pauldron = (c, x, y, dir) => {
+    c.fillStyle = o.armorCol ? grad(c, x - 3.4, x + 3.4, '#6a707a', '#0d0e11') : steel(c, x - 3.4, x + 3.4, y - 2, y + 2);
+    c.beginPath();
+    c.ellipse(x, y, 3.4, 2.4, dir * 0.35, 0, Math.PI * 2);
+    c.fill();
+    outline(c, 0.6);
+    if (o.spikes) {
+      c.fillStyle = '#16171a';
+      for (const k of [-1, 0, 1]) {
+        const px = x + k * 1.5, py = y - 1.6 + Math.abs(k) * 0.5;
+        c.beginPath();
+        c.moveTo(px - 0.6, py + 0.6);
+        c.lineTo(px + dir * 0.4, py - 2.6);
+        c.lineTo(px + 0.6, py + 0.6);
+        c.closePath();
+        c.fill();
+      }
+    }
+  };
+  rigTwoHand(ctx, col, {
+    ...o,
+    shoulders: (c) => {
+      if (o.shoulders) o.shoulders(c);
+      if (o.pauldrons !== false) pauldron(c, -4.6, -20.4, -1);
+    },
+    weapon: (c, at, ang) => {
+      if (o.pauldrons !== false) pauldron(c, 4.6, -20.4, 1);
+      const [x0, y0] = at(-0.18), [x1, y1] = at(1.32);
+      ffLine(c, x0, y0, x1, y1, 1.9, o.haftCol || '#4a2f1a');
+      for (const t of [-0.12, 1.08]) {
+        const [bx, by] = at(t);
+        c.fillStyle = '#8b9099';
+        c.beginPath();
+        c.arc(bx, by, 1.1, 0, Math.PI * 2);
+        c.fill();
+      }
+      const [tx, ty] = at(1.22);
+      o.blade(c, tx, ty, ang);
+    },
+  });
+  ctx.restore();
+}
+// Mondsichelklinge des Königreich-Ritters (Klinge quer zum Schaft, rote Rune, Dorn hinten)
+function bkCrescent(ctx, x, y, ang, rune = 'rgba(220,38,38,0.85)') {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  ctx.scale(0.75, 0.75);
+  const bg = ctx.createLinearGradient(0, -2, 0, 13);
+  bg.addColorStop(0, '#4b5058');
+  bg.addColorStop(0.45, '#9aa1ab');
+  bg.addColorStop(1, '#eef0f3');
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  ctx.moveTo(-1.5, -1);
+  ctx.lineTo(-6, 3);
+  ctx.quadraticCurveTo(-8, 9, -5.5, 13);
+  ctx.quadraticCurveTo(0, 9.5, 5.5, 13);
+  ctx.quadraticCurveTo(8, 9, 6, 3);
+  ctx.lineTo(1.5, -1);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.8);
+  ctx.strokeStyle = '#e5e7eb';
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(-5.5, 13);
+  ctx.quadraticCurveTo(0, 9.5, 5.5, 13);
+  ctx.stroke();
+  ctx.strokeStyle = rune;
+  ctx.beginPath();
+  ctx.moveTo(-2, 3.5);
+  ctx.lineTo(0, 7);
+  ctx.lineTo(2, 3.5);
+  ctx.moveTo(0, 7);
+  ctx.lineTo(0, 9.5);
+  ctx.stroke();
+  ctx.fillStyle = '#2a2d33';
+  ctx.beginPath();
+  ctx.moveTo(-1.6, -1);
+  ctx.lineTo(0, -6.5);
+  ctx.lineTo(1.6, -1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
 }
 // Reiter mit Gelenken auf einem Reittier (Pferderahmen: Sattel bei y ≈ −21).
 // o: { armored, kind (Rumpf), legCol, skin, head(ctx) im Kopf-Maßstab, weapon: 'sword' | 'lance', lanceLen, lanceCol, lanceStripe,
@@ -7154,33 +7032,27 @@ const VK = {
     ctx.restore();
   },
   blackknight(ctx, col) {
-    // Jarl: Häuptling mit Kronhelm, Fellmantel und langer Bartaxt
+    // Jarl: Häuptling mit Kronhelm, Fellmantel und langer Bartaxt (Doppelaxt des Jarls: zweischneidig)
     const st = FIGST.stage;
-    ctx.save();
-    ctx.scale(1.3, 1.3);
-    ctx.translate(0, -1.5);
-    cape(ctx, 0, 6, col, 21, 9);
-    legs(ctx, 0, 6, '#3a3028', 3);
-    torso(ctx, 0, 6, col, st >= 2 ? 'plate' : 'mail');
-    ffFur(ctx, 0, -14.5, 8, st >= 4 ? '#e7e5e4' : '#6b4a2e');
-    face(ctx, 0, -20.5, st >= 5 ? '#fde68a' : '#c2410c');
-    ffHornHelm(ctx, 0, -21.3, true);
-    // Kronreif
-    ctx.fillStyle = '#facc15';
-    for (const cx of [-3, 0, 3]) {
-      ctx.beginPath();
-      ctx.moveTo(cx - 1.2, -27.4);
-      ctx.lineTo(cx, -30.4);
-      ctx.lineTo(cx + 1.2, -27.4);
-      ctx.fill();
-    }
-    arm(ctx, 4.8, -14, 9, -18, '#9aa3ad', true);
-    arm(ctx, -4.8, -14, 6, -10, '#9aa3ad', true);
-    // lange Axt (reicht über 2 Felder)
-    ffLine(ctx, 3, -4, 16, -46, 2, ffWood());
-    ffAxe(ctx, 16, -46, -1.27, 1.45, hasUp('x3a'));
-    if (hasUp('x3b')) ffVikingShield(ctx, -7.5, -9, 8.5, col);
-    ctx.restore();
+    rigBlackKnight(ctx, col, {
+      kind: st >= 2 ? 'plate' : 'mail', armored: st >= 2, armoredLegs: st >= 2, trouser: '#3a3028', boot: '#3a3028', bare: st < 2, cape: col, spikes: false,
+      flap: { light: '#a08060', main: st >= 4 ? '#e7e5e4' : '#6b4a2e', dark: '#3b2a1a' },
+      shoulders: (c) => ffFur(c, 0, -20.4, 7.6, st >= 4 ? '#e7e5e4' : '#6b4a2e'),
+      pauldrons: false, haftCol: ffWood(),
+      head: () => {
+        face(ctx, 0, 0, st >= 5 ? '#fde68a' : '#c2410c');
+        ffHornHelm(ctx, 0, -0.8, true);
+        ctx.fillStyle = '#facc15';
+        for (const cx of [-3, 0, 3]) {
+          ctx.beginPath();
+          ctx.moveTo(cx - 1.2, -6.9);
+          ctx.lineTo(cx, -9.9);
+          ctx.lineTo(cx + 1.2, -6.9);
+          ctx.fill();
+        }
+      },
+      blade: (c, x, y, ang) => ffAxe(c, x, y, ang, 1.15, hasUp('x3a')),
+    });
   },
   troll(ctx, col) {
     drawTroll(ctx, col, ['#5b84a8', '#1e3448', '#bfe0ff']);
@@ -8162,41 +8034,28 @@ const WT = {
     ctx.restore();
   },
   blackknight(ctx, col) {
-    // Todesritter: Skelett in dunkler Rüstung mit Sensenaxt und zerfetztem Umhang
+    // Todesritter: Skelett in dunkler Rüstung mit Dornenkrone und Sense (Doppelaxt: zusätzlich Axtblatt), zerfetzter Umhang
     const st = FIGST.stage;
-    ctx.save();
-    ctx.scale(1.3, 1.3);
-    ctx.translate(0, -1.5);
-    cape(ctx, 0, 6, { main: '#2a1838', dark: '#0b0612', light: col.main }, 22, 9.5);
-    legs(ctx, 0, 6, '#16121c', 3);
-    torso(ctx, 0, 6, col, 'plate');
-    // Knochenschädel mit grünen Augen
-    ffSkull(ctx, 0.5, -21, 4.4, st >= 5 ? '#fde047' : '#a3e635');
-    ffGlow(ctx, 0.5, -21, 3, 'rgba(170,255,120,0.5)', 'rgba(20,160,60,0)');
-    // Krone aus Dornen
-    ctx.fillStyle = '#1c1917';
-    for (const cx of [-3, -1, 1, 3]) {
-      ctx.beginPath();
-      ctx.moveTo(cx - 0.9, -24.4);
-      ctx.lineTo(cx + 0.5, -28.5);
-      ctx.lineTo(cx + 1.1, -24.4);
-      ctx.fill();
-    }
-    arm(ctx, 4.8, -14, 9, -18, '#9aa3ad', true);
-    arm(ctx, -4.8, -14, 6, -10, '#9aa3ad', true);
-    ffLine(ctx, 3, -4, 16, -46, 1.9, '#1c1917');
-    // Sensenblatt
-    ctx.fillStyle = steel(ctx, 4, 18, -52, -40);
-    ctx.beginPath();
-    ctx.moveTo(16, -46);
-    ctx.quadraticCurveTo(10, -54, 0, -50);
-    ctx.quadraticCurveTo(9, -50, 14.4, -42.5);
-    ctx.closePath();
-    ctx.fill();
-    outline(ctx, 0.5);
-    if (hasUp('x3a')) ffAxe(ctx, 16, -46, -1.27, 1.1);
-    if (hasUp('x3b')) kiteShield(ctx, -7, -21, 13, 22, { main: '#2a1838', dark: '#0b0612', light: col.main }, 'none');
-    ctx.restore();
+    rigBlackKnight(ctx, col, {
+      kind: 'darkplate', armored: true, armoredLegs: true, armorCol: '#2a2730', skin: '#e7e2d3', fistArmored: false,
+      cape: { main: '#2a1838', dark: '#0b0612', light: col.main }, spikes: st >= 2, haftCol: '#1c1917',
+      head: () => {
+        ffSkull(ctx, 0.5, 0, 4.4, st >= 5 ? '#fde047' : '#a3e635');
+        ffGlow(ctx, 0.5, 0, 3, 'rgba(170,255,120,0.5)', 'rgba(20,160,60,0)');
+        ctx.fillStyle = '#1c1917';
+        for (const cx of [-3, -1, 1, 3]) {
+          ctx.beginPath();
+          ctx.moveTo(cx - 0.9, -3.4);
+          ctx.lineTo(cx + 0.5, -7.5);
+          ctx.lineTo(cx + 1.1, -3.4);
+          ctx.fill();
+        }
+      },
+      blade: (c, x, y, ang) => {
+        thScythe(c, x, y, ang, 0.9, false);
+        if (hasUp('x3a')) ffAxe(c, x - Math.cos(ang) * 4, y - Math.sin(ang) * 4, ang, 0.8);
+      },
+    });
   },
   troll(ctx, col) {
     drawTroll(ctx, col, ['#a7868a', '#4a3236', '#e3c5c8']);
@@ -8918,33 +8777,32 @@ const DK = {
     ffFlames(ctx, [[-10, -18], [-5, -21], [0, -22], [5, -21]], '#fb923c', 2.6);
   },
   blackknight(ctx, col) {
-    // Drachenfürst: großer gepanzerter Echsenkrieger mit Glefe und Flügelstummeln
+    // Drachenfürst: großer gepanzerter Echsenkrieger mit Glefe, Flügelstummeln und Schwanz
     const st = FIGST.stage;
-    ctx.save();
-    ctx.scale(1.3, 1.3);
-    ctx.translate(0, -1.5);
-    dkWing(ctx, -2, -14, col, true, 0.55);
-    dkTail(ctx, -2, -1, 17);
-    cape(ctx, 0, 6, col, 21, 9);
-    legs(ctx, 0, 6, DK_SKIN[1], 3);
-    torso(ctx, 0, 6, col, 'plate');
-    dkHead(ctx, 0, -21, 1.1);
-    dkHelm(ctx, 0, -22.5);
-    arm(ctx, 4.8, -14, 9, -18, '#9aa3ad', true);
-    arm(ctx, -4.8, -14, 6, -10, '#9aa3ad', true);
-    // Glefe: langer Stab mit gebogener Klinge (reicht über 2 Felder)
-    ffLine(ctx, 3, -4, 16, -46, 1.9, '#3b1d0e');
-    ctx.fillStyle = steel(ctx, 12, 22, -60, -44);
-    ctx.beginPath();
-    ctx.moveTo(15, -45);
-    ctx.quadraticCurveTo(14, -54, 19, -60);
-    ctx.quadraticCurveTo(22, -52, 18, -44);
-    ctx.closePath();
-    ctx.fill();
-    outline(ctx, 0.6);
-    if (hasUp('x3a') || st >= 5) ffFlames(ctx, [[19, -58]], '#fb923c', 3.4);
-    if (hasUp('x3b')) kiteShield(ctx, -7, -21, 13, 22, col, 'chevron');
-    ctx.restore();
+    rigBlackKnight(ctx, col, {
+      kind: 'plate', armored: true, armoredLegs: true, skin: DK_SKIN[0], cape: col, spikes: st >= 2, haftCol: '#3b1d0e',
+      back: (c) => dkWing(c, -2, -14, col, true, 0.55),
+      tail: (c) => dkTail(c, -2, -4, 17),
+      head: () => {
+        dkHead(ctx, 0, 0, 1.05);
+        dkHelm(ctx, 0, -1.4);
+      },
+      blade: (c, x, y, ang) => {
+        c.save();
+        c.translate(x, y);
+        c.rotate(ang + Math.PI / 2);
+        c.fillStyle = steel(c, -4, 4, -14, 2);
+        c.beginPath();
+        c.moveTo(-1, 1);
+        c.quadraticCurveTo(-2, -8, 2, -14);
+        c.quadraticCurveTo(5, -7, 1.6, 1.4);
+        c.closePath();
+        c.fill();
+        outline(c, 0.6);
+        c.restore();
+        if (hasUp('x3a') || st >= 5) ffFlames(c, [[x + Math.cos(ang) * 12, y + Math.sin(ang) * 12]], '#fb923c', 3.2);
+      },
+    });
   },
   troll(ctx, col) {
     dkWyrm(ctx, col, false);
