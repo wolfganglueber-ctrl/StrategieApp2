@@ -155,6 +155,7 @@ Startwerte und Kampfformel (Commit e094f32, 16.10.) stammen aus dem Vorbild *The
   7. Wenn Wolfgang selbst testet: „keine Screenshots nötig“.
 
 # Offene Aufgaben
+- **An Neustart erinnern (Wolfgangs Wunsch):** bei langem Chatverlauf `/fertig` + neue Sitzung mit `/start` vorschlagen (spart Nutzungslimit; lange Sitzungen werden pro Schritt teurer).
 - Völker Schritt 2 (Rest): Magier-Besonderheiten (Runenmeister-Aura +Angriff, Hexenmeister stärkere Heilung) fehlen noch. Figuren sind fertig (1.07); Kampf-Animationen: Feuerspucker zeigen Feuer, Irrlichtwerfer Zauberkugeln; Axtwerfer werfen noch einen Pfeil, Besenhexe/Wyvern nutzen die Greifen-Effekte. Burgverteidigung: Verbesserungen sind seit 1.07 viel billiger – Balance prüfen.
 - **Am Ende der Entwicklung erinnern (Wolfgang hat darum gebeten):** LICENSE „Alle Rechte vorbehalten“ anlegen, kurze Datenschutzerklärung/Impressum-Hinweis ins Spiel, Markenrecherche „KnightyKnight“ (Looney Tunes „Knighty Knight Bugs“), Repo ggf. privat, eigenes Hosting statt Artefakt für kommerzielle Nutzung. Emojis in Menüs (Darstellung = Geräteschrift von Apple/Google) für Werbematerial ggf. durch eigene Symbole ersetzen.
 - **Burgverteidigung Schritt 2 (Wunsch aus dieser Sitzung):** „Kriegsrat“ – dauerhafte prozentuale Verbesserungen über Partien hinweg, bezahlt mit „Ruhm“ (je nach erreichter Welle/Schwierigkeit), gespeichert im localStorage; Wellenvorschau über den Toren (was kommt als Nächstes); Bestwerte-Anzeige; Feinschliff.
