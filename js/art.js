@@ -3378,25 +3378,37 @@ function drawBasilisk(ctx, col, pal = null) {
     return g;
   };
   ctx.lineCap = 'round';
-  // Schwanz in S-Kurve nach hinten links
-  ctx.strokeStyle = scD;
-  ctx.lineWidth = 7.5;
-  ctx.beginPath();
-  ctx.moveTo(-4, 2);
-  ctx.bezierCurveTo(-16, 6, -24, 0, -22, -8);
-  ctx.bezierCurveTo(-21, -14, -28, -17, -33, -12);
-  ctx.stroke();
-  ctx.strokeStyle = sc;
-  ctx.lineWidth = 5.5;
-  ctx.stroke();
-  ctx.strokeStyle = scL;
-  ctx.lineWidth = 1.4;
-  ctx.globalAlpha = 0.6;
-  ctx.beginPath();
-  ctx.moveTo(-6, 0);
-  ctx.bezierCurveTo(-16, 3, -22, -2, -21, -9);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
+  // Schwanz: setzt hinten am Rumpf an, schwingt im S nach hinten links und läuft spitz zu (Mittellinie mit abnehmender Breite)
+  const tailPts = [];
+  const segs = [[[-8, -5], [-17, -5], [-24, 0], [-25, -6]], [[-25, -6], [-26, -12], [-30, -15], [-33, -12.4]]];
+  for (const [p0, p1, p2, p3] of segs) {
+    for (let i = tailPts.length ? 1 : 0; i <= 14; i++) {
+      const t = i / 14, u = 1 - t;
+      tailPts.push([
+        u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0],
+        u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1],
+      ]);
+    }
+  }
+  const tailP = () => {
+    const n = tailPts.length, L = [], R = [];
+    for (let i = 0; i < n; i++) {
+      const [x0, y0] = tailPts[Math.max(0, i - 1)], [x1, y1] = tailPts[Math.min(n - 1, i + 1)];
+      const d = Math.hypot(x1 - x0, y1 - y0) || 1, w = 3.4 - 3 * (i / (n - 1));
+      const nx = -(y1 - y0) / d * w, ny = (x1 - x0) / d * w;
+      L.push([tailPts[i][0] + nx, tailPts[i][1] + ny]);
+      R.push([tailPts[i][0] - nx, tailPts[i][1] - ny]);
+    }
+    ctx.beginPath();
+    ctx.moveTo(L[0][0], L[0][1]);
+    for (const [x, y] of L.slice(1)) ctx.lineTo(x, y);
+    for (const [x, y] of R.reverse()) ctx.lineTo(x, y);
+    ctx.closePath();
+  };
+  ctx.fillStyle = grad(ctx, -30, -2, scL, sc);
+  tailP();
+  ctx.fill();
+  outline(ctx, 0.8);
   // Schwanzstachel
   ctx.fillStyle = col.main;
   ctx.beginPath();
