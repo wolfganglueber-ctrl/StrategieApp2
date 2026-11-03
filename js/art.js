@@ -4389,8 +4389,9 @@ function drawTroll2(ctx, col, v = {}) {
       ctx.fill();
     }
   };
-  leg([-6, -17], [-9.6, -7], [-8.2, 0], true);
-  leg([6, -17], [10.4, -7.6], [7.4, 0], false);
+  // rechtes Bein hinten im Schatten (dunkel, zuerst), linkes Bein vorn hell
+  leg([6, -17], [10.4, -7.6], [7.4, 0], true);
+  leg([-6, -17], [-9.6, -7], [-8.2, 0], false);
   // Rumpf: Buckel hinten oben, mächtige Brust, Bauch
   const torsoP = () => {
     ctx.beginPath();
@@ -4760,7 +4761,7 @@ function drawCurseTree(ctx, col) {
   branch([[6, -42], [16, -36], [21, -24], [22, -14]], 5, 2, bark[1]);
   for (const [dx, dy] of [[-1.8, 4.4], [0.4, 5], [2.4, 4]]) branch([[22, -14], [22 + dx, -14 + dy]], 1.2, 0.6, bark[1]);
   // Wurzelbeine
-  for (const [x, far] of [[-6, true], [6, false]]) {
+  for (const [x, far] of [[6, true], [-6, false]]) {
     const c = far ? bark[1] : bark[0];
     branch([[x, -16], [x - 1, -6], [x + 1, 0]], 7, 6, c);
     for (const [dx, dy] of [[-6, 4], [-2, 5], [3, 4.6], [7, 3.6]]) branch([[x + 1, 1], [x + 1 + dx, 1 + dy]], 2.4, 1, c);
