@@ -4122,6 +4122,14 @@ function drawGiant(ctx, col, pal = null) {
     g.addColorStop(1, skinD);
     return g;
   };
+  // große Faust (rigFist 2,2-fach)
+  const bigFist = (p, ang, wrist) => {
+    ctx.save();
+    ctx.translate(p[0], p[1]);
+    ctx.scale(2.2, 2.2);
+    rigFist(ctx, [0, 0], ang, false, skin, [(wrist[0] - p[0]) / 2.2, (wrist[1] - p[1]) / 2.2]);
+    ctx.restore();
+  };
   const limb = (pts, w, fill) => {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -4135,31 +4143,6 @@ function drawGiant(ctx, col, pal = null) {
     ctx.lineWidth = w;
     ctx.stroke();
   };
-  // Steinkeule hinter dem Körper, über die Schulter gelegt
-  ctx.save();
-  ctx.translate(-14, -38);
-  ctx.rotate(-0.55);
-  ctx.fillStyle = grad(ctx, -3, 3, '#7a5a3a', '#3a2614');
-  ctx.fillRect(-2.2, -4, 4.4, 26);
-  outline(ctx, 0.7);
-  ctx.fillStyle = grad(ctx, -9, 9, '#a7a39a', '#4b4842');
-  ctx.beginPath();
-  ctx.moveTo(-6, -4);
-  ctx.quadraticCurveTo(-10, -14, -6, -22);
-  ctx.quadraticCurveTo(0, -27, 7, -21);
-  ctx.quadraticCurveTo(10, -12, 6, -4);
-  ctx.closePath();
-  ctx.fill();
-  outline(ctx, 0.9);
-  ctx.fillStyle = '#d6d2c6';
-  for (const [x, y] of [[-6, -12], [6, -10], [0, -24], [-3, -18], [4, -17]]) {
-    ctx.beginPath();
-    ctx.moveTo(x - 1.4, y);
-    ctx.lineTo(x, y - 3);
-    ctx.lineTo(x + 1.4, y);
-    ctx.fill();
-  }
-  ctx.restore();
   // Säulenbeine mit Steinschienen
   for (const [hx, fx] of [[-9, -10], [7, 8]]) {
     limb([[hx, -16], [fx, 3]], 9.5, grad(ctx, fx - 6, fx + 6, skinL, skinD));
@@ -4173,6 +4156,9 @@ function drawGiant(ctx, col, pal = null) {
     ctx.ellipse(fx + 1, 5, 6.5, 2.6, 0, 0, Math.PI * 2);
     ctx.fill();
   }
+  // rechter Arm hinter dem Rumpf, hängt mit geballter Faust herab
+  limb([[17, -44], [23, -30], [19, -18]], 8.5, grad(ctx, 14, 26, skinL, skinD));
+  bigFist([19, -15.6], Math.atan2(12, -4), [23, -30]);
   // Breiter Rumpf mit Steinplatten auf den Schultern
   ctx.fillStyle = skinGrad(0, -34, 28);
   ctx.beginPath();
@@ -4208,14 +4194,34 @@ function drawGiant(ctx, col, pal = null) {
     ctx.fill();
     outline(ctx, 0.8);
   }
-  // Arme: vorne eine geballte Faust
-  limb([[17, -44], [23, -30], [19, -18]], 8.5, grad(ctx, 14, 26, skinL, skinD));
-  ctx.fillStyle = skinGrad(19, -16, 5.5);
+  // Steinkeule über die linke Schulter gelegt, vor dem Körper
+  ctx.save();
+  ctx.translate(-14, -38);
+  ctx.rotate(-0.55);
+  ctx.fillStyle = grad(ctx, -3, 3, '#7a5a3a', '#3a2614');
+  ctx.fillRect(-2.2, -4, 4.4, 26);
+  outline(ctx, 0.7);
+  ctx.fillStyle = grad(ctx, -9, 9, '#a7a39a', '#4b4842');
   ctx.beginPath();
-  ctx.arc(19, -16, 5, 0, Math.PI * 2);
+  ctx.moveTo(-6, -4);
+  ctx.quadraticCurveTo(-10, -14, -6, -22);
+  ctx.quadraticCurveTo(0, -27, 7, -21);
+  ctx.quadraticCurveTo(10, -12, 6, -4);
+  ctx.closePath();
   ctx.fill();
-  outline(ctx, 0.8);
-  limb([[-17, -44], [-21, -40], [-17, -36]], 7.5, grad(ctx, -24, -12, skinL, skinD));
+  outline(ctx, 0.9);
+  ctx.fillStyle = '#d6d2c6';
+  for (const [x, y] of [[-6, -12], [6, -10], [0, -24], [-3, -18], [4, -17]]) {
+    ctx.beginPath();
+    ctx.moveTo(x - 1.4, y);
+    ctx.lineTo(x, y - 3);
+    ctx.lineTo(x + 1.4, y);
+    ctx.fill();
+  }
+  ctx.restore();
+  // linker Arm vor dem Körper: Ellbogen außen, Faust umschließt den Keulenstiel vor der Brust
+  limb([[-17, -44], [-23.5, -33], [-11, -30.6]], 8.5, grad(ctx, -26, -12, skinL, skinD));
+  bigFist([-9.8, -30.8], Math.atan2(-0.852, -0.523) + Math.PI / 2, [-23.5, -33]);
   // Knochenkette mit Anhänger in Spielerfarbe
   ctx.strokeStyle = '#3a2a1a';
   ctx.lineWidth = 1;
@@ -4313,6 +4319,14 @@ function drawTroll(ctx, col, pal = null) {
     g.addColorStop(1, skinD);
     return g;
   };
+  // große Faust (rigFist doppelt so groß): Handrücken, Knöchel, Finger um den Griff
+  const bigFist = (p, ang, wrist) => {
+    ctx.save();
+    ctx.translate(p[0], p[1]);
+    ctx.scale(2, 2);
+    rigFist(ctx, [0, 0], ang, false, skin, [(wrist[0] - p[0]) / 2, (wrist[1] - p[1]) / 2]);
+    ctx.restore();
+  };
   const limb = (pts, w, fill) => {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -4328,11 +4342,59 @@ function drawTroll(ctx, col, pal = null) {
   };
   // Hinterer Arm hängt bis fast zum Boden
   limb([[-12, -40], [-19, -24], [-18, -8]], 7.5, grad(ctx, -22, -12, skin, skinD));
-  ctx.fillStyle = skinGrad(-18, -5, 5);
+  bigFist([-18, -5.6], Math.atan2(16, 1) - 0.2, [-19, -24]);
+  // Rechter Arm (hinter dem Körper) schultert den Steinhammer: Stiel und Kopf zuerst, dann der Arm
+  ctx.strokeStyle = 'rgba(10,8,6,0.9)';
+  ctx.lineWidth = 4.6;
   ctx.beginPath();
-  ctx.ellipse(-18, -5, 4.6, 4, 0, 0, Math.PI * 2);
+  ctx.moveTo(18.2, -10);
+  ctx.lineTo(25, -60);
+  ctx.stroke();
+  ctx.strokeStyle = grad(ctx, 18, 26, '#9a6a3c', '#3e2614');
+  ctx.lineWidth = 3.2;
+  ctx.stroke();
+  ctx.strokeStyle = '#2c3036';
+  ctx.lineWidth = 1;
+  for (const t of [0.15, 0.25]) {
+    ctx.beginPath();
+    ctx.moveTo(19 + 6 * t - 2, -16 - 44 * t);
+    ctx.lineTo(19 + 6 * t + 2, -16 - 44 * t);
+    ctx.stroke();
+  }
+  ctx.save();
+  ctx.translate(25.5, -63);
+  ctx.rotate(0.14);
+  ctx.fillStyle = grad(ctx, -9, 9, '#a39d93', '#4a4640');
+  ctx.beginPath();
+  ctx.roundRect ? ctx.roundRect(-9, -6, 18, 12, 3) : ctx.rect(-9, -6, 18, 12);
   ctx.fill();
-  outline(ctx, 0.7);
+  outline(ctx, 1);
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  ctx.lineWidth = 0.6;
+  ctx.beginPath();
+  ctx.moveTo(-5, -6);
+  ctx.lineTo(-3, 0);
+  ctx.lineTo(-6, 6);
+  ctx.moveTo(4, -6);
+  ctx.lineTo(2, 2);
+  ctx.stroke();
+  ctx.fillStyle = steel(ctx, -9, 9);
+  ctx.fillRect(-2.2, -6.5, 4.4, 13);
+  outline(ctx, 0.5);
+  ctx.strokeRect(-2.2, -6.5, 4.4, 13);
+  for (const [sx, sy] of [[-9, -2], [9, -2], [-9, 3], [9, 3]]) {
+    ctx.fillStyle = steel(ctx, sx - 2, sx + 2);
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - 1.4);
+    ctx.lineTo(sx + Math.sign(sx) * 3, sy);
+    ctx.lineTo(sx, sy + 1.4);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+  // Arm hinter dem Rumpf: nur Ellbogen, Unterarm und Faust schauen hervor; Faust umschließt den Stiel
+  limb([[11, -40], [17, -30], [19, -20]], 7.5, grad(ctx, 10, 22, skinL, skinD));
+  bigFist([20.2, -19.4], Math.atan2(-44, 6) + Math.PI / 2, [17, -30]);
   // Beine, leicht gebeugt, mit Fellwickeln
   for (const [hx, kx, fx] of [[-7, -10, -9], [5, 7, 6]]) {
     limb([[hx, -14], [kx, -4], [fx, 3]], 7.5, grad(ctx, kx - 5, kx + 5, skinL, skinD));
@@ -4494,61 +4556,6 @@ function drawTroll(ctx, col, pal = null) {
   ctx.closePath();
   ctx.fill();
   outline(ctx, 0.4);
-  // Vorderer Arm schultert den Steinhammer
-  ctx.strokeStyle = 'rgba(10,8,6,0.9)';
-  ctx.lineWidth = 4.6;
-  ctx.beginPath();
-  ctx.moveTo(19, -16);
-  ctx.lineTo(25, -60);
-  ctx.stroke();
-  ctx.strokeStyle = grad(ctx, 18, 26, '#9a6a3c', '#3e2614');
-  ctx.lineWidth = 3.2;
-  ctx.stroke();
-  ctx.strokeStyle = '#2c3036';
-  ctx.lineWidth = 1;
-  for (const t of [0.15, 0.25]) {
-    ctx.beginPath();
-    ctx.moveTo(19 + 6 * t - 2, -16 - 44 * t);
-    ctx.lineTo(19 + 6 * t + 2, -16 - 44 * t);
-    ctx.stroke();
-  }
-  ctx.save();
-  ctx.translate(25.5, -63);
-  ctx.rotate(0.14);
-  ctx.fillStyle = grad(ctx, -9, 9, '#a39d93', '#4a4640');
-  ctx.beginPath();
-  ctx.roundRect ? ctx.roundRect(-9, -6, 18, 12, 3) : ctx.rect(-9, -6, 18, 12);
-  ctx.fill();
-  outline(ctx, 1);
-  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-  ctx.lineWidth = 0.6;
-  ctx.beginPath();
-  ctx.moveTo(-5, -6);
-  ctx.lineTo(-3, 0);
-  ctx.lineTo(-6, 6);
-  ctx.moveTo(4, -6);
-  ctx.lineTo(2, 2);
-  ctx.stroke();
-  ctx.fillStyle = steel(ctx, -9, 9);
-  ctx.fillRect(-2.2, -6.5, 4.4, 13);
-  outline(ctx, 0.5);
-  ctx.strokeRect(-2.2, -6.5, 4.4, 13);
-  for (const [sx, sy] of [[-9, -2], [9, -2], [-9, 3], [9, 3]]) {
-    ctx.fillStyle = steel(ctx, sx - 2, sx + 2);
-    ctx.beginPath();
-    ctx.moveTo(sx, sy - 1.4);
-    ctx.lineTo(sx + Math.sign(sx) * 3, sy);
-    ctx.lineTo(sx, sy + 1.4);
-    ctx.closePath();
-    ctx.fill();
-  }
-  ctx.restore();
-  limb([[11, -40], [17, -30], [19, -20]], 7.5, grad(ctx, 10, 22, skinL, skinD));
-  ctx.fillStyle = skinGrad(19.5, -19, 4.6);
-  ctx.beginPath();
-  ctx.ellipse(19.5, -19, 4.4, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-  outline(ctx, 0.7);
   // Stachel-Schulterpanzer
   ctx.fillStyle = steel(ctx, 3, 17, -44, -32);
   ctx.beginPath();
