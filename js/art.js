@@ -4333,14 +4333,20 @@ function drawTroll2(ctx, col, v = {}) {
         const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
         const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
         const w0 = ws[i] / 2 + (pass ? 0 : 0.8), w1 = ws[i + 1] / 2 + (pass ? 0 : 0.8);
+        // Segment als Trapez plus volle Kreise an beiden Enden (keine Löcher an Knie und Ellbogen)
+        ctx.fillStyle = pass ? c : 'rgb(10,8,6)';
         ctx.beginPath();
         ctx.moveTo(x0 + nx * w0, y0 + ny * w0);
         ctx.lineTo(x1 + nx * w1, y1 + ny * w1);
-        ctx.arc(x1, y1, w1, Math.atan2(ny, nx), Math.atan2(-ny, -nx));
+        ctx.lineTo(x1 - nx * w1, y1 - ny * w1);
         ctx.lineTo(x0 - nx * w0, y0 - ny * w0);
-        ctx.arc(x0, y0, w0, Math.atan2(-ny, -nx), Math.atan2(ny, nx));
         ctx.closePath();
-        ctx.fillStyle = pass ? c : 'rgba(10,8,6,0.9)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x0, y0, w0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x1, y1, w1, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -4496,8 +4502,8 @@ function drawTroll2(ctx, col, v = {}) {
     ctx.fillStyle = col.main;
     ctx.fillRect(-10.6, -15.4, 21, 1.4);
   }
-  // Eisenkette quer über die Brust (Stufe 2)
-  if (st >= 2) {
+  // Eisenkette quer über die Brust
+  {
     for (let k = 0; k <= 9; k++) {
       const t = k / 9;
       const cx = -11 + 26 * t, cy = -49 + 31 * t + Math.sin(t * Math.PI) * 2;
@@ -4512,7 +4518,15 @@ function drawTroll2(ctx, col, v = {}) {
     }
   }
   // Hals und Kopf: kurzer dicker Nacken nach vorn, Kopf klein vor den Schultern
-  limb([[5, -48], [11, -50.5]], [9, 7.5], sk);
+  // Nacken ohne Kontur, damit am Übergang zum Rumpf kein Strich entsteht
+  ctx.fillStyle = sk;
+  ctx.beginPath();
+  ctx.moveTo(2.6, -52);
+  ctx.quadraticCurveTo(8, -56, 12, -54);
+  ctx.lineTo(12, -46.6);
+  ctx.quadraticCurveTo(8, -45, 4, -44.4);
+  ctx.closePath();
+  ctx.fill();
   const hx = 14, hy = -54;
   // Schädel
   ctx.fillStyle = shadeG(hx, hy - 1, 8);
@@ -4536,6 +4550,23 @@ function drawTroll2(ctx, col, v = {}) {
   ctx.closePath();
   ctx.fill();
   outline(ctx, 0.5);
+  // Hörner wie beim bisherigen Troll, nach hinten geschwungen (Frost: mit Reif)
+  ctx.save();
+  // Hornansätze sitzen im Haar oben auf dem Schädel
+  ctx.translate(hx - 9 + 0.6, hy + 50 + 1.6);
+  ctx.fillStyle = frost ? grad(ctx, -8, 8, '#ffffff', '#93c5fd') : grad(ctx, -8, 8, '#f1eadb', '#8f846f');
+  ctx.beginPath();
+  ctx.moveTo(4, -56);
+  ctx.quadraticCurveTo(-4, -62, -6, -70);
+  ctx.quadraticCurveTo(-1, -64, 7, -58);
+  ctx.closePath();
+  ctx.moveTo(10, -58);
+  ctx.quadraticCurveTo(6, -66, 8, -73);
+  ctx.quadraticCurveTo(11, -66, 13, -58);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.6);
+  ctx.restore();
   // spitzes Ohr nach hinten
   ctx.fillStyle = shadeG(hx - 5, hy - 1, 4);
   ctx.beginPath();
@@ -4864,10 +4895,21 @@ function drawCurseTree(ctx, col) {
   }
   // Rabe auf dem Ast (ab Stufe 4)
   if (st >= 4) ffRaven(ctx, 14.6, -66.6);
-  // vorderer Astarm (links, vor dem Stamm): greift mit langen Krallenzweigen nach vorn
-  branch([[-7, -44], [-15, -34], [-6, -26], [6, -27]], 6, 2.6, bark[0]);
-  for (const [dx, dy] of [[5, -2.4], [6, 0.4], [5, 3]]) branch([[6, -27], [6 + dx, -27 + dy]], 1.6, 0.7, bark[0]);
-  ffGlow(ctx, 11, -28, 3.4, 'rgba(190,255,120,0.85)', 'rgba(20,160,60,0)');
+  // vorderer Astarm (links) wie beim Lehmgolem: setzt seitlich an der Schulter des Stamms an und hängt bis zum Knie herab,
+  // ein knorriger Astknoten deckt das Schultergelenk, unten Krallenzweige
+  branch([[-8.6, -46], [-14, -34], [-13.4, -21]], 6.4, 4, bark[0]);
+  for (const [dx, dy] of [[-3, 5], [-0.6, 6], [2, 5]]) branch([[-13.4, -21], [-13.4 + dx, -21 + dy]], 1.8, 0.7, bark[0]);
+  ctx.fillStyle = barkG(-14, -4);
+  ctx.beginPath();
+  ctx.ellipse(-8.6, -47, 4.6, 3.8, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  outline(ctx, 0.7);
+  ctx.strokeStyle = 'rgba(10,6,4,0.55)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.ellipse(-8.6, -47, 2, 1.4, -0.3, 0, Math.PI * 2);
+  ctx.stroke();
+  ffGlow(ctx, -13.4, -15, 3, 'rgba(190,255,120,0.85)', 'rgba(20,160,60,0)');
 }
 
 // Drache: dunkle Schuppen, Flügelhäute in Spielerfarbe, glühendes Maul
