@@ -2046,7 +2046,7 @@ function horse(ctx, coat, mane, col, armored) {
 // Greif: Adlerkopf und Schwingen, Löwenleib (Reittier des Greifenreiters)
 // Flügelumriss als eine Fläche: Vorderkante glatt, Hinterkante aus Federspitzen (spitz-runde Enden statt Halbkreise).
 // lead: Punkte der Vorderkante von der Wurzel bis zur Flügelspitze; trail: Punkte der Hinterkante von der Spitze zurück zur Wurzel.
-function wingSilhouette(ctx, lead, trail, tipLen = 3.2) {
+function wingSilhouette(ctx, lead, trail, tipLen = 3.2, round = false) {
   ctx.beginPath();
   ctx.moveTo(lead[0][0], lead[0][1]);
   for (let i = 1; i < lead.length; i++) {
@@ -2058,6 +2058,11 @@ function wingSilhouette(ctx, lead, trail, tipLen = 3.2) {
     const [px, py] = trail[i - 1], [x, y] = trail[i];
     const dx = x - px, dy = y - py, L = Math.hypot(dx, dy) || 1;
     const nx = dy / L, ny = -dx / L;
+    if (round) {
+      // runde Federenden (Schwan): fast halbkreisförmiger Bogen
+      ctx.bezierCurveTo(px + dx * 0.05 + nx * tipLen * 1.3, py + dy * 0.05 + ny * tipLen * 1.3, px + dx * 0.85 + nx * tipLen * 1.3, py + dy * 0.85 + ny * tipLen * 1.3, x, y);
+      continue;
+    }
     // runder Federbauch, Spitze zum Körper hin (Federn hängen nach hinten unten), kurzer steiler Rücksprung
     const tx = px + dx * 0.9 + nx * tipLen, ty = py + dy * 0.9 + ny * tipLen;
     ctx.quadraticCurveTo(px + dx * 0.35 + nx * tipLen * 1.25, py + dy * 0.35 + ny * tipLen * 1.25, tx, ty);
@@ -2160,6 +2165,70 @@ function griffinMount(ctx, col, st) {
       [[-21, -44.5], [-24.6, -38], [-26, -31], [-26.4, -24.5], [-25.4, -18], [-23.4, -12], [-20, -7], [-15.4, -3.4], [-9.6, -0.6], [0, 0]],
       3.4);
     ctx.fill();
+    // breite Federn innerhalb des Umrisses: je Federspitze ein Feld von der Hinterkante zur Vorderkante,
+    // abwechselnd leicht schattiert, mit Trennlinie, hellem Kiel und einer Reihe Deckfedern an der Vorderkante
+    ctx.save();
+    ctx.clip();
+    const T = [[-21, -44.5], [-24.6, -38], [-26, -31], [-26.4, -24.5], [-25.4, -18], [-23.4, -12], [-20, -7], [-15.4, -3.4], [-9.6, -0.6], [0, 0]];
+    const LE = [[-21, -44.5], [-17.6, -42.6], [-14, -40], [-11, -35], [-8.4, -30], [-6.4, -24.6], [-4.4, -19], [-3, -13], [-1.6, -6.6], [0, 0]];
+    const n = T.length - 1;
+    const tipOf = (i) => {
+      const [px, py] = T[i], [x, y] = T[i + 1], dx = x - px, dy = y - py, L = Math.hypot(dx, dy) || 1;
+      return [px + dx * 0.9 + (dy / L) * 3.4, py + dy * 0.9 + (-dx / L) * 3.4];
+    };
+    for (let i = 0; i < n; i++) {
+      // Federfeld
+      ctx.fillStyle = i % 2 ? 'rgba(40,20,5,0.12)' : 'rgba(255,245,220,0.10)';
+      ctx.beginPath();
+      ctx.moveTo(T[i][0], T[i][1]);
+      const tp = tipOf(i);
+      ctx.lineTo(tp[0], tp[1]);
+      ctx.lineTo(T[i + 1][0], T[i + 1][1]);
+      ctx.lineTo(LE[i + 1][0], LE[i + 1][1]);
+      ctx.lineTo(LE[i][0], LE[i][1]);
+      ctx.closePath();
+      ctx.fill();
+      // Trennlinie zur nächsten Feder (leicht gebogen)
+      ctx.strokeStyle = shade(feather, -0.55 + dark);
+      ctx.lineWidth = 0.55;
+      ctx.beginPath();
+      ctx.moveTo(T[i + 1][0], T[i + 1][1]);
+      ctx.quadraticCurveTo((T[i + 1][0] + LE[i + 1][0]) / 2 - 1, (T[i + 1][1] + LE[i + 1][1]) / 2 + 1, LE[i + 1][0], LE[i + 1][1]);
+      ctx.stroke();
+      // heller Kiel von der Spitze zur Vorderkante
+      const mx = (LE[i][0] + LE[i + 1][0]) / 2, my = (LE[i][1] + LE[i + 1][1]) / 2;
+      ctx.strokeStyle = 'rgba(255,240,205,0.45)';
+      ctx.lineWidth = 0.4;
+      ctx.beginPath();
+      ctx.moveTo(tp[0] + (mx - tp[0]) * 0.08, tp[1] + (my - tp[1]) * 0.08);
+      ctx.lineTo(mx + (tp[0] - mx) * 0.3, my + (tp[1] - my) * 0.3);
+      ctx.stroke();
+    }
+    // Deckfedern: schuppige Reihe parallel zur Vorderkante, etwas heller
+    const cov = LE.map(([x, y], i) => [x + (T[i][0] - x) * 0.32, y + (T[i][1] - y) * 0.32]);
+    ctx.fillStyle = 'rgba(255,240,210,0.16)';
+    ctx.beginPath();
+    ctx.moveTo(LE[0][0], LE[0][1]);
+    for (const [x, y] of LE.slice(1)) ctx.lineTo(x, y);
+    for (let i = n; i > 0; i--) {
+      const [x0, y0] = cov[i], [x1, y1] = cov[i - 1];
+      ctx.quadraticCurveTo((x0 + x1) / 2 - 1.6, (y0 + y1) / 2 + 0.8, x1, y1);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = shade(feather, -0.45 + dark);
+    ctx.lineWidth = 0.45;
+    ctx.beginPath();
+    ctx.moveTo(cov[n][0], cov[n][1]);
+    for (let i = n; i > 0; i--) {
+      const [x0, y0] = cov[i], [x1, y1] = cov[i - 1];
+      ctx.quadraticCurveTo((x0 + x1) / 2 - 1.6, (y0 + y1) / 2 + 0.8, x1, y1);
+    }
+    ctx.stroke();
+    ctx.restore();
+    wingSilhouette(ctx,
+      [[0, 0], [-4, -22], [-14, -40], [-21, -44.5]],
+      T, 3.4);
     outline(ctx, 0.8);
     ctx.restore();
   };
@@ -7000,6 +7069,8 @@ function ffWing(ctx, x, y, dir, c, far) {
   // Walkürenflügel: breiter, hoch aufgestellter Schwanenflügel als eine Fläche, Hinterkante aus Federspitzen
   ctx.save();
   ctx.translate(x + 1, y + 1);
+  // flacher angestellt, Flügelspitze mehr nach hinten unten
+  ctx.rotate(-0.42);
   if (far) ctx.globalAlpha = 0.85;
   const g = ctx.createLinearGradient(0, 0, -20, -40);
   g.addColorStop(0, far ? shade(c, -0.22) : shade(c, -0.08));
@@ -7008,7 +7079,7 @@ function ffWing(ctx, x, y, dir, c, far) {
   wingSilhouette(ctx,
     [[0, 0], [-3, -18], [-10, -32], [-19, -42]],
     [[-19, -42], [-24, -37], [-27.4, -31], [-29.4, -24.6], [-29.6, -18], [-28, -12], [-24.6, -7], [-19.6, -3.4], [-13.4, -1], [-6.4, 0.6], [0, 0]],
-    3.6);
+    2.4, true);
   ctx.fill();
   outline(ctx, 0.7);
   ctx.restore();
