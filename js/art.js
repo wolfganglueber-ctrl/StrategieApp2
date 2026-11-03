@@ -5058,16 +5058,23 @@ function drawDragon(ctx, col, pal = null) {
   ctx.fillRect(23.3, -43.4, 0.5, 1.6);
   ctx.restore();
   // nahes Hinterbein: kräftiger Oberschenkel an der Hüfte, Knie, Sprunggelenk, Fuß flach am Boden
-  limbSmooth(ctx, [[-4, -5], [0, 0], [-3.4, 3.4], [1.6, 5.6]], [6.4, 4.6, 3.8], sc);
+  // eine Keule: runder Oberschenkel, Vorderkante läuft bis zu den Zehen, Ferse unter dem Schenkel eingeknickt
   ctx.fillStyle = grad(ctx, -11, 2, scL, scD);
   ctx.beginPath();
-  ctx.ellipse(-4.6, -6.4, 5.6, 6.6, -0.5, 0, Math.PI * 2);
+  ctx.moveTo(-5.4, 5.6);
+  ctx.quadraticCurveTo(-6.4, 1.2, -3.6, -2.4);
+  ctx.quadraticCurveTo(-6.4, -2.2, -8.8, -3.6);
+  ctx.bezierCurveTo(-11.8, -6.4, -9, -12.8, -4, -12.6);
+  ctx.bezierCurveTo(1, -12.4, 3.8, -6.4, 3.6, -2);
+  ctx.quadraticCurveTo(3.4, 2.4, 6.6, 4.2);
+  ctx.quadraticCurveTo(7.6, 5.6, 6, 5.6);
+  ctx.closePath();
   ctx.fill();
   outline(ctx, 0.8);
   // nahes Vorderbein: von der Brust gerade nach unten, Pranke am Boden
   limbSmooth(ctx, [[13.4, -8.6], [15.4, -1.6], [16.4, 5]], [5, 3.8], sc);
   ctx.fillStyle = '#efe7d6';
-  for (const fx of [1.6, 16.4]) {
+  for (const fx of [0.4, 16.4]) {
     for (const k of [0, 1.8, 3.6]) {
       ctx.beginPath();
       ctx.moveTo(fx + k, 5.4);
