@@ -6244,16 +6244,18 @@ function ffHornHelm(ctx, x, y, horns = true) {
   if (horns) factionHorns(ctx, x, y - 1, 1.05);
 }
 // Geflochtene Zöpfe (Schildmaid, Walküre)
-function ffBraids(ctx, x, y, c = '#e0b04a') {
+// sides: welche Zöpfe (−1 links, 1 rechts), cap: Haarkappe oben
+function ffBraids(ctx, x, y, c = '#e0b04a', sides = [-1, 1], cap = true) {
   ctx.strokeStyle = c;
   ctx.lineWidth = 2;
   ctx.lineCap = 'round';
-  for (const sx of [-1, 1]) {
+  for (const sx of sides) {
     ctx.beginPath();
     ctx.moveTo(x + sx * 3.6, y);
     ctx.quadraticCurveTo(x + sx * 4.6, y + 5, x + sx * 3.4, y + 9);
     ctx.stroke();
   }
+  if (!cap) return;
   ctx.fillStyle = c;
   ctx.beginPath();
   ctx.arc(x, y - 1.5, 4.5, Math.PI, 0);
@@ -6462,8 +6464,11 @@ const VK = {
     rigGuard(ctx, col, {
       kind: st >= 4 ? 'mail' : 'leather', trouser: '#4a3f36', boot: '#4a3828', bare: true, spearTop: -40 + pk,
       head: () => {
+        // rechter Zopf beginnt hinter dem Kopf und fällt vor den Körper, linker liegt vorn
+        const hc = st >= 5 ? '#fde68a' : '#e0b04a';
+        ffBraids(ctx, 0, 0, hc, [1], false);
         face(ctx, 0, 0, false);
-        ffBraids(ctx, 0, 0, st >= 5 ? '#fde68a' : '#e0b04a');
+        ffBraids(ctx, 0, 0, hc, [-1], true);
         if (st >= 4) ffHornHelm(ctx, 0, -0.8, false);
       },
       spear: (c, x, y) => {
