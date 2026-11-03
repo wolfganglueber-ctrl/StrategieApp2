@@ -2831,13 +2831,10 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
         kind: st >= 4 ? 'mail' : 'leather', legCol: '#5a4636', capeCol: st >= 1 ? col : null, scabbard: false,
         weapon: hasUp('r3a') ? 'sword' : 'spear', blade: riderSaber,
         shield: null,
-        tail: () => {
-          if (hasUp('r3b')) riderJavelins(ctx);
-          if (st >= 2) riderBackShield(ctx, col);
-        },
+        tail: hasUp('r3b') ? () => riderJavelins(ctx) : null,
         head: () => {
           face(ctx, 0, 0);
-          helmet(ctx, 0, 0, st >= 4 ? 'kettle' : 'hood', col);
+          helmet(ctx, 0, st >= 4 ? -1.4 : 0, st >= 4 ? 'kettle' : 'hood', col);
         },
       });
       ctx.restore();
@@ -5274,16 +5271,6 @@ function rigGuard(ctx, col, o) {
   rigFist(ctx, hand, 0, o.armored, skin, elbow);
   o.shield(ctx);
 }
-// Schild auf dem Rücken des Reiters, seitlich gesehen (perspektivisch schmal), mit Riemen über der Brust
-function riderBackShield(ctx, col, viking = false) {
-  ctx.save();
-  ctx.translate(-8.8, -26.8);
-  ctx.rotate(0.18);
-  ctx.scale(0.46, 1);
-  if (viking) ffVikingShield(ctx, 0, 0, 5.6, col);
-  else roundShield(ctx, 0, 0, 5.6, col);
-  ctx.restore();
-}
 // Krummsäbel für Reiter: gebogene Klinge vom Griff zur Spitze, Parierstange
 function riderSaber(ctx, x0, y0, x1, y1) {
   const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy), nx = -dy / L, ny = dx / L;
@@ -6323,8 +6310,8 @@ function ffWolf(ctx, coat, armored, eyes = '#fde047') {
   // buschiger Schwanz: dicke Rute mit zottigen Haarspitzen, hängt im Bogen herab
   ctx.fillStyle = grad(ctx, -27, -12, light, coat);
   ctx.beginPath();
-  ctx.moveTo(-13, -18.4);
-  ctx.quadraticCurveTo(-21, -21.6, -25.6, -16);
+  ctx.moveTo(-13, -17.8);
+  ctx.quadraticCurveTo(-20.4, -20.6, -25.6, -16);
   ctx.lineTo(-27.6, -15.4);
   ctx.lineTo(-26.4, -13.4);
   ctx.lineTo(-28.4, -11.6);
@@ -6334,9 +6321,9 @@ function ffWolf(ctx, coat, armored, eyes = '#fde047') {
   ctx.lineTo(-24.6, -5.2);
   ctx.lineTo(-22.8, -7.4);
   ctx.lineTo(-21, -6.4);
-  ctx.quadraticCurveTo(-21.4, -10.6, -18, -12.4);
-  ctx.lineTo(-16.6, -11.2);
-  ctx.quadraticCurveTo(-15, -12.4, -13, -11.6);
+  ctx.quadraticCurveTo(-21, -11.4, -18.4, -13.6);
+  ctx.lineTo(-16.8, -13.4);
+  ctx.quadraticCurveTo(-15, -14.4, -13, -14.4);
   ctx.closePath();
   ctx.fill();
   outline(ctx, 0.7);
@@ -6515,17 +6502,14 @@ const VK = {
     ctx.translate(0, 6);
     ffWolf(ctx, st >= 5 ? '#e8e4dc' : st >= 4 ? '#3a3632' : '#7c7064', st >= 4, st >= 5 ? '#60a5fa' : '#fde047');
     rigRider(ctx, col, {
-      kind: st >= 4 ? 'mail' : 'leather', legCol: '#5a4a3a', capeCol: null, scabbard: false, skin: skinOf(),
+      kind: st >= 4 ? 'mail' : 'leather', legCol: '#5a4a3a', capeCol: st >= 2 ? col : null, scabbard: false, skin: skinOf(),
       weapon: hasUp('r3a') ? 'sword' : 'spear', spearCol: ffWood(),
       blade: (c, x0, y0, x1, y1) => {
         ffLine(c, x0, y0 + 2, x1 - 1, y1 + 3, 1.4, ffWood());
         ffAxe(c, x1 - 1, y1 + 3, Math.atan2(y1 - y0, x1 - x0), 0.9);
       },
       shield: null,
-      tail: () => {
-        if (hasUp('r3b')) riderJavelins(ctx);
-        if (st >= 2) riderBackShield(ctx, col, true);
-      },
+      tail: hasUp('r3b') ? () => riderJavelins(ctx) : null,
       extra: () => ffFur(ctx, -1, -31.6, 5.6, '#7a5a3a'),
       head: () => {
         face(ctx, 0, 0);
@@ -8037,37 +8021,45 @@ function dkRaptor(ctx, coat, armored) {
     ctx.fill();
   };
   leg(-6, true);
-  // Schwanz
+  // Schwanz, Leib und Hals: erst alle Umrisse, dann alle Füllungen – so bleibt kein Strich, wo sie sich überlappen
+  const tailP = () => {
+    ctx.beginPath();
+    ctx.moveTo(-9, -19);
+    ctx.quadraticCurveTo(-22, -22, -30, -17);
+    ctx.quadraticCurveTo(-20, -14, -9, -12);
+    ctx.closePath();
+  };
+  const bodyP = () => {
+    ctx.beginPath();
+    ctx.ellipse(-1, -16, 12, 6.4, -0.08, 0, Math.PI * 2);
+  };
+  const neckP = () => {
+    ctx.beginPath();
+    ctx.moveTo(7, -20);
+    ctx.quadraticCurveTo(12, -30, 16, -32);
+    ctx.quadraticCurveTo(22, -33, 27, -30);
+    ctx.quadraticCurveTo(28, -28, 26, -27);
+    ctx.lineTo(19, -27);
+    ctx.quadraticCurveTo(15, -22, 11, -12);
+    ctx.closePath();
+  };
+  for (const [path, w] of [[tailP, 1.4], [bodyP, 1.8], [neckP, 1.6]]) {
+    path();
+    outline(ctx, w);
+  }
+  tailP();
   ctx.fillStyle = grad(ctx, -28, -8, light, coat);
-  ctx.beginPath();
-  ctx.moveTo(-9, -19);
-  ctx.quadraticCurveTo(-22, -22, -30, -17);
-  ctx.quadraticCurveTo(-20, -14, -9, -12);
-  ctx.closePath();
   ctx.fill();
-  outline(ctx, 0.7);
-  // Leib
   const g = ctx.createLinearGradient(0, -23, 0, -9);
   g.addColorStop(0, light);
   g.addColorStop(0.5, coat);
   g.addColorStop(1, dark);
+  bodyP();
   ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.ellipse(-1, -16, 12, 6.4, -0.08, 0, Math.PI * 2);
   ctx.fill();
-  outline(ctx, 0.9);
-  // Hals und Kopf
+  neckP();
   ctx.fillStyle = grad(ctx, 6, 24, light, coat);
-  ctx.beginPath();
-  ctx.moveTo(7, -20);
-  ctx.quadraticCurveTo(12, -30, 16, -32);
-  ctx.quadraticCurveTo(22, -33, 27, -30);
-  ctx.quadraticCurveTo(28, -28, 26, -27);
-  ctx.lineTo(19, -27);
-  ctx.quadraticCurveTo(15, -22, 11, -12);
-  ctx.closePath();
   ctx.fill();
-  outline(ctx, 0.8);
   ctx.strokeStyle = '#111';
   ctx.lineWidth = 0.6;
   ctx.beginPath();
@@ -8393,12 +8385,11 @@ const DK = {
     ctx.translate(0, 6);
     dkRaptor(ctx, st >= 4 ? '#7c2d12' : '#65a30d', st >= 4);
     rigRider(ctx, col, {
-      kind: st >= 4 ? 'plate' : 'leather', legCol: DK_SKIN[1], skin: DK_SKIN[0], capeCol: null, scabbard: false, scales: st < 4,
+      kind: st >= 4 ? 'plate' : 'leather', legCol: DK_SKIN[1], skin: DK_SKIN[0], capeCol: st >= 2 ? col : null, scabbard: false, scales: st < 4,
       weapon: hasUp('r3a') ? 'sword' : 'spear', blade: riderSaber,
       shield: null,
       tail: (c) => {
         if (hasUp('r3b')) riderJavelins(c);
-        if (st >= 2) riderBackShield(c, col);
         // Echsenschwanz des Reiters
         c.fillStyle = grad(c, -8, -2, DK_SKIN[0], DK_SKIN[1]);
         c.beginPath();
