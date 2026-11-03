@@ -2719,6 +2719,7 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       const sleeve = st >= 4 ? '#9aa3ad' : col.main;
       rigBody(ctx, col, {
         feet: [[-4.2, 4.6], [4.4, 4.6]], trouser: '#3d4a2e', kind: st >= 4 ? 'mail' : 'leather',
+        backArm: () => rigArm(ctx, [3.9, -19.8], [14.4, -22.4], { sleeve, armored: st >= 4, skin, elbow: [9.2, -21.6], grip: 0 }),
         back: (c) => {
           // Köcher schräg auf dem Rücken, Pfeile ragen über die linke Schulter
           c.save();
@@ -2782,8 +2783,8 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
         ctx.ellipse(AX, H[1] - 2, 3.2, 5, 0.2, 0, Math.PI * 2);
         ctx.fill();
       }
-      // Bogenarm gestreckt, Faust um den Griff
-      rigArm(ctx, [3.9, -19.8], H, { sleeve, armored: st >= 4, skin, elbow: E, grip: 0 });
+      // Bogenarm (hinter dem Körper) gestreckt, Faust um den Griff
+      rigFist(ctx, H, 0, st >= 4, skin, E);
       // Zugarm: Oberarm waagerecht nach hinten, Unterarm zurück zum Kinn, Befiederung vor der Hand
       ctx.fillStyle = col.light;
       ctx.beginPath();
@@ -5021,8 +5022,10 @@ function rigTwoHand(ctx, col, o) {
   if (o.tail) o.tail(ctx);
   rigLeg(ctx, [-2.3, -8], [-2.9, 4.6], { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
   rigLeg(ctx, [2.3, -8], [3.4, 4.6], { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
-  if (o.robe) ffRobe(ctx, 0, col, o.robe);
-  else torso(ctx, 0, 0.2, col, o.kind || 'tunic');
+  if (o.robe) {
+    ffRobe(ctx, 0, col, o.robe);
+    ffBodice(ctx, col, o.robe);
+  } else torso(ctx, 0, 0.2, col, o.kind || 'tunic');
   if (o.body) o.body(ctx);
   // linker Arm vor dem Körper, oben vom Umhang verdeckt
   rigArm(ctx, shF, farH, armOpt(farE));
@@ -5284,11 +5287,15 @@ function rigBody(ctx, col, o) {
   if (o.back) o.back(ctx);
   if (o.cape) cape(ctx, 0, 2, o.cape, 21, 8.5);
   if (o.tail) o.tail(ctx);
+  // rechter Arm liegt hinter dem Körper
+  if (o.backArm) o.backArm(ctx);
   const [fl, fr] = o.feet || [[-2.9, 4.6], [3.4, 4.6]];
   rigLeg(ctx, [-2.3, -8], fl, { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
   rigLeg(ctx, [2.3, -8], fr, { trouser: o.trouser, boot: o.boot, armored: o.armoredLegs, l1: 6.6, l2: 6.4 });
-  if (o.robe) ffRobe(ctx, 0, col, o.robe);
-  else torso(ctx, 0, 0.2, col, o.kind || 'tunic');
+  if (o.robe) {
+    ffRobe(ctx, 0, col, o.robe);
+    ffBodice(ctx, col, o.robe);
+  } else torso(ctx, 0, 0.2, col, o.kind || 'tunic');
   if (o.body) o.body(ctx);
 }
 function rigHeadOn(ctx, draw, neck) {
@@ -6440,6 +6447,8 @@ const VK = {
     const skin = skinOf();
     rigBody(ctx, col, {
       feet: [[-4.6, 4.6], [4.6, 4.6]], trouser: '#4a3f2e', boot: '#4a3828', kind: st >= 4 ? 'mail' : 'leather',
+      // vorderer Arm zeigt zum Ziel, Oberarm hinter dem Körper
+      backArm: () => rigArm(ctx, [3.9, -19.8], [13.4, -22.6], { bare: true, skin, elbow: [8.8, -21.4] }),
       body: (c) => {
         // Gürtel mit Wurfäxten (mehr mit der Entwicklung)
         const n = Math.min(3, 1 + Math.floor(st / 2));
@@ -6465,8 +6474,6 @@ const VK = {
       if (st >= 2) ffHornHelm(ctx, 0, -0.6, false);
       else hair(ctx, 0, 0, '#b07a2a');
     }, skin);
-    // vorderer Arm zeigt zum Ziel
-    rigArm(ctx, [3.9, -19.8], [13.4, -22.6], { bare: true, skin, elbow: [8.8, -21.4] });
   },
   rider(ctx, col) {
     const st = FIGST.stage;
@@ -6995,6 +7002,47 @@ function ffRobe(ctx, x, col, dark = '#1e1030') {
   ctx.quadraticCurveTo(x, 9.4, x + 8.2, 7.4);
   ctx.stroke();
 }
+// Oberteil der Robe für Gelenk-Figuren: Schultern, Brust bis zur Taille, Kragen und Gürtel in Spielerfarbe
+function ffBodice(ctx, col, dark) {
+  ctx.fillStyle = grad(ctx, -7, 7, shade(dark, 0.4), dark);
+  ctx.beginPath();
+  ctx.moveTo(-5.6, -12.6);
+  ctx.quadraticCurveTo(-6.6, -18, -5.6, -21.4);
+  ctx.quadraticCurveTo(-3, -23.4, 0, -23.2);
+  ctx.quadraticCurveTo(3, -23.4, 5.6, -21.4);
+  ctx.quadraticCurveTo(6.6, -18, 5.6, -12.6);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.7);
+  // Falten
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  ctx.lineWidth = 0.4;
+  for (const fx of [-3, 3]) {
+    ctx.beginPath();
+    ctx.moveTo(fx, -20.6);
+    ctx.quadraticCurveTo(fx * 1.1, -17, fx * 0.9, -13.4);
+    ctx.stroke();
+  }
+  // Kragen und Schärpe
+  ctx.fillStyle = col.main;
+  ctx.beginPath();
+  ctx.moveTo(-2.6, -22.8);
+  ctx.lineTo(0, -19.2);
+  ctx.lineTo(2.6, -22.8);
+  ctx.lineTo(1.2, -23.2);
+  ctx.lineTo(0, -21.4);
+  ctx.lineTo(-1.2, -23.2);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.35);
+  ctx.fillRect(-1.2, -19.6, 2.4, 6.4);
+  ctx.fillStyle = '#2a1a10';
+  ctx.fillRect(-5.8, -14.4, 11.6, 1.6);
+  outline(ctx, 0.35);
+  ctx.fillStyle = '#d9ad3c';
+  ctx.fillRect(-0.9, -14.6, 1.8, 2);
+  outline(ctx, 0.3);
+}
 // Kapuze mit glühenden Augen (Kultist, Reiter); mask = Knochenmaske
 function ffHood(ctx, x, y, col, eyes = '#a3e635', mask = false) {
   ctx.fillStyle = grad(ctx, x - 6, x + 6, '#3b2a55', '#140a20');
@@ -7104,7 +7152,7 @@ const WT = {
     const skin = skinOf();
     const big = hasUp('a3a') ? 1.35 : 1;
     const c = hasUp('a3b') ? ['rgba(240,120,255,0.95)', 'rgba(120,0,200,0)'] : ['rgba(170,255,120,0.95)', 'rgba(20,160,60,0)'];
-    rigBody(ctx, col, { robe, feet: [[-2.9, 4.6], [3.6, 4.6]] });
+    rigBody(ctx, col, { robe, feet: [[-2.9, 4.6], [3.6, 4.6]], backArm: () => rigArm(ctx, [3.9, -19.8], [11.2, -26.2], { sleeve: robe, skin, elbow: [9, -20.8], grip: 0 }) });
     // weitere Irrlichter schweben hinter ihr (mehr mit der Entwicklung)
     for (let k = 0; k < Math.min(3, Math.floor((st + 1) / 2)); k++) ffGlow(ctx, -9 + k * 3, -30 - k * 4, 2.2, c[0], c[1]);
     rigArm(ctx, [-3.9, -19.8], [-4.4, -10.2], { sleeve: robe, skin, elbow: [-7, -14.8], grip: 0 });
@@ -7112,7 +7160,6 @@ const WT = {
       face(ctx, 0, 0);
       ffWitchHat(ctx, 0, -1.5, col, 0.85);
     }, skin);
-    rigArm(ctx, [3.9, -19.8], [11.2, -26.2], { sleeve: robe, skin, elbow: [9, -20.8], grip: 0 });
     ffGlow(ctx, 12, -30.2, 5 * big, c[0], c[1]);
     ffGlow(ctx, 12, -30.2, 1.6 * big, 'rgba(255,255,255,0.95)', 'rgba(255,255,255,0)');
   },
@@ -8265,6 +8312,7 @@ const DK = {
     rigBody(ctx, col, {
       feet: [[-3.8, 4.6], [4.2, 4.6]], trouser: DK_SKIN[1], boot: DK_SKIN[1], kind: st >= 4 ? 'mail' : 'leather',
       tail: (c) => dkTail(c, -2, -4, 14),
+      backArm: () => rigArm(ctx, [3.9, -19.8], [11, -19.6], { bare: true, skin, elbow: [7.8, -15], grip: -0.2 }),
     });
     rigArm(ctx, [-3.9, -19.8], [-4.8, -11], { bare: true, skin, elbow: [-8.4, -15.2], grip: 0 });
     rigHeadOn(ctx, () => {
@@ -8276,7 +8324,7 @@ const DK = {
     ffLine(ctx, H[0] - 1, H[1] + 4, H[0] + 0.6, H[1] - 3.4, 1.3, '#5a3a1e');
     ctx.fillStyle = '#3b2a1a';
     ctx.fillRect(H[0] - 0.4, H[1] - 4.6, 2, 1.8);
-    rigArm(ctx, [3.9, -19.8], H, { bare: true, skin, elbow: [7.8, -15], grip: -0.2 });
+    rigFist(ctx, H, -0.2, false, skin, [7.8, -15]);
     const L = hasUp('a3a') ? 1.4 : 1;
     const c = hasUp('a3b') ? ['rgba(120,200,255,0.95)', 'rgba(30,60,255,0)'] : ['rgba(255,190,60,0.95)', 'rgba(230,50,0,0)'];
     ffGlow(ctx, H[0] + 0.8, H[1] - 6, 2.4, c[0], c[1]);
