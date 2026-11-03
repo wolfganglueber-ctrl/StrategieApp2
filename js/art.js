@@ -4866,15 +4866,31 @@ function drawDragon(ctx, col, pal = null) {
   // S-Hals vorn mit Bauchplatten, Kopf vorn oben, Flügel am oberen Rücken nach hinten oben, Schwanz hinten am Boden
   // entlang und hinten hoch zur Pfeilspitze, Stacheln auf Rücken und Schwanz.
   wing(2, -17, [[1, -35], [-10, -43], [-22, -45], [-25, -32], [-14, -20]], true);
-  wing(-1, -17, [[-4, -36], [-16, -44], [-30, -46], [-32, -31], [-20, -16]], false);
+  // Schwanz als gleichmäßig verjüngter Strang entlang einer Mittellinie (keine Verdrehung, Kanten kreuzen sich nicht)
+  const tailPts = (() => {
+    const segs = [[[-7, -5.5], [-16, -2], [-24, 3.4], [-30, 2.2]], [[-30, 2.2], [-37, 1], [-36.4, -9], [-34.4, -16]]];
+    const out = [];
+    segs.forEach((sg, si) => {
+      for (let i = si ? 1 : 0; i <= 14; i++) {
+        const t = i / 14, u = 1 - t;
+        out.push([0, 1].map((k) => u * u * u * sg[0][k] + 3 * u * u * t * sg[1][k] + 3 * u * t * t * sg[2][k] + t * t * t * sg[3][k]));
+      }
+    });
+    return out;
+  })();
   const tailP = () => {
+    const n = tailPts.length, L = [], R = [];
+    for (let i = 0; i < n; i++) {
+      const a = tailPts[Math.max(0, i - 1)], b = tailPts[Math.min(n - 1, i + 1)];
+      const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy) || 1;
+      const w = 3.6 - 2.8 * (i / (n - 1));
+      L.push([tailPts[i][0] - (dy / d) * w, tailPts[i][1] + (dx / d) * w]);
+      R.push([tailPts[i][0] + (dy / d) * w, tailPts[i][1] - (dx / d) * w]);
+    }
     ctx.beginPath();
-    ctx.moveTo(-9, -9);
-    ctx.bezierCurveTo(-18, -4, -24, 5, -31, 3);
-    ctx.bezierCurveTo(-38, 1, -39, -9, -35, -16);
-    ctx.lineTo(-33, -15.4);
-    ctx.bezierCurveTo(-35.6, -9, -34.6, -2, -30, -0.6);
-    ctx.bezierCurveTo(-23, 1, -17, -1, -8, -2);
+    ctx.moveTo(L[0][0], L[0][1]);
+    for (const [x, y] of L.slice(1)) ctx.lineTo(x, y);
+    for (const [x, y] of R.reverse()) ctx.lineTo(x, y);
     ctx.closePath();
   };
   const bodyP = () => {
@@ -4975,6 +4991,8 @@ function drawDragon(ctx, col, pal = null) {
     ctx.closePath();
     ctx.fill();
   }
+  // vorderer Flügel vor dem Körper (setzt am oberen Rücken an, wird nicht verdeckt)
+  wing(-1, -17, [[-4, -36], [-16, -44], [-30, -46], [-32, -31], [-20, -16]], false);
   // Kopf vorn oben am Hals (Kopfzeichnung verschoben)
   ctx.save();
   ctx.translate(-8, 7);
