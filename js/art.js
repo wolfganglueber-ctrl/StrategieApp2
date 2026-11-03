@@ -3405,6 +3405,10 @@ function drawBasilisk(ctx, col, pal = null) {
     for (const [x, y] of R.reverse()) ctx.lineTo(x, y);
     ctx.closePath();
   };
+  // Rumpf-Umriss zuerst, damit am Übergang zum Schwanz kein Strich bleibt
+  ctx.beginPath();
+  ctx.ellipse(-1, -5, 13, 8, -0.15, 0, Math.PI * 2);
+  outline(ctx, 0.9);
   ctx.fillStyle = grad(ctx, -30, -2, scL, sc);
   tailP();
   ctx.fill();
@@ -3473,7 +3477,6 @@ function drawBasilisk(ctx, col, pal = null) {
   ctx.beginPath();
   ctx.ellipse(-1, -5, 13, 8, -0.15, 0, Math.PI * 2);
   ctx.fill();
-  outline(ctx, 0.9);
   // Bauchschuppen
   ctx.fillStyle = belly;
   ctx.beginPath();
