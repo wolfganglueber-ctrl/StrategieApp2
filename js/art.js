@@ -4758,8 +4758,15 @@ function drawCurseTree(ctx, col) {
   // Irrlichter um den Baum
   for (const [x, y, r] of [[-20, -52, 2], [22, -60, 1.6], [-24, -28, 1.4]].slice(0, 1 + Math.min(2, st))) ffGlow(ctx, x, y, r * 1.6, 'rgba(190,255,120,0.9)', 'rgba(20,160,60,0)');
   // hinterer Astarm (rechts, hinter dem Stamm) mit Krallenzweigen
-  branch([[6, -42], [16, -36], [21, -24], [22, -14]], 5, 2, bark[1]);
-  for (const [dx, dy] of [[-1.8, 4.4], [0.4, 5], [2.4, 4]]) branch([[22, -14], [22 + dx, -14 + dy]], 1.2, 0.6, bark[1]);
+  // Wurzelfinger: vier gekrümmte, auslaufende Wurzeln an der Hand
+  const rootHand = (hx, hy, c, dir) => {
+    for (const [dx, dy, bx] of [[-3.6, 7, -2], [-0.8, 8.4, -0.6], [2.2, 7.8, 1], [4.4, 5.8, 2]]) {
+      branch([[hx, hy], [hx + dx * 0.5 * dir + bx * dir, hy + dy * 0.55], [hx + dx * dir, hy + dy]], 2.4, 0.7, c);
+    }
+  };
+  // hinterer Astarm (rechts) wie ein richtiger Arm: Schulter, ein Ellbogen, gebeugt wie der linke
+  branch([[8.4, -42], [16.8, -31], [16.4, -18.4]], 6.4, 4, bark[1]);
+  rootHand(16.4, -18.4, bark[1], 1);
   // Wurzelbeine
   // Beine als dicke Stämme, Knie wie beim Troll nach vorn (rechts) gebeugt, unten in Wurzeln gespreizt
   for (const [x, far] of [[6, true], [-6, false]]) {
@@ -4913,7 +4920,7 @@ function drawCurseTree(ctx, col) {
   // vorderer Astarm (links) wie beim Lehmgolem: setzt seitlich an der Schulter des Stamms an und hängt bis zum Knie herab,
   // ein knorriger Astknoten deckt das Schultergelenk, unten Krallenzweige
   branch([[-8.4, -42], [-14, -31], [-13.4, -19]], 6.4, 4, bark[0]);
-  for (const [dx, dy] of [[-3, 5], [-0.6, 6], [2, 5]]) branch([[-13.4, -19], [-13.4 + dx, -19 + dy]], 1.8, 0.7, bark[0]);
+  rootHand(-13.4, -19, bark[0], 1);
   ctx.fillStyle = barkG(-14, -4);
   ctx.beginPath();
   ctx.ellipse(-8.4, -43, 4.6, 3.8, -0.3, 0, Math.PI * 2);
