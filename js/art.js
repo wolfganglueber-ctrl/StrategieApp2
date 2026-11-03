@@ -2958,115 +2958,71 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       drawCatapult(ctx, col);
       break;
     case 'mage': {
-      cape(ctx, 0, 6, col, 21, 9);
-      // Stab mit Kristall
-      ctx.strokeStyle = 'rgba(20,14,10,0.85)';
-      ctx.lineWidth = 2.6;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(9, 6);
-      ctx.quadraticCurveTo(11, -14, 10, -34);
-      ctx.stroke();
-      ctx.strokeStyle = grad(ctx, 8, 12, '#a87a4c', '#4d3018');
-      ctx.lineWidth = 1.6;
-      ctx.stroke();
-      ctx.strokeStyle = '#6b4a2b';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(10, -33);
-      ctx.quadraticCurveTo(7, -36, 8, -39);
-      ctx.moveTo(10, -33);
-      ctx.quadraticCurveTo(13, -36, 12, -39);
-      ctx.stroke();
-      // Kriegsmagier: Feuerkugel · Heiliger Hüter: goldenes Licht
-      const glow = ctx.createRadialGradient(10, -37, 0.5, 10, -37, hasUp('m3a') ? 11 : 9);
-      glow.addColorStop(0, 'rgba(255,255,255,1)');
-      glow.addColorStop(0.3, hasUp('m3a') ? 'rgba(255,140,40,0.95)' : hasUp('m3b') ? 'rgba(253,224,71,0.95)' : 'rgba(147,220,255,0.95)');
-      glow.addColorStop(1, hasUp('m3a') ? 'rgba(239,68,68,0)' : hasUp('m3b') ? 'rgba(250,204,21,0)' : 'rgba(125,211,252,0)');
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(10, -37, 9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#e0f7ff';
-      ctx.beginPath();
-      ctx.moveTo(10, -40.5);
-      ctx.lineTo(11.6, -37);
-      ctx.lineTo(10, -34);
-      ctx.lineTo(8.4, -37);
-      ctx.closePath();
-      ctx.fill();
-      // Robe
-      ctx.fillStyle = cloth(ctx, -8, 8, col);
-      ctx.beginPath();
-      ctx.moveTo(-8.5, 6);
-      ctx.lineTo(-4.8, -16);
-      ctx.quadraticCurveTo(0, -18.5, 4.8, -16);
-      ctx.lineTo(8.5, 6);
-      ctx.quadraticCurveTo(0, 8.5, -8.5, 6);
-      ctx.closePath();
-      ctx.fill();
-      outline(ctx, 0.9);
-      ctx.strokeStyle = '#e9c45a';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, -16.5);
-      ctx.lineTo(0, 6.5);
-      ctx.moveTo(-8.2, 5.2);
-      ctx.quadraticCurveTo(0, 7.6, 8.2, 5.2);
-      ctx.stroke();
-      ctx.fillStyle = '#3b2616';
-      ctx.fillRect(-5.2, -7, 10.4, 1.8);
-      ctx.fillStyle = '#7a4b22';
-      ctx.fillRect(-4.5, -5.3, 2.6, 3);
-      // Arm zum Stab
-      ctx.strokeStyle = 'rgba(20,14,10,0.85)';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(3.5, -14);
-      ctx.lineTo(9.5, -12);
-      ctx.stroke();
-      ctx.strokeStyle = col.main;
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.fillStyle = skinOf();
-      ctx.beginPath();
-      ctx.arc(10, -12.2, 1.6, 0, Math.PI * 2);
-      ctx.fill();
-      // Kopf mit langem Bart
-      face(ctx, 0, -20.5);
-      ctx.fillStyle = grad(ctx, -4, 4, '#ffffff', '#c9ccd1');
-      ctx.beginPath();
-      ctx.moveTo(-3.8, -20);
-      ctx.quadraticCurveTo(-3, -10, 0, -8);
-      ctx.quadraticCurveTo(3, -10, 3.8, -20);
-      ctx.quadraticCurveTo(0, -17.5, -3.8, -20);
-      ctx.fill();
-      outline(ctx, 0.5);
-      // Spitzhut mit Hutband und Sternen
-      ctx.fillStyle = cloth(ctx, -7, 7, col);
-      ctx.beginPath();
-      ctx.moveTo(-7.5, -23);
-      ctx.quadraticCurveTo(0, -25.5, 7.5, -23);
-      ctx.lineTo(2.5, -28);
-      ctx.quadraticCurveTo(1.5, -37, -4.5, -42);
-      ctx.quadraticCurveTo(-2, -34, -3, -28);
-      ctx.closePath();
-      ctx.fill();
-      outline(ctx, 0.8);
-      ctx.fillStyle = '#e9c45a';
-      ctx.beginPath();
-      ctx.moveTo(-3.3, -26.5);
-      ctx.quadraticCurveTo(0, -27.6, 3, -26.6);
-      ctx.lineTo(2.6, -25.2);
-      ctx.quadraticCurveTo(0, -26, -3.5, -25.2);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = '#fff3b0';
-      for (const [sx, sy, r] of [[-1, -31, 1], [1, -34.5, 0.7], [-2.6, -37, 0.6]]) {
-        ctx.beginPath();
-        ctx.arc(sx, sy, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      // Magier: Robe in Spielerfarbe mit Goldsaum, Stab mit Kristall (Kriegsmagier Feuer, Heiliger Hüter Gold), langer Bart, Spitzhut
+      const sp = hasUp('m3a') ? ['rgba(255,140,40,0.95)', 'rgba(239,68,68,0)'] : hasUp('m3b') ? ['rgba(253,224,71,0.95)', 'rgba(250,204,21,0)'] : ['rgba(147,220,255,0.95)', 'rgba(125,211,252,0)'];
+      rigMage(ctx, col, {
+        robe: col.main, spell: sp,
+        staffTop: (c, x, y) => {
+          c.strokeStyle = '#6b4a2b';
+          c.lineWidth = 1;
+          c.beginPath();
+          c.moveTo(x, y + 1);
+          c.quadraticCurveTo(x - 3, y - 2, x - 2, y - 5);
+          c.moveTo(x, y + 1);
+          c.quadraticCurveTo(x + 3, y - 2, x + 2, y - 5);
+          c.stroke();
+          ffGlow(c, x, y - 3, hasUp('m3a') ? 10 : 8, sp[0], sp[1]);
+          c.fillStyle = '#e0f7ff';
+          c.beginPath();
+          c.moveTo(x, y - 6.5);
+          c.lineTo(x + 1.6, y - 3);
+          c.lineTo(x, y);
+          c.lineTo(x - 1.6, y - 3);
+          c.closePath();
+          c.fill();
+          outline(c, 0.3);
+        },
+        head: () => {
+          face(ctx, 0, 0);
+          ctx.save();
+          ctx.translate(0, 20.5);
+          ctx.fillStyle = grad(ctx, -4, 4, '#ffffff', '#c9ccd1');
+          ctx.beginPath();
+          ctx.moveTo(-3.8, -20);
+          ctx.quadraticCurveTo(-3, -10, 0, -8);
+          ctx.quadraticCurveTo(3, -10, 3.8, -20);
+          ctx.quadraticCurveTo(0, -17.5, -3.8, -20);
+          ctx.fill();
+          outline(ctx, 0.5);
+          // Spitzhut mit Hutband und Sternen
+          ctx.fillStyle = cloth(ctx, -7, 7, col);
+          ctx.beginPath();
+          ctx.moveTo(-7.5, -23);
+          ctx.quadraticCurveTo(0, -25.5, 7.5, -23);
+          ctx.lineTo(2.5, -28);
+          ctx.quadraticCurveTo(1.5, -37, -4.5, -42);
+          ctx.quadraticCurveTo(-2, -34, -3, -28);
+          ctx.closePath();
+          ctx.fill();
+          outline(ctx, 0.8);
+          ctx.fillStyle = '#e9c45a';
+          ctx.beginPath();
+          ctx.moveTo(-3.3, -26.5);
+          ctx.quadraticCurveTo(0, -27.6, 3, -26.6);
+          ctx.lineTo(2.6, -25.2);
+          ctx.quadraticCurveTo(0, -26, -3.5, -25.2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = '#fff3b0';
+          for (const [sx, sy, r] of [[-1, -31, 1], [1, -34.5, 0.7], [-2.6, -37, 0.6]]) {
+            ctx.beginPath();
+            ctx.arc(sx, sy, r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          ctx.restore();
+        },
+      });
       break;
     }
     case 'troll':
@@ -5302,6 +5258,31 @@ function rigHeadOn(ctx, draw, neck) {
   rigNeck(ctx, 0, -23.2, -21, neck);
   rigHead(ctx, 0, -25.6, 0.86, draw);
 }
+// Magier mit Gelenken (Vorbild: Zauberer mit Stab): Stab senkrecht neben dem Körper in der rechten Faust (Arm hinter dem Körper),
+// linker Arm angewinkelt vor der Brust, Hand erhoben mit Zauberlicht.
+// o: { robe, skin, tail, body(ctx), shoulders(ctx), head(ctx), haft, staffTop(ctx, x, y), spell: [innen, außen], sleeve }
+function rigMage(ctx, col, o) {
+  const skin = o.skin || skinOf();
+  const sleeve = o.sleeve || o.robe;
+  const SX = 10.4, H = [SX, -15.6], E = [5.6, -13.8];
+  rigBody(ctx, col, {
+    robe: o.robe, tail: o.tail, feet: [[-2.9, 4.6], [3.6, 4.6]], body: o.body,
+    backArm: () => rigArm(ctx, [3.9, -19.8], H, { sleeve, skin, elbow: E, grip: 0 }),
+  });
+  if (o.shoulders) o.shoulders(ctx);
+  // Stab vom Boden bis über den Kopf
+  ffLine(ctx, SX + 0.4, 5.6, SX, -36, 1.7, o.haft || ffWood());
+  o.staffTop(ctx, SX, -36);
+  rigFist(ctx, H, 0, false, skin, E);
+  rigHeadOn(ctx, () => o.head(ctx), skin);
+  // linker Arm: Ellbogen unten am Körper, Hand erhoben vor der Schulter, darüber das Zauberlicht
+  const LH = [-6.4, -22.2];
+  rigArm(ctx, [-3.9, -19.8], LH, { sleeve, skin, elbow: [-7.8, -14.8] });
+  if (o.spell) {
+    ffGlow(ctx, LH[0] - 0.4, LH[1] - 3.4, 3.4, o.spell[0], o.spell[1]);
+    ffGlow(ctx, LH[0] - 0.4, LH[1] - 3.4, 1.1, 'rgba(255,255,255,0.95)', 'rgba(255,255,255,0)');
+  }
+}
 // Wächter mit Gelenken: Speer senkrecht neben dem Körper (Fuß am Boden), rechter Arm hinter dem Körper, Unterarm nach vorn zur Faust;
 // linker Arm trägt den Schild vor dem Körper (vom Schild verdeckt). Grundgerüst wie rigTwoHand (gleiche Schultern, Beine, Kopf).
 // o: { kind, trouser, boot, skin, sleeve, bare, armored, armoredLegs, cape, tail, body, head, spearTop, spear(ctx, x, yTop), shield(ctx) }
@@ -6812,41 +6793,46 @@ const VK = {
     ffVikingShield(ctx, 4, 0, 4.2, col);
   },
   mage(ctx, col) {
-    // Runenmeister: alter Seher im Fellmantel mit Runenstab
+    // Runenmeister: alter Seher im Fellmantel, Runenstab, Runenlicht in der erhobenen Hand
     const st = FIGST.stage;
-    ctx.fillStyle = cloth(ctx, -8, 8, col);
-    ctx.beginPath();
-    ctx.moveTo(-5.5, -15);
-    ctx.lineTo(-8, 8);
-    ctx.quadraticCurveTo(0, 10, 8, 8);
-    ctx.lineTo(5.5, -15);
-    ctx.closePath();
-    ctx.fill();
-    outline(ctx, 0.7);
-    ffFur(ctx, 0, -14.5, 7.5, st >= 2 ? '#d6d3d1' : '#7a5a3a');
-    // Stab mit Runensteinen
-    ffLine(ctx, 9, 7, 9, -38, 1.8, ffWood());
     const rc = hasUp('m3a') ? '#f97316' : '#38bdf8';
-    for (let k = 0; k < 3; k++) {
-      ctx.fillStyle = '#9ca3af';
-      ctx.fillRect(7.3, -36 + k * 4, 3.4, 3);
-      outline(ctx, 0.4);
-      ctx.fillStyle = rc;
-      ctx.fillRect(8.6, -35.5 + k * 4, 0.8, 2);
-    }
-    if (st >= 1) ffGlow(ctx, 9, -40, st >= 5 ? 6 : 4.5, hasUp('m3a') ? 'rgba(255,140,40,0.9)' : 'rgba(120,200,255,0.9)', 'rgba(0,80,200,0)');
-    arm(ctx, 4.5, -14, 8.5, -22, col.main);
-    face(ctx, 0, -20.5, '#e5e7eb');
-    hair(ctx, 0, -20.5, '#d1d5db');
+    const sp = hasUp('m3a') ? ['rgba(255,140,40,0.9)', 'rgba(220,60,0,0)'] : ['rgba(120,200,255,0.9)', 'rgba(0,80,200,0)'];
     if (hasUp('m3b')) {
-      // Runenkreis
+      // Runenkreis am Boden
       ctx.strokeStyle = 'rgba(125,211,252,0.8)';
       ctx.lineWidth = 0.8;
       ctx.beginPath();
-      ctx.ellipse(0, 7, 13, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 5, 13, 4, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
-    if (st >= 4) ffRaven(ctx, -6, -18);
+    rigMage(ctx, col, {
+      robe: '#4a3a2e', sleeve: '#5a4636', spell: sp,
+      shoulders: () => ffFur(ctx, 0, -20.4, 7.5, st >= 2 ? '#d6d3d1' : '#7a5a3a'),
+      staffTop: (c, x, y) => {
+        for (let k = 0; k < 3; k++) {
+          c.fillStyle = '#9ca3af';
+          c.fillRect(x - 1.7, y + k * 4 - 2, 3.4, 3);
+          outline(c, 0.4);
+          c.fillStyle = rc;
+          c.fillRect(x - 0.4, y + k * 4 - 1.5, 0.8, 2);
+        }
+        if (st >= 1) ffGlow(c, x, y - 4, st >= 5 ? 6 : 4.5, sp[0], sp[1]);
+      },
+      head: () => {
+        face(ctx, 0, 0, '#e5e7eb');
+        hair(ctx, 0, 0, '#d1d5db');
+        // langer grauer Bart
+        ctx.fillStyle = grad(ctx, -4, 4, '#f3f4f6', '#9ca3af');
+        ctx.beginPath();
+        ctx.moveTo(-3.6, 0.6);
+        ctx.quadraticCurveTo(-2.6, 9, 0.4, 10.4);
+        ctx.quadraticCurveTo(3, 8.6, 3.8, 0.6);
+        ctx.quadraticCurveTo(0, 2.6, -3.6, 0.6);
+        ctx.fill();
+        outline(ctx, 0.45);
+      },
+    });
+    if (st >= 4) ffRaven(ctx, 11.2, -27.4);
   },
   basilisk(ctx, col) {
     // Fenriswolf: riesiger Wolf mit gesprengter Kette
@@ -7678,25 +7664,29 @@ const WT = {
     ffSkull(ctx, -2, -6, 2.6, '#a3e635');
   },
   mage(ctx, col) {
-    // Hexenmeister: dunkles Gewand, Hexenhut, Totenkopfstab mit grüner Flamme
+    // Hexenmeister: dunkles Gewand, Hexenhut, Totenkopfstab mit grüner Flamme, Zauberlicht in der erhobenen Hand
     const st = FIGST.stage;
-    ffRobe(ctx, 0, col, '#1a0f28');
-    ffLine(ctx, 9, 7, 9, -36, 1.6, '#3b2a1a');
-    ffSkull(ctx, 9, -38, 2.8, st >= 1 ? '#a3e635' : null);
     const fl = hasUp('m3a') ? ['rgba(255,140,40,0.95)', 'rgba(220,40,0,0)'] : ['rgba(170,255,120,0.95)', 'rgba(20,160,60,0)'];
-    ffGlow(ctx, 9, -43, st >= 5 ? 6.5 : 4.5, fl[0], fl[1]);
-    arm(ctx, 4.5, -14, 8.5, -22, '#1a0f28');
-    face(ctx, 0, -20.5, '#d1d5db');
-    ffWitchHat(ctx, 0, -22.5, col);
-    if (st >= 2) for (const sx of [-3, 0, 3]) ffSkull(ctx, sx, -4, 1.1);
     if (hasUp('m3b')) {
       ctx.strokeStyle = 'rgba(216,180,254,0.85)';
       ctx.lineWidth = 0.9;
       ctx.beginPath();
-      ctx.ellipse(0, 7, 13, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 5, 13, 4, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
-    if (st >= 4) ffRaven(ctx, -6, -18);
+    rigMage(ctx, col, {
+      robe: '#1a0f28', haft: '#3b2a1a', spell: fl,
+      body: st >= 2 ? (c) => { for (const sx of [-3, 0, 3]) ffSkull(c, sx, -9.6, 1.1); } : null,
+      staffTop: (c, x, y) => {
+        ffSkull(c, x, y - 2, 2.8, st >= 1 ? '#a3e635' : null);
+        ffGlow(c, x, y - 7, st >= 5 ? 6.5 : 4.5, fl[0], fl[1]);
+      },
+      head: () => {
+        face(ctx, 0, 0, '#d1d5db');
+        ffWitchHat(ctx, 0, -2, col);
+      },
+    });
+    if (st >= 4) ffRaven(ctx, 11.2, -27.4);
   },
   basilisk(ctx, col) {
     // Riesenkröte mit Warzen und Giftzunge
@@ -8437,39 +8427,58 @@ const DK = {
     drawTrebuchet(ctx, col, ['#3a302c', '#171210', '#7a2e12']);
   },
   mage(ctx, col) {
-    // Drachenpriester: Robe, Drachenschädel-Kopfputz, Flammenstab
+    // Drachenpriester: Robe, Drachenschädel-Kopfputz, Flammenstab, Flamme in der erhobenen Hand
     const st = FIGST.stage;
-    dkTail(ctx, -2, -1, 12);
-    ffRobe(ctx, 0, col, st >= 4 ? '#3b0d0d' : '#7c2d12');
-    ffLine(ctx, 9, 7, 9, -36, 1.6, '#3b2a1a');
+    const robe = st >= 4 ? '#3b0d0d' : '#7c2d12';
     const fl = hasUp('m3a') ? ['rgba(255,120,40,0.95)', 'rgba(220,40,0,0)'] : ['rgba(255,210,80,0.95)', 'rgba(230,120,0,0)'];
-    ffGlow(ctx, 9, -39, st >= 5 ? 6.5 : 4.5, fl[0], fl[1]);
-    arm(ctx, 4.5, -14, 8.5, -22, st >= 4 ? '#3b0d0d' : '#7c2d12');
-    dkHead(ctx, 0, -21);
-    // Drachenschädel als Kopfputz
-    ctx.fillStyle = grad(ctx, -6, 6, '#f5f0e2', '#b9b09a');
-    ctx.beginPath();
-    ctx.moveTo(-5, -24);
-    ctx.quadraticCurveTo(-2, -30, 4, -28);
-    ctx.lineTo(8, -26);
-    ctx.lineTo(3, -24.5);
-    ctx.closePath();
-    ctx.fill();
-    outline(ctx, 0.5);
-    if (st >= 4) {
-      ctx.strokeStyle = '#facc15';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.arc(0, -14, 5, 0.2, Math.PI - 0.2);
-      ctx.stroke();
-    }
     if (hasUp('m3b')) {
       ctx.strokeStyle = 'rgba(253,186,116,0.85)';
       ctx.lineWidth = 0.9;
       ctx.beginPath();
-      ctx.ellipse(0, 7, 13, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 5, 13, 4, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
+    rigMage(ctx, col, {
+      robe, haft: '#3b2a1a', skin: DK_SKIN[0], spell: fl,
+      tail: (c) => dkTail(c, -2, -4, 12),
+      body: st >= 4 ? (c) => {
+        // goldene Kette
+        c.strokeStyle = '#facc15';
+        c.lineWidth = 1.1;
+        c.beginPath();
+        c.arc(0, -20, 4.6, 0.3, Math.PI - 0.3);
+        c.stroke();
+      } : null,
+      staffTop: (c, x, y) => {
+        // Drachenklaue hält die Flamme
+        c.strokeStyle = '#d6d3d1';
+        c.lineWidth = 0.9;
+        c.beginPath();
+        for (const dx of [-2, 0, 2]) {
+          c.moveTo(x, y + 1);
+          c.quadraticCurveTo(x + dx * 1.2, y - 1.5, x + dx * 0.6, y - 3.6);
+        }
+        c.stroke();
+        ffGlow(c, x, y - 3, st >= 5 ? 6.5 : 4.5, fl[0], fl[1]);
+      },
+      head: () => {
+        dkHead(ctx, 0, 0);
+        // Drachenschädel als Kopfputz
+        ctx.fillStyle = grad(ctx, -6, 6, '#f5f0e2', '#b9b09a');
+        ctx.beginPath();
+        ctx.moveTo(-5, -3);
+        ctx.quadraticCurveTo(-2, -9, 4, -7);
+        ctx.lineTo(8, -5);
+        ctx.lineTo(3, -3.5);
+        ctx.closePath();
+        ctx.fill();
+        outline(ctx, 0.5);
+        ctx.fillStyle = '#1c1917';
+        ctx.beginPath();
+        ctx.arc(3, -5.6, 0.7, 0, Math.PI * 2);
+        ctx.fill();
+      },
+    });
   },
   basilisk(ctx, col) {
     // Salamander: glühende Feuerechse
