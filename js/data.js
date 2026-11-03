@@ -549,12 +549,10 @@ export function slotsUsed(city) {
 // Jede Hauptstadt startet mit Bauernhof, Holzfäller und Mine
 export const START_BUILDINGS = ['farm', 'lumber', 'mine'];
 // Startoption „Siedlungen selbst gründen“: nur Hauptstädte auf der Karte, neue Siedlungen kosten je 5 Grundrohstoffe
-// (+1 je weitere eigene Siedlung) und entstehen FOUND_GAP Felder von einer eigenen Stadt: bei Gebietsradius 2 berühren sich
-// die Gebiete dann ohne Überlappung, auf den festen Wabenplätzen ergibt sich eine lückenlose Wabe
+// (+1 je weitere eigene Siedlung) und entstehen im Kreis mit Abstand FOUND_GAP um eine eigene Stadt: bei Gebietsradius 2
+// berühren sich die Gebiete dann ohne Überlappung (jedes Feld gehört nur einer Siedlung)
 export const FOUND_COST = { food: 5, wood: 5, ore: 5 };
 export const FOUND_GAP = 5;
-// Wabenplätze (axial dq, dr): die 6 Nachbarn in einer lückenlosen Wabe aus Gebieten mit Radius 2 (19 Felder je Gebiet)
-export const FOUND_LATTICE = [[3, 2], [-2, 5], [-5, 3], [-3, -2], [2, -5], [5, -3]];
 // Versorgung: wie viele Einheiten eine Stadt unterhält (bewusst knapp: wenige, aber wertvolle Einheiten)
 export function citySupply(city) {
   return [0, 3, 5, 7, 9, 11][city.level] ?? 11;

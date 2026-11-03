@@ -1961,7 +1961,7 @@ function renderCityPanel(panel, ci, occ) {
       list.append(el('div', { class: 'build-row tower-row' },
         el('span', { class: 'bicon' }, '🏘️'),
         el('div', { class: 'binfo' }, el('b', {}, 'Siedlung gründen'),
-          el('span', { class: 'muted' }, spots ? `${FOUND_GAP} Felder von einer eigenen Stadt (${FOUND_GAP - 1} Felder dazwischen), Gebiete grenzen lückenlos aneinander, nicht auf Berg oder Wasser. Jede Siedlung macht die nächste um 1 teurer. (${spots} Felder möglich)` : 'Gerade kein freies Feld am Rand des Reichs')),
+          el('span', { class: 'muted' }, spots ? `${FOUND_GAP} Felder von einer eigenen Stadt (${FOUND_GAP - 1} Felder dazwischen), Gebiete überlappen nie, nicht auf Berg oder Wasser. Jede Siedlung macht die nächste um 1 teurer. (${spots} Felder möglich)` : 'Gerade kein freies Feld am Rand des Reichs')),
         el('button', {
           class: 'btn small', disabled: !spots || !canAfford(p.res, foundCost(S, p.id)),
           onclick: () => { clearSel(); sel.found = ci; refresh(); },
