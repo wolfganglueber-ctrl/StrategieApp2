@@ -1414,7 +1414,7 @@ function cape(ctx, x, y, col, len = 22, wide = 9) {
 }
 
 // Oberkörper: 'tunic' (Stoff), 'leather', 'mail' (Kettenhemd), 'plate' (Plattenpanzer); dazu Wappenrock
-function torso(ctx, x, y, col, kind = 'tunic') {
+function torso(ctx, x, y, col, kind = 'tunic', shoulders = [-1, 1]) {
   const top = y - 22, waist = y - 11;
   const body = () => {
     ctx.beginPath();
@@ -1544,9 +1544,9 @@ function torso(ctx, x, y, col, kind = 'tunic') {
   ctx.fillRect(x - 5.7, waist - 1, 11.4, 2);
   ctx.fillStyle = '#e9c45a';
   ctx.fillRect(x - 1, waist - 1.2, 2, 2.4);
-  // Schulterstücke
+  // Schulterstücke (shoulders: welche Seiten; beim Reiter nur die vordere, sonst ragt hinten ein Knubbel heraus)
   if (kind === 'plate' || kind === 'mail') {
-    for (const sx of [-1, 1]) {
+    for (const sx of shoulders) {
       ctx.fillStyle = steel(ctx, x + sx * 6 - 3, x + sx * 6 + 3, top, top + 4);
       ctx.beginPath();
       ctx.ellipse(x + sx * 5.6, top + 2.2, 3, 2.4, 0, 0, Math.PI * 2);
@@ -2847,7 +2847,7 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
       ctx.translate(0, 4);
       griffinMount(ctx, col, st);
       rigRider(ctx, col, {
-        armored: st >= 2, kind: st >= 2 ? 'plate' : 'mail', legCol: '#6b4a2e', sign: 'lion', capeCol: col,
+        armored: st >= 2, kind: st >= 2 ? 'plate' : 'mail', legCol: '#6b4a2e', sign: 'lion', capeCol: col, shield: null,
         weapon: 'lance', lanceLen: 44, lanceCol: st >= 4 ? '#3b3b44' : '#f1e3c4', lanceStripe: col.main, pennant: col,
         head: () => {
           face(ctx, 0, 0);
@@ -5290,8 +5290,9 @@ function rigRider(ctx, col, o) {
   // Bein im Steigbügel: Knie nach vorn
   rigLeg(ctx, [-0.6, -21.5], [1.6, -8.4], { l1: 7.4, l2: 6.6, armored: o.armored, trouser: o.legCol, boot: o.legCol });
   // hinterer Arm (Zügelhand) hinter dem Schild
-  rigArm(ctx, [-4.4, -31], [-3, -24.6], { sleeve, armored: o.armored, skin, bend: -1 });
-  torso(ctx, -1, -10.5, col, o.kind);
+  // Schulter tiefer im Rumpf, damit oben am Rücken kein Knubbel herausragt
+  rigArm(ctx, [-3, -28.8], [-3, -24.6], { sleeve, armored: o.armored, skin, bend: -1 });
+  torso(ctx, -1, -10.5, col, o.kind, [1]);
   if (o.scales) fdScales(ctx, -1, -27, 5, 4.5, 'rgba(20,40,5,0.35)', 0.8);
   if (o.sign) fdTabard(ctx, -1, o.tabardCol || col, o.sign);
   if (o.scabbard !== false) fdScabbard(ctx, -3.5, -21.5, 11);
@@ -7588,7 +7589,8 @@ const WT = {
     }
     ctx.fillStyle = '#5a3a1e';
     ctx.fillRect(-14.2, -4.8, 1.6, 5.6);
-    if (hasUp('f3a') || st >= 5) ffFlames(ctx, [[-26, -2], [-27, 2]], '#a3e635', 3.4);
+    // grüne Flammen auf den Borsten
+    if (hasUp('f3a') || st >= 5) ffFlames(ctx, [[-18.6, -3.6], [-21.6, -2.8], [-23.4, 0.4]], '#a3e635', 3.2);
     if (hasUp('f3b')) {
       ctx.fillStyle = steel(ctx, -14, -9, -6, 2);
       ctx.fillRect(-12, -5.6, 4, 5.4);
