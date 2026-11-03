@@ -6447,8 +6447,8 @@ const VK = {
     const skin = skinOf();
     rigBody(ctx, col, {
       feet: [[-4.6, 4.6], [4.6, 4.6]], trouser: '#4a3f2e', boot: '#4a3828', kind: st >= 4 ? 'mail' : 'leather',
-      // vorderer Arm zeigt zum Ziel, Oberarm hinter dem Körper
-      backArm: () => rigArm(ctx, [3.9, -19.8], [13.4, -22.6], { bare: true, skin, elbow: [8.8, -21.4] }),
+      // vorderer Arm angewinkelt zum Ziel (Ellbogen unten, Faust vorn oben), Oberarm hinter dem Körper
+      backArm: () => rigArm(ctx, [3.9, -19.8], [14.2, -23.4], { bare: true, skin, elbow: [10.2, -15.8] }),
       body: (c) => {
         // Gürtel mit Wurfäxten (mehr mit der Entwicklung)
         const n = Math.min(3, 1 + Math.floor(st / 2));
