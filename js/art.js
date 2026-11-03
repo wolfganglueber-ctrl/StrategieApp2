@@ -6900,46 +6900,76 @@ function ffWolf(ctx, coat, armored, eyes = '#fde047') {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   const dark = shade(coat, -0.45), light = shade(coat, 0.35);
-  // Beine nach Wolfgangs Wolf-Vorbild (blaue Linien): Vorderbein fast gerade, leicht nach vorn geneigt;
-  // Hinterbein mit kräftigem Oberschenkel, Sprunggelenk spitz nach hinten, Mittelfuß senkrecht, Pfote nach vorn
-  const hindLeg = (dx, c) => {
-    ctx.save();
-    ctx.translate(dx, 0);
-    ctx.fillStyle = c;
-    ctx.beginPath();
-    ctx.moveTo(-6.3, -13.2);
-    ctx.quadraticCurveTo(-3.2, -9.2, -6.4, -5);
-    ctx.quadraticCurveTo(-9, -2.6, -10.6, -1);
-    ctx.lineTo(-10.6, 2.2);
-    ctx.quadraticCurveTo(-8.4, 2.4, -7.8, 3.2);
-    ctx.quadraticCurveTo(-7.6, 4, -8.8, 4);
-    ctx.lineTo(-12.8, 4);
-    ctx.quadraticCurveTo(-13.2, 2.6, -12.8, 0.6);
-    ctx.lineTo(-13.8, -2.6);
-    ctx.quadraticCurveTo(-11, -5.6, -11.6, -10);
-    ctx.quadraticCurveTo(-10, -14.6, -6.3, -13.2);
+  const bodyPath = () => {
+    ctx.moveTo(-14, -14);
+    ctx.quadraticCurveTo(-14, -21, -6, -20.5);
+    ctx.quadraticCurveTo(4, -22, 11, -21);
+    ctx.quadraticCurveTo(15, -18, 13, -11);
+    ctx.quadraticCurveTo(9, -7, 3, -8.5);
+    ctx.lineTo(-8, -8.5);
+    ctx.quadraticCurveTo(-14, -9, -14, -14);
     ctx.closePath();
-    ctx.fill();
-    outline(ctx, 0.7);
+  };
+  // Umriss nur außerhalb des Rumpfs (Teile, die in den Körper übergehen, ohne Trennstrich)
+  const outlineOutside = (path, w) => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-60, -60, 120, 120);
+    bodyPath();
+    ctx.clip('evenodd');
+    ctx.beginPath();
+    path();
+    outline(ctx, w);
     ctx.restore();
   };
-  const foreLeg = (dx, c) => {
+  // Beine nach Wolfgangs Wolf-Vorbild (blaue Linien): Vorderbein fast gerade, leicht nach vorn geneigt;
+  // Hinterbein mit kräftigem Oberschenkel, Sprunggelenk spitz nach hinten, Mittelfuß senkrecht, Pfote nach vorn
+  const hindLeg = (dx, c, near) => {
     ctx.save();
     ctx.translate(dx, 0);
+    const path = () => {
+      ctx.moveTo(-6.3, -13.2);
+      ctx.quadraticCurveTo(-3.2, -9.2, -6.4, -5);
+      ctx.quadraticCurveTo(-9, -2.6, -10.6, -1);
+      ctx.lineTo(-10.6, 2.2);
+      ctx.quadraticCurveTo(-8.4, 2.4, -7.8, 3.2);
+      ctx.quadraticCurveTo(-7.6, 4, -8.8, 4);
+      ctx.lineTo(-12.8, 4);
+      ctx.quadraticCurveTo(-13.2, 2.6, -12.8, 0.6);
+      ctx.lineTo(-13.8, -2.6);
+      ctx.quadraticCurveTo(-11, -5.6, -11.6, -10);
+      ctx.quadraticCurveTo(-10, -14.6, -6.3, -13.2);
+      ctx.closePath();
+    };
     ctx.fillStyle = c;
     ctx.beginPath();
-    ctx.moveTo(5.6, -12);
-    ctx.lineTo(7.6, -0.4);
-    ctx.lineTo(7.8, 4);
-    ctx.lineTo(11.4, 4);
-    ctx.quadraticCurveTo(12, 3.2, 11, 2.8);
-    ctx.lineTo(10, 2.6);
-    ctx.lineTo(10.2, -0.4);
-    ctx.lineTo(10, -12);
-    ctx.quadraticCurveTo(8, -14.6, 5.6, -12);
-    ctx.closePath();
+    path();
     ctx.fill();
-    outline(ctx, 0.7);
+    if (near) outlineOutside(path, 0.7);
+    else outline(ctx, 0.7);
+    ctx.restore();
+  };
+  const foreLeg = (dx, c, near) => {
+    ctx.save();
+    ctx.translate(dx, 0);
+    const path = () => {
+      ctx.moveTo(5.6, -12);
+      ctx.lineTo(7.6, -0.4);
+      ctx.lineTo(7.8, 4);
+      ctx.lineTo(11.4, 4);
+      ctx.quadraticCurveTo(12, 3.2, 11, 2.8);
+      ctx.lineTo(10, 2.6);
+      ctx.lineTo(10.2, -0.4);
+      ctx.lineTo(10, -12);
+      ctx.quadraticCurveTo(8, -14.6, 5.6, -12);
+      ctx.closePath();
+    };
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    path();
+    ctx.fill();
+    if (near) outlineOutside(path, 0.7);
+    else outline(ctx, 0.7);
     ctx.restore();
   };
   hindLeg(2.6, shade(coat, -0.5));
@@ -6982,32 +7012,28 @@ function ffWolf(ctx, coat, armored, eyes = '#fde047') {
   g.addColorStop(1, dark);
   ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.moveTo(-14, -14);
-  ctx.quadraticCurveTo(-14, -21, -6, -20.5);
-  ctx.quadraticCurveTo(4, -22, 11, -21);
-  ctx.quadraticCurveTo(15, -18, 13, -11);
-  ctx.quadraticCurveTo(9, -7, 3, -8.5);
-  ctx.lineTo(-8, -8.5);
-  ctx.quadraticCurveTo(-14, -9, -14, -14);
-  ctx.closePath();
+  bodyPath();
   ctx.fill();
   outline(ctx, 0.9);
   // Halskrause und Kopf
   ctx.fillStyle = grad(ctx, 8, 24, light, coat);
+  const headPath = () => {
+    ctx.moveTo(8, -20);
+    ctx.quadraticCurveTo(11, -29, 16, -30);
+    ctx.lineTo(15.5, -34.5);
+    ctx.lineTo(18.2, -31);
+    ctx.lineTo(20, -35);
+    ctx.lineTo(20.8, -30);
+    ctx.quadraticCurveTo(23, -28.5, 27, -27);
+    ctx.quadraticCurveTo(28, -25.5, 26.5, -24.5);
+    ctx.lineTo(21, -23.5);
+    ctx.quadraticCurveTo(17, -20, 14, -12);
+    ctx.closePath();
+  };
   ctx.beginPath();
-  ctx.moveTo(8, -20);
-  ctx.quadraticCurveTo(11, -29, 16, -30);
-  ctx.lineTo(15.5, -34.5);
-  ctx.lineTo(18.2, -31);
-  ctx.lineTo(20, -35);
-  ctx.lineTo(20.8, -30);
-  ctx.quadraticCurveTo(23, -28.5, 27, -27);
-  ctx.quadraticCurveTo(28, -25.5, 26.5, -24.5);
-  ctx.lineTo(21, -23.5);
-  ctx.quadraticCurveTo(17, -20, 14, -12);
-  ctx.closePath();
+  headPath();
   ctx.fill();
-  outline(ctx, 0.8);
+  outlineOutside(headPath, 0.8);
   // leichte Mähne: zottige Haarbüschel vom Widerrist über den Nacken bis hinter die Ohren
   ctx.fillStyle = shade(coat, -0.25);
   ctx.beginPath();
@@ -7021,6 +7047,24 @@ function ffWolf(ctx, coat, armored, eyes = '#fde047') {
   ctx.fill();
   outline(ctx, 0.5);
   fdFur(ctx, 10, -24, 4.4, 2.6, shade(coat, -0.5), 18, 1.4, 11, 2.3);
+  // Unterkiefer, Maul leicht geöffnet
+  ctx.fillStyle = '#5a1f1a';
+  ctx.beginPath();
+  ctx.moveTo(21.2, -24.2);
+  ctx.lineTo(26.4, -24.5);
+  ctx.lineTo(25.4, -22.6);
+  ctx.lineTo(21.4, -22.4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = shade(coat, -0.1);
+  ctx.beginPath();
+  ctx.moveTo(20.4, -22.6);
+  ctx.quadraticCurveTo(23.4, -23.2, 25.8, -22.8);
+  ctx.quadraticCurveTo(26.2, -21.8, 25, -21.4);
+  ctx.quadraticCurveTo(22.4, -20.8, 19.6, -21.2);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.6);
   // Fang mit Zähnen
   ctx.strokeStyle = '#1c1612';
   ctx.lineWidth = 0.7;
@@ -7044,8 +7088,8 @@ function ffWolf(ctx, coat, armored, eyes = '#fde047') {
   ctx.beginPath();
   ctx.ellipse(20.6, -28.3, 1.2, 0.7, -0.2, 0, Math.PI * 2);
   ctx.fill();
-  hindLeg(0, shade(coat, -0.2));
-  foreLeg(0, shade(coat, -0.2));
+  hindLeg(0, shade(coat, -0.2), true);
+  foreLeg(0, shade(coat, -0.2), true);
   if (armored) {
     // Eisenkragen mit Dornen und Rückenplatte
     ctx.fillStyle = steel(ctx, 8, 16, -26, -18);
@@ -7524,9 +7568,10 @@ const VK = {
     ffWolf(ctx, st >= 5 ? '#1f1b18' : '#4b4540', hasUp('b3b') || st >= 4, hasUp('b3a') || st >= 5 ? '#ef4444' : '#fde047');
     ctx.strokeStyle = '#9ca3af';
     ctx.lineWidth = 1.1;
+    // Kette um den Hals: vom Widerrist schräg hinab zur Kehle
     for (let k = 0; k < 4; k++) {
       ctx.beginPath();
-      ctx.ellipse(13 - k * 3, -16 + k * 2.6, 1.6, 1, 0.6, 0, Math.PI * 2);
+      ctx.ellipse(5.4 + k * 2.7, -21.2 + k * 2.3, 1.5, 0.95, 0.7, 0, Math.PI * 2);
       ctx.stroke();
     }
     if (hasUp('b3a') || st >= 5) ffGlow(ctx, 20.6, -28.3, 3, 'rgba(255,80,60,0.9)', 'rgba(255,0,0,0)');
