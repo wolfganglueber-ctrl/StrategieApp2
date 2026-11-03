@@ -7091,24 +7091,42 @@ function ffWolf(ctx, coat, armored, eyes = '#fde047') {
   hindLeg(0, shade(coat, -0.2), true);
   foreLeg(0, shade(coat, -0.2), true);
   if (armored) {
-    // Eisenkragen mit Dornen und Rückenplatte
-    ctx.fillStyle = steel(ctx, 8, 16, -26, -18);
+    // kleines Kettenhemd auf dem Rücken: Ringreihen, unten gezackter Saum
+    ctx.fillStyle = '#8a8f98';
     ctx.beginPath();
-    ctx.moveTo(9, -23);
-    ctx.quadraticCurveTo(13, -27, 16.5, -24);
-    ctx.lineTo(15, -19);
-    ctx.quadraticCurveTo(12, -21, 10, -17);
+    ctx.moveTo(-6.4, -20.4);
+    ctx.quadraticCurveTo(-0.6, -21.6, 5.4, -21.4);
+    ctx.lineTo(5, -16);
+    for (let k = 0; k <= 6; k++) ctx.lineTo(5 - k * 1.9, k % 2 ? -14.8 : -15.8);
     ctx.closePath();
     ctx.fill();
-    outline(ctx, 0.6);
-    ctx.fillStyle = '#d6d3d1';
-    for (const [sx, sy] of [[11, -25], [14, -26.5]]) {
-      ctx.beginPath();
-      ctx.moveTo(sx - 1, sy + 1);
-      ctx.lineTo(sx, sy - 2.5);
-      ctx.lineTo(sx + 1, sy + 1);
-      ctx.fill();
+    ctx.save();
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(30,32,38,0.45)';
+    ctx.lineWidth = 0.3;
+    for (let row = 0, y = -21.6; y < -14.4; y += 1.1, row++) {
+      for (let x = -7 + (row % 2) * 0.7; x < 6; x += 1.4) {
+        ctx.beginPath();
+        ctx.arc(x, y, 0.58, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.fillRect(-7, -21.8, 13, 2);
+    ctx.restore();
+    outline(ctx, 0.6);
+    // zusätzliche Mähne über den ganzen Rücken bis zur Kruppe
+    ctx.fillStyle = shade(coat, -0.25);
+    ctx.beginPath();
+    ctx.moveTo(-11.6, -19.8);
+    const back = [[-10.4, -22.4], [-9.2, -20.6], [-7.6, -23.4], [-6.4, -21], [-4.6, -23.8], [-3.4, -21.4], [-1.4, -24.2], [-0.2, -21.8], [1.8, -24.6], [3, -22.2], [4.6, -24.8]];
+    for (const [x, y] of back) ctx.lineTo(x, y);
+    ctx.lineTo(5.6, -21.2);
+    ctx.quadraticCurveTo(-3, -20.4, -11.6, -19.8);
+    ctx.closePath();
+    ctx.fill();
+    outline(ctx, 0.5);
+    fdFur(ctx, -3, -21.8, 7, 1.4, shade(coat, -0.5), 14, 1.2, 5, 2.1);
   }
 }
 // Reiter auf einem Reittier (Sitz wie beim Pferd): Beine, Oberkörper, Kopf
