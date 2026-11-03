@@ -155,7 +155,7 @@ export const FACTIONS = {
     names: {
       warrior: 'Kultist', archer: 'Irrlichtwerfer', rider: 'Nachtmahrreiter', defender: 'Lehmgolem', knight: 'Hexenritter', griffin: 'Besenhexe',
       catapult: 'Fluchkessel', trebuchet: 'Seelenwerfer', mage: 'Hexenmeister', basilisk: 'Riesenkröte', blackknight: 'Todesritter',
-      troll: 'Fleischgolem', giant: 'Golemkoloss', dragon: 'Knochendrache',
+      troll: 'Raditron', giant: 'Golemkoloss', dragon: 'Knochendrache',
     },
     icons: { nest: '🐸', tavern: '⚰️', lair: '🧟', dragonlair: '💀', workshop: '🧪' },
     buildings: { barracks: 'Zirkel', workshop: 'Hexenküche', sanctum: 'Hexenturm', nest: 'Krötensumpf', tavern: 'Gruft', lair: 'Golemgrube', dragonlair: 'Drachengruft' },
@@ -171,7 +171,7 @@ export const FACTIONS = {
       b1: 'Schleimhaut', b2: 'Giftzunge', b3a: ['Weitzunge', 'Lange Zunge: +1 Reichweite'], b3b: 'Panzerkröte', b4: 'Sprungbeine', b5: 'Urkröte',
       c1: 'Größerer Kessel', c2: 'Eisenbänder', c3a: 'Zielguss', c3b: 'Giftspritzer', c4: 'Kesselwagen', c5: 'Schnellsud',
       t1: 'Knochenarm', t2: 'Bannschirm', t3a: 'Seelenexplosion', t3b: 'Riesenschädel', t4: 'Grabsteingewicht', t5: 'Meister der Seelen',
-      o1: 'Runennähte', o2: 'Eisenklammern', o3a: 'Raserei', o3b: 'Steinhaut', o4: 'Frisches Fleisch', o5: 'Golemfürst',
+      o1: 'Runen-Raditron', o2: 'Ketten-Raditron', o3a: 'Wüter-Raditron', o3b: 'Stein-Raditron', o4: 'Saft-Raditron', o5: 'Raditron-König',
       g1: 'Knochenpanzer', g2: 'Grabesatem', g3a: 'Fäulnisschwall', g3b: 'Panzerknochen', g4: 'Geisterschwingen', g5: 'Urknochendrache',
     },
   },

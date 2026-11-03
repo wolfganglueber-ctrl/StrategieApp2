@@ -4761,10 +4761,23 @@ function drawCurseTree(ctx, col) {
   branch([[6, -42], [16, -36], [21, -24], [22, -14]], 5, 2, bark[1]);
   for (const [dx, dy] of [[-1.8, 4.4], [0.4, 5], [2.4, 4]]) branch([[22, -14], [22 + dx, -14 + dy]], 1.2, 0.6, bark[1]);
   // Wurzelbeine
+  // Beine als dicke Stämme, Knie wie beim Troll nach vorn (rechts) gebeugt, unten in Wurzeln gespreizt
   for (const [x, far] of [[6, true], [-6, false]]) {
     const c = far ? bark[1] : bark[0];
-    branch([[x, -16], [x - 1, -6], [x + 1, 0]], 7, 6, c);
-    for (const [dx, dy] of [[-6, 4], [-2, 5], [3, 4.6], [7, 3.6]]) branch([[x + 1, 1], [x + 1 + dx, 1 + dy]], 2.4, 1, c);
+    const knee = [x + 4, -7.6], foot = [x + 1.4, 0];
+    branch([[x, -16], knee, foot], 9, 7.4, c);
+    // Borkenrillen entlang der Stämme
+    ctx.strokeStyle = 'rgba(10,6,4,0.5)';
+    ctx.lineWidth = 0.45;
+    for (const o of [-2, 0.4, 2.6]) {
+      ctx.beginPath();
+      ctx.moveTo(x + o, -15);
+      ctx.lineTo(knee[0] + o, knee[1]);
+      ctx.lineTo(foot[0] + o * 0.8, foot[1] - 0.4);
+      ctx.stroke();
+    }
+    // Wurzeln: dick am Ansatz, dünn auslaufend, nach vorn und hinten gespreizt
+    for (const [dx, dy, w] of [[-7, 3.4, 3.4], [-3, 5, 2.8], [3.4, 5, 3], [8, 3, 3.4]]) branch([[foot[0], foot[1] + 0.6], [foot[0] + dx * 0.55, foot[1] + 0.6 + dy * 0.7], [foot[0] + dx, foot[1] + 0.6 + dy]], w, 0.8, c);
   }
   // Stamm: gedreht, breit unten, oben in Äste verzweigt
   const trunkP = () => {
