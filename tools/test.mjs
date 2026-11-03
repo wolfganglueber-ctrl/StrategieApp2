@@ -42,10 +42,10 @@ const t0 = Date.now();
   const geo = getGeo(s.cols, s.rows);
   playOut(s, mulberry32(5), 40);
   const founded = s.cities.filter((c) => !c.capital).length;
-  const close = s.cities.some((a, i) => s.cities.some((b, j) => i < j && geo.dist(a.idx, b.idx) < 4));
+  const close = s.cities.some((a, i) => s.cities.some((b, j) => i < j && geo.dist(a.idx, b.idx) < 5));
   console.log(`Selbst gründen: Runde ${s.turn}, ${founded} gegründete Siedlungen`);
   check(founded > 0, 'KI gründet keine Siedlungen');
-  check(!close, 'Siedlungen näher als 4 Felder');
+  check(!close, 'Siedlungen näher als 5 Felder');
   check(s.cities.every((c) => s.terrain[c.idx] !== 'mountain' && s.terrain[c.idx] !== 'water'), 'Siedlung auf Berg oder Wasser');
 }
 // Reiche KI: Einzel-Verbesserungen, Greifenreiter, alle Werte ganzzahlig

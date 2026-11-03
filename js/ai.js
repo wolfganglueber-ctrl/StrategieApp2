@@ -2,13 +2,13 @@
 // Die Schwierigkeit steuert Zufallsrauschen, Fehlerquote, Risikobewusstsein und Wirtschaft.
 import {
   UNITS, UNIT_ORDER, CITY_MAX_LEVEL, canAfford, BUILDINGS, citySlots, hasBuilding, RES, BASE_RES, TECHS, TOWER_UPGRADE, TOWERS_PER_CITY, structureLimit,
-  costTotal, ATK_TYPE, DEF_TABLE, DEF_MAX, UNIT_UPS, unitUpCost, boostCost, skillCost, plantCost, slotsUsed, usesSlot, FOUND_COST,
+  costTotal, ATK_TYPE, DEF_TABLE, DEF_MAX, UNIT_UPS, unitUpCost, boostCost, skillCost, plantCost, slotsUsed, usesSlot,
 } from './data.js';
 import {
   geoOf, buildOcc, getMoves, getTargets, computeCombat, canMove, canAttack, cityOn, terrainDefense, hitDamage, unitRange, unitCap, canRecruit,
   spawnSpots, computeTerritory, incomeOf, tradeRate, statsOf, visibility, upgradeCostOf, techAvailable, canBuildTower, towersOfCity, splashDamage, getHealTargets, healAmount, perkOptions, unitCount, unitUpOptions, unitUpList, canBuild, canPetrify,
   canBoost, skillOptions, getFreezeTargets, canStorm, stormArea, stormDamage, canTerraform, cityTiles, cityYield, canFuse, sweepTargets, canTowerKind, atkKind,
-  factionOf, unitCost, foundSpots, tileRes,
+  factionOf, unitCost, foundSpots, foundCost, tileRes,
 } from './game.js';
 import { bfsDistances } from './mapgen.js';
 
@@ -435,12 +435,19 @@ function economyAction(state, ctx, P, pid, rng) {
     const opts = perkOptions(u);
     if (opts.length) return { type: 'perk', unitId: u.id, perk: opts[Math.floor(rng() * opts.length)] };
   }
-  // Siedlungen selbst gründen: wenn es ruhig ist, das Feld mit den meisten freien Rohstofffeldern ringsum wählen
-  if (state.config?.manualCities && totalDanger <= 10 && canAfford(res, FOUND_COST)) {
+  // Siedlungen selbst gründen: wenn es ruhig ist, kompakt um die eigene Hauptstadt wachsen (nicht auf den Gegner zu);
+  // unter gleich nahen Feldern das mit den meisten freien Rohstofffeldern ringsum
+  if (state.config?.manualCities && totalDanger <= 10 && canAfford(res, foundCost(state, pid))) {
     const spots = foundSpots(state, pid, ctx.territory);
     if (spots.length) {
       const geo = geoOf(state);
-      const score = (i) => geo.within(i, 2).reduce((s, j) => s + (j !== i && ctx.territory[j] === -1 ? (tileRes(state, j)?.n || 0) : 0), 0) + rng() * 0.5;
+      const cap = state.cities.find((c) => c.owner === pid && c.capital) || ctx.ownCities[0];
+      const foes = state.cities.filter((c) => c.owner >= 0 && c.owner !== pid);
+      const score = (i) => {
+        const resN = geo.within(i, 2).reduce((s, j) => s + (j !== i && ctx.territory[j] === -1 ? (tileRes(state, j)?.n || 0) : 0), 0);
+        const foe = foes.reduce((m, c) => Math.min(m, geo.dist(c.idx, i)), 99);
+        return resN * 0.5 - (cap ? geo.dist(cap.idx, i) : 0) * 1.5 + Math.min(foe, 12) + rng() * 0.3;
+      };
       const best = spots.map((i) => [i, score(i)]).sort((x, y) => y[1] - x[1])[0][0];
       memory.ctxKey = '';
       return { type: 'found', idx: best };

@@ -6,7 +6,7 @@ import {
   incomeOf, realmYield, boostedYield, cityBaseYield, unitCount, upkeepTotal, cityTiles, playerHasActions, unitById, cityYield, computeTerritory, STATE_VERSION, canRecruit,
   tradeRate, tradeCost, spawnSpots, statsOf, visibility, isStructure, canBuildTower, towersOfCity, techAvailable, hasTech, upgradeCostOf,
   perkOptions, canBuild, unitUpList, unitUpOptions, combatInfo, splashDamage, splashOf, castleOf, terrainDefense,
-  canBoost, boostMax, boostStats, canTowerKind, rankXpNeed, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, foundSpots, canStorm, canFuse, fuseGroup, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
+  canBoost, boostMax, boostStats, canTowerKind, rankXpNeed, skillOptions, hasSkill, hasPerk, unitCap, canTerraform, foundSpots, foundCost, canStorm, canFuse, fuseGroup, stormWait, stormArea, STORM, getFreezeTargets, getBombTargets, migrateState,
   unitName, unitCost, factionOf, boostAllCost,
 } from './game.js';
 import { planAction } from './ai.js';
@@ -1961,11 +1961,11 @@ function renderCityPanel(panel, ci, occ) {
       list.append(el('div', { class: 'build-row tower-row' },
         el('span', { class: 'bicon' }, '🏘️'),
         el('div', { class: 'binfo' }, el('b', {}, 'Siedlung gründen'),
-          el('span', { class: 'muted' }, spots ? `${FOUND_GAP} Felder von einer eigenen Stadt, angrenzend ans Reich, nicht auf Bergen (${spots} Felder möglich)` : 'Gerade kein freies Feld am Rand des Reichs')),
+          el('span', { class: 'muted' }, spots ? `${FOUND_GAP} Felder von einer eigenen Stadt (${FOUND_GAP - 1} Felder dazwischen), Gebiete grenzen lückenlos aneinander, nicht auf Berg oder Wasser. Jede Siedlung macht die nächste um 1 teurer. (${spots} Felder möglich)` : 'Gerade kein freies Feld am Rand des Reichs')),
         el('button', {
-          class: 'btn small', disabled: !spots || !canAfford(p.res, FOUND_COST),
+          class: 'btn small', disabled: !spots || !canAfford(p.res, foundCost(S, p.id)),
           onclick: () => { clearSel(); sel.found = ci; refresh(); },
-        }, costEl(FOUND_COST, p.res))));
+        }, costEl(foundCost(S, p.id), p.res))));
     };
     // Felder bearbeiten: Wiese → Wald, Erzgrube oder Traubenhain; Wald → Wiese
     const terraRow = (list) => {
@@ -2054,7 +2054,7 @@ function renderPanelContent(panel) {
     panel.append(el('div', { class: 'city-head' },
       el('span', { class: 'title' }, '🏘️ Siedlung gründen'),
       el('button', { class: 'btn small', onclick: () => { clearSel(); refresh(); } }, 'Abbrechen')));
-    panel.append(el('div', { class: 'note' }, `Tippe ein helles Feld an (${costText(FOUND_COST)}). Die neue Siedlung entsteht ${FOUND_GAP} Felder von einer deiner Städte und grenzt an dein Reich.`));
+    panel.append(el('div', { class: 'note' }, `Tippe ein helles Feld an (${costText(foundCost(S, S.current))}). Die neue Siedlung entsteht ${FOUND_GAP} Felder von einer deiner Städte (${FOUND_GAP - 1} Felder dazwischen); ihr Gebiet grenzt ohne Überlappung an dein Reich.`));
     return;
   }
   if (sel.placeTower != null) {
@@ -2277,7 +2277,7 @@ function showIntro() {
     el('p', {}, 'Ziel: Erobere alle Städte deiner Gegner.'),
     el('p', {}, 'Tippe eine Einheit an und dann ein helles Feld, um zu ziehen. Rote Felder zeigen angreifbare Gegner samt Schaden – ein Tipp greift an.'),
     el('p', {}, S.config.manualCities
-      ? `Neue Siedlungen gründest du selbst: Stadt antippen → Gebäude → Wirtschaft → Siedlung gründen (${costText(FOUND_COST)}). Ihr Gebiet liefert Rohstoffe: Wiesen Nahrung, Wälder Holz, Hügel und Berge Erz.`
+      ? `Neue Siedlungen gründest du selbst: Stadt antippen → Gebäude → Wirtschaft → Siedlung gründen (ab ${costText(FOUND_COST)}, jede weitere 1 mehr). Ihr Gebiet liefert Rohstoffe: Wiesen Nahrung, Wälder Holz, Hügel und Berge Erz.`
       : 'Stelle eine Einheit auf ein Dorf. Steht sie zu Beginn deines nächsten Zuges noch dort, gehört es dir – samt Gebiet: Wiesen liefern Nahrung, Wälder Holz, Hügel und Berge Erz.'),
     el('p', {}, 'Tippe eine Stadt an, um Einheiten zu rekrutieren oder Gebäude zu bauen. Der 💡-Knopf unten links zeigt dir den nächsten sinnvollen Schritt.'),
     el('button', { class: 'btn primary big', onclick: closeModal }, "Los geht's"),
@@ -2536,7 +2536,7 @@ function renderSetup() {
 const citiesCache = new Map();
 let citiesTimer = null;
 function updateCitiesInfo() {
-  if (setup.manualCities) { $('citiesInfo').textContent = `(selbst gründen: nur Hauptstädte, neue Siedlungen über Wirtschaft für ${costText(FOUND_COST)})`; return; }
+  if (setup.manualCities) { $('citiesInfo').textContent = `(selbst gründen: nur Hauptstädte, neue Siedlungen über Wirtschaft ab ${costText(FOUND_COST)}, jede weitere 1 mehr)`; return; }
   const label = `${setup.density} %, Abstand ${Math.round((4 + 4 * (1 - setup.density / 100)) * 10) / 10} Felder`;
   const c = skirmishConfig({ ...setup, code: setup.code || 'A' });
   const key = [c.seed, c.cols, c.rows, c.biome, c.density, c.players.length].join('|');

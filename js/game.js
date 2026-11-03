@@ -6,7 +6,7 @@ import {
   TOWER_UPGRADE, TOWERS_PER_CITY, STRUCTURE_LIMIT, structureLimit, CASTLE_DEF, MELEE, FOOT, moveCap, AURA, HEAL, RANK_XP, RANK_BONUS, MAX_RANK, PERKS, PERK_CHOICES,
   PERK_RANKS, CAVALRY, buildingYield, plantCost, START_BUILDINGS, slotsUsed, usesSlot, PLANT_KINDS, PLANT_ROUNDS, CLEAR_WOOD, UNIT_UPS, UP_INDEX, unitUpCost, BOOST_ADD, ATK_TYPE, DEF_TABLE, DEF_MAX, SKILLS, skillsFor, boostCost, skillCost,
   BASE_RES, MANA, ECO_TECH, ECO_TECH_PCT, ARCHER_MAX_RANGE, counterMax, FUSE, TOWER_BOOST_ADD, TOWER_KINDS, START_BONUS,
-  FACTIONS, factionKey, UNIT_ORDER, FOUND_COST, FOUND_GAP,
+  FACTIONS, factionKey, UNIT_ORDER, FOUND_COST, FOUND_GAP, FOUND_LATTICE,
 } from './data.js';
 import { generateMap } from './mapgen.js';
 
@@ -582,21 +582,37 @@ export function computeCombat(state, att, def, fromIdx = att.idx, attHp = att.hp
 
 // Gebiet: jedes Feld gehört der nächstgelegenen Stadt in Reichweite (Gleichstand: höhere Stufe).
 // Hauptstädte haben Vorrang: ihre beiden Ringe gehören immer ganz ihnen; das Stadtfeld selbst gehört immer der Stadt.
-// Siedlungen selbst gründen: mögliche Felder einer neuen Siedlung – begehbar (kein Berg, kein Wasser), noch niemandes Gebiet,
-// genau FOUND_GAP Felder von einer eigenen Stadt (das Reich grenzt an) und keiner Stadt näher; kein fremder Trupp darauf
+// Siedlungen selbst gründen: Kosten steigen mit jeder eigenen Siedlung (außer der Hauptstadt) um 1 je Rohstoff
+export function foundCost(state, pid) {
+  const n = state.cities.filter((c) => c.owner === pid && !c.capital).length;
+  const cost = {};
+  for (const k of Object.keys(FOUND_COST)) cost[k] = FOUND_COST[k] + n;
+  return cost;
+}
+// Mögliche Felder einer neuen Siedlung: je eigener Stadt die 6 Wabenplätze (Abstand FOUND_GAP, lückenlose Wabe);
+// ist ein Wabenplatz nicht nutzbar, ersatzweise ein Nachbarfeld davon. Nutzbar: begehbar (kein Berg, kein Wasser),
+// niemandes Gebiet, genau FOUND_GAP von dieser Stadt und keiner Stadt näher (Gebiete überlappen nie), kein fremder Trupp
 export function foundSpots(state, pid, territory = computeTerritory(state), occ = buildOcc(state)) {
   if (!state.config?.manualCities) return [];
   const geo = geoOf(state);
+  const ok = (j, c) => {
+    const t = state.terrain[j];
+    if (!TERRAIN[t].pass || t === 'mountain' || territory[j] !== -1 || state.cityAt[j] !== -1) return false;
+    if (occ[j] && occ[j].owner !== pid) return false;
+    if (geo.dist(c.idx, j) !== FOUND_GAP) return false;
+    return !state.cities.some((x) => geo.dist(x.idx, j) < FOUND_GAP);
+  };
   const out = new Set();
   for (const c of state.cities) {
     if (c.owner !== pid) continue;
-    for (const j of geo.within(c.idx, FOUND_GAP)) {
-      if (out.has(j) || geo.dist(c.idx, j) !== FOUND_GAP) continue;
-      const t = state.terrain[j];
-      if (!TERRAIN[t].pass || t === 'mountain' || territory[j] !== -1 || state.cityAt[j] !== -1) continue;
-      if (occ[j] && occ[j].owner !== pid) continue;
-      if (state.cities.some((x) => geo.dist(x.idx, j) < FOUND_GAP)) continue;
-      out.add(j);
+    for (const [dq, dr] of FOUND_LATTICE) {
+      const q = geo.cq[c.idx] + dq, r = geo.cr[c.idx] + dr;
+      if (r < 0 || r >= geo.rows) continue;
+      const col = q + ((r - (r & 1)) >> 1);
+      if (col < 0 || col >= geo.cols) continue;
+      const j = r * geo.cols + col;
+      if (ok(j, c)) out.add(j);
+      else for (const k of geo.nb[j]) if (ok(k, c)) out.add(k);
     }
   }
   return [...out];
@@ -1296,8 +1312,9 @@ function applyActionCore(state, a) {
     }
     case 'found': {
       // neue Siedlung: Stufe 1, ohne Gebäude (wie ein freies Dorf), gehört gleich dem Gründer
-      if (!canAfford(player.res, FOUND_COST) || !foundSpots(state, pid).includes(a.idx)) return null;
-      for (const k of RES) player.res[k] -= FOUND_COST[k] || 0;
+      const cost = foundCost(state, pid);
+      if (!canAfford(player.res, cost) || !foundSpots(state, pid).includes(a.idx)) return null;
+      for (const k of RES) player.res[k] -= cost[k] || 0;
       state.plants = (state.plants || []).filter((x) => x.idx !== a.idx);
       state.terrain[a.idx] = 'plain';
       state.cities.push({ idx: a.idx, owner: pid, level: 1, capital: false, buildings: [] });
