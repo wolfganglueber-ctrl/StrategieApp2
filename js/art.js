@@ -2985,15 +2985,8 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
         head: () => {
           face(ctx, 0, 0);
           ctx.save();
-          ctx.translate(0, 20.5);
-          ctx.fillStyle = grad(ctx, -4, 4, '#ffffff', '#c9ccd1');
-          ctx.beginPath();
-          ctx.moveTo(-3.8, -20);
-          ctx.quadraticCurveTo(-3, -10, 0, -8);
-          ctx.quadraticCurveTo(3, -10, 3.8, -20);
-          ctx.quadraticCurveTo(0, -17.5, -3.8, -20);
-          ctx.fill();
-          outline(ctx, 0.5);
+          // Hut tiefer auf dem Kopf
+          ctx.translate(0, 22.6);
           // Spitzhut mit Hutband und Sternen
           ctx.fillStyle = cloth(ctx, -7, 7, col);
           ctx.beginPath();
@@ -3019,8 +3012,18 @@ function drawFigureInner(ctx, type, col, level, noPedestal) {
             ctx.arc(sx, sy, r, 0, Math.PI * 2);
             ctx.fill();
           }
-
           ctx.restore();
+        },
+        // langer Bart vor dem linken Arm
+        front: () => {
+          ctx.fillStyle = grad(ctx, -4, 4, '#ffffff', '#c9ccd1');
+          ctx.beginPath();
+          ctx.moveTo(-3.8, 0.5);
+          ctx.quadraticCurveTo(-3, 10.5, 0, 12.5);
+          ctx.quadraticCurveTo(3, 10.5, 3.8, 0.5);
+          ctx.quadraticCurveTo(0, 3, -3.8, 0.5);
+          ctx.fill();
+          outline(ctx, 0.5);
         },
       });
       break;
@@ -5260,7 +5263,7 @@ function rigHeadOn(ctx, draw, neck) {
 }
 // Magier mit Gelenken (Vorbild: Zauberer mit Stab): Stab senkrecht neben dem Körper in der rechten Faust (Arm hinter dem Körper),
 // linker Arm angewinkelt vor der Brust, Hand erhoben mit Zauberlicht.
-// o: { robe, skin, tail, body(ctx), shoulders(ctx), head(ctx), haft, staffTop(ctx, x, y), spell: [innen, außen], sleeve }
+// o: { robe, skin, tail, body(ctx), shoulders(ctx), head(ctx), front(ctx) (im Kopf-Maßstab vor dem linken Arm), haft, staffTop(ctx, x, y), spell: [innen, außen], sleeve }
 function rigMage(ctx, col, o) {
   const skin = o.skin || skinOf();
   const sleeve = o.sleeve || o.robe;
@@ -5278,6 +5281,7 @@ function rigMage(ctx, col, o) {
   // linker Arm: Ellbogen unten am Körper, Hand erhoben vor der Schulter, darüber das Zauberlicht
   const LH = [-6.4, -22.2];
   rigArm(ctx, [-3.9, -19.8], LH, { sleeve, skin, elbow: [-7.8, -14.8] });
+  if (o.front) rigHead(ctx, 0, -25.6, 0.86, () => o.front(ctx));
   if (o.spell) {
     ffGlow(ctx, LH[0] - 0.4, LH[1] - 3.4, 3.4, o.spell[0], o.spell[1]);
     ffGlow(ctx, LH[0] - 0.4, LH[1] - 3.4, 1.1, 'rgba(255,255,255,0.95)', 'rgba(255,255,255,0)');
@@ -7683,7 +7687,7 @@ const WT = {
       },
       head: () => {
         face(ctx, 0, 0, '#d1d5db');
-        ffWitchHat(ctx, 0, -2, col);
+        ffWitchHat(ctx, 0, -0.2, col);
       },
     });
     if (st >= 4) ffRaven(ctx, 11.2, -27.4);
