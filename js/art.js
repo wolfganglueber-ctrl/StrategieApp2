@@ -2060,7 +2060,8 @@ function wingSilhouette(ctx, lead, trail, tipLen = 3.2, round = false) {
     const nx = dy / L, ny = -dx / L;
     if (round) {
       // runde Federenden (Schwan): fast halbkreisförmiger Bogen
-      ctx.bezierCurveTo(px + dx * 0.05 + nx * tipLen * 1.3, py + dy * 0.05 + ny * tipLen * 1.3, px + dx * 0.85 + nx * tipLen * 1.3, py + dy * 0.85 + ny * tipLen * 1.3, x, y);
+      // Bogen nach außen, die Spitzen zwischen den Bögen zeigen in den Umriss hinein (wie beim Adlerflügel)
+      ctx.bezierCurveTo(px + dx * 0.05 - nx * tipLen * 1.3, py + dy * 0.05 - ny * tipLen * 1.3, px + dx * 0.85 - nx * tipLen * 1.3, py + dy * 0.85 - ny * tipLen * 1.3, x, y);
       continue;
     }
     // runder Federbauch, Spitze zum Körper hin (Federn hängen nach hinten unten), kurzer steiler Rücksprung
