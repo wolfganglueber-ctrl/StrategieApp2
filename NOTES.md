@@ -169,10 +169,13 @@ Startwerte und Kampfformel (Commit e094f32, 16.10.) stammen aus dem Vorbild *The
 - Frage offen: Soll die Kampagne auch „viele“ Städte bekommen (derzeit „normal“)?
 - Hinweis: Episch „voll“ braucht zum Erzeugen am PC ~0,6 s.
 - Angebot offen: Feldwahl beim Heranziehen soll auch andere Gegner meiden (Schütze landete im Test neben einem zweiten Gegner).
+- Angebot offen (1.23): Gründungskosten bei „Selbst gründen“ mit jeder weiteren Siedlung steigen lassen, falls die KI-Reiche zu schnell wachsen.
 - Angebot offen: Schwingenfeld (Drache blockiert ein zweites Feld) und freie Schüsse von Schützen/Türmen beim Feuersturm.
 - Ideen von früher: Marschbefehl (automatisches Ziehen über mehrere Runden); Balancing Troll (in Städten mit Mauer sehr zäh) und KI-Heilen (selten genutzt).
 
 # Nächster Schritt
+Stand 1.23 (Siedlungen selbst gründen). Wolfgang probiert den Modus „Selbst gründen“ aus; falls die Reiche zu schnell wachsen: Gründungskosten mit jeder Siedlung steigen lassen (Angebot offen). Danach Tierbeine nach dem Wolf-Vorbild auf Pferd, Greif und Raptor übertragen oder Spielthemen (Magier-Besonderheiten, Burgverteidigung Schritt 2).
+
 Ab 1.22: Tierbeine immer nach dem Wolf-Vorbild (Vorderbein gerade, Hinterbein mit Sprunggelenk nach hinten, Pfote nach vorn, keine Trennlinien an Übergängen). Als Nächstes Wolfgang fragen: Beinform auf Pferd, Greif, Raptor usw. übertragen oder Spielthemen (Magier-Besonderheiten, Burgverteidigung Schritt 2). Große Einzelvorschau: `scratchpad/nah.mjs` (Wikinger) / `nahk.mjs` (Königreich).
 
 Figuren-Überarbeitung nach den Regeln unter „Arbeitsweise“ (Bilder zuerst im Chat zeigen): fertig sind Ritter (1.10), Berserker (1.11), Krieger (1.12), Wächter + Golem (1.13), Schützen (1.14), Magier (1.15), Reiter (1.16), Flieger (1.17/1.18), Belagerung (1.19), Schwarzer Ritter + Troll (1.20). Riesentrolle (1.21), Drache + Basilisk + Wolf (1.22). Offen: Ritter-Lanzenhand evtl. wie beim Greifenreiter drehen (`fistAlong`), Ritter-Schild (Wolfgang hat bei Reitern/Fliegern Schilde entfernt). Regel: Überlappende Teile eines Körpers (Glieder, Hals, Schwanz) ohne Trennstrich zeichnen – erst alle Umrisse, dann alle Füllungen. Verdeckungsregel: rechter Arm (Bildseite rechts) immer hinter dem Körper, nur Unterarm/Faust sichtbar (wie bei Rittern/Wächtern/Schützen); Krieger behalten die Berserker-Haltung. Wolfgang spielt nebenbei 1.09–1.12 und gibt Rückmeldung zu Völkern/Balance.
