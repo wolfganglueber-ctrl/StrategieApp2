@@ -7258,9 +7258,8 @@ const VK = {
         if (st >= 2) ffAxe(c, x, y + 4, -Math.PI / 2, 0.55);
       },
       shield: (c) => {
-        // Schildwall: zwei Schilde, sonst einer (ab Stufe 1 größer)
-        if (hasUp('d3a')) ffVikingShield(c, -5.5, -17, 9, col);
-        ffVikingShield(c, -4.5, -9.6, hasUp('d3a') ? 9 : st >= 1 ? 9.5 : 8.2, col);
+        // ein großer Rundschild (ab Stufe 1 größer)
+        ffVikingShield(c, -4.5, -9.6, st >= 1 ? 9.5 : 8.2, col);
       },
     });
   },
