@@ -590,10 +590,11 @@ export function foundCost(state, pid) {
   return cost;
 }
 // Mögliche Felder einer neuen Siedlung: jedes Feld im Kreis mit Abstand FOUND_GAP um eine eigene Stadt. Nutzbar: begehbar
-// (kein Berg, kein Wasser), niemandes Gebiet, keiner Stadt näher als FOUND_GAP (so überlappen die Gebiete nie, jedes Feld
-// gehört nur einer Siedlung), kein fremder Trupp darauf
+// (kein Berg, kein Wasser), niemandes Gebiet, keiner eigenen Stadt näher als FOUND_GAP, kein fremder Trupp darauf.
+// Fremde Städte dürfen näher sein: Die neue Siedlung bekommt dann nur die Felder, die noch niemandem gehören
+// (computeTerritory: ältere Gebiete bleiben). Höchstens eine Gründung je Spieler und Runde.
 export function foundSpots(state, pid, territory = computeTerritory(state), occ = buildOcc(state)) {
-  if (!state.config?.manualCities) return [];
+  if (!state.config?.manualCities || state.players[pid].foundTurn === state.turn) return [];
   const geo = geoOf(state);
   const out = new Set();
   for (const c of state.cities) {
@@ -603,7 +604,7 @@ export function foundSpots(state, pid, territory = computeTerritory(state), occ 
       const t = state.terrain[j];
       if (!TERRAIN[t].pass || t === 'mountain' || territory[j] !== -1 || state.cityAt[j] !== -1) continue;
       if (occ[j] && occ[j].owner !== pid) continue;
-      if (state.cities.some((x) => geo.dist(x.idx, j) < FOUND_GAP)) continue;
+      if (state.cities.some((x) => x.owner === pid && geo.dist(x.idx, j) < FOUND_GAP)) continue;
       out.add(j);
     }
   }
@@ -615,11 +616,18 @@ export function computeTerritory(state) {
   const owner = new Int16Array(geo.n).fill(-1);
   const best = new Float32Array(geo.n).fill(1e9);
   state.cities.forEach((c, ci) => {
+    if (c.founded) return; // selbst gegründete Siedlungen: siehe unten
     for (const j of geo.within(c.idx, cityRadius(c))) {
       const d = j === c.idx ? -10 : geo.dist(c.idx, j) - c.level * 0.01 - (c.capital ? 3 : 0);
       if (d < best[j]) { best[j] = d; owner[j] = ci; }
     }
   });
+  // Selbst gegründete Siedlungen nehmen in Gründungsreihenfolge nur Felder, die noch niemandem gehören:
+  // ein bestehendes Gebiet wird von einer neueren Siedlung nie verkleinert
+  const later = state.cities.map((c, ci) => [c, ci]).filter(([c]) => c.founded).sort((a, b) => a[0].founded - b[0].founded);
+  for (const [c, ci] of later) {
+    for (const j of geo.within(c.idx, cityRadius(c))) if (owner[j] === -1 || j === c.idx) owner[j] = ci;
+  }
   return owner;
 }
 
@@ -1309,8 +1317,10 @@ function applyActionCore(state, a) {
       for (const k of RES) player.res[k] -= cost[k] || 0;
       state.plants = (state.plants || []).filter((x) => x.idx !== a.idx);
       state.terrain[a.idx] = 'plain';
-      state.cities.push({ idx: a.idx, owner: pid, level: 1, capital: false, buildings: [] });
+      state.foundSeq = (state.foundSeq || 0) + 1;
+      state.cities.push({ idx: a.idx, owner: pid, level: 1, capital: false, buildings: [], founded: state.foundSeq });
       state.cityAt[a.idx] = state.cities.length - 1;
+      player.foundTurn = state.turn;
       ev.push({ k: 'found', idx: a.idx, pid });
       break;
     }

@@ -1957,11 +1957,11 @@ function renderCityPanel(panel, ci, occ) {
     // Siedlungen selbst gründen (Startoption): neue Siedlung am Rand des Reichs
     const foundRow = (list) => {
       if (!S.config.manualCities) return;
-      const spots = foundSpots(S, p.id).length;
+      const spots = foundSpots(S, p.id).length, done = p.foundTurn === S.turn;
       list.append(el('div', { class: 'build-row tower-row' },
         el('span', { class: 'bicon' }, '🏘️'),
         el('div', { class: 'binfo' }, el('b', {}, 'Siedlung gründen'),
-          el('span', { class: 'muted' }, spots ? `${FOUND_GAP} Felder von einer eigenen Stadt (${FOUND_GAP - 1} Felder dazwischen), Gebiete überlappen nie, nicht auf Berg oder Wasser. Jede Siedlung macht die nächste um 1 teurer. (${spots} Felder möglich)` : 'Gerade kein freies Feld am Rand des Reichs')),
+          el('span', { class: 'muted' }, spots ? `${FOUND_GAP} Felder von einer eigenen Stadt (${FOUND_GAP - 1} Felder dazwischen), Gebiete überlappen nie, nicht auf Berg oder Wasser. Eine Siedlung je Runde, jede macht die nächste um 1 teurer. Nahe fremden Städten bekommt sie nur freie Felder. (${spots} Felder möglich)` : done ? 'Diese Runde schon gegründet – nächste Runde wieder (eine Siedlung je Runde)' : 'Gerade kein freies Feld am Rand des Reichs')),
         el('button', {
           class: 'btn small', disabled: !spots || !canAfford(p.res, foundCost(S, p.id)),
           onclick: () => { clearSel(); sel.found = ci; refresh(); },

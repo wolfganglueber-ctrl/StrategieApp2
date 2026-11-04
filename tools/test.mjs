@@ -40,12 +40,29 @@ const t0 = Date.now();
   const s = createGame({ seed: 31, cols: 16, rows: 21, biome: 'mixed', manualCities: true, density: 0.8, villageDensity: 0, players: [{ ai: 3 }, { ai: 4 }, { ai: 5 }] });
   check(s.cities.every((c) => c.capital), 'Selbst gründen: es gibt freie Dörfer');
   const geo = getGeo(s.cols, s.rows);
-  playOut(s, mulberry32(5), 40);
+  const rng = mulberry32(5), perTurn = new Map();
+  let shrunk = 0, n = 0, close = false;
+  while (!s.over && s.turn <= 40) {
+    const before = computeTerritory(s);
+    const ev = applyAction(s, planAction(s, rng));
+    if (!ev) throw new Error('Ungültige Aktion');
+    if (++n > 30000) throw new Error('Zu viele Aktionen');
+    if (ev.some((e) => e.k === 'found')) {
+      const fi = ev.find((e) => e.k === 'found').idx;
+      if (s.cities.some((c) => c.idx !== fi && c.owner === s.current && geo.dist(c.idx, fi) < 5)) close = true;
+      const key = s.turn + ':' + s.current;
+      perTurn.set(key, (perTurn.get(key) || 0) + 1);
+      // kein Feld eines bestehenden Gebiets wechselt durch die Gründung den Besitzer
+      const after = computeTerritory(s);
+      for (let i = 0; i < before.length; i++) if (before[i] !== -1 && after[i] !== before[i]) shrunk++;
+    }
+  }
+  check([...perTurn.values()].every((v) => v === 1), 'Mehr als eine Gründung je Runde');
+  check(shrunk === 0, `Gründung hat ${shrunk} Felder bestehender Gebiete übernommen`);
   const founded = s.cities.filter((c) => !c.capital).length;
-  const close = s.cities.some((a, i) => s.cities.some((b, j) => i < j && geo.dist(a.idx, b.idx) < 5));
   console.log(`Selbst gründen: Runde ${s.turn}, ${founded} gegründete Siedlungen`);
   check(founded > 0, 'KI gründet keine Siedlungen');
-  check(!close, 'Siedlungen näher als 5 Felder');
+  check(!close, 'Eigene Siedlungen näher als 5 Felder');
   check(s.cities.every((c) => s.terrain[c.idx] !== 'mountain' && s.terrain[c.idx] !== 'water'), 'Siedlung auf Berg oder Wasser');
 }
 // Reiche KI: Einzel-Verbesserungen, Greifenreiter, alle Werte ganzzahlig
