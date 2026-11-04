@@ -92,6 +92,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .yield { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #d1fae5; }
 .yield span { display: inline-flex; align-items: center; gap: 2px; }
 .note { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+/* Hinweis unter den Einheiten: feste Höhe, damit die Knöpfe beim Antippen nicht verrutschen */
+#recruitNote { height: 4.6em; line-height: 1.5; overflow-y: auto; }
 .btn.small { padding: 7px 10px; font-size: 13px; flex: none; }
 .cost { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 12px; }
 .cost > span { display: inline-flex; align-items: center; gap: 1px; }

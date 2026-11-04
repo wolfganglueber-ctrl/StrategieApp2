@@ -561,21 +561,25 @@ function onTap(sx, sy) {
     const city = S.cities[sel.placeTower].idx;
     clearSel();
     if (ok) {
-      // Steinwälle: nach dem Setzen gleich weiter platzieren, solange es geht
-      const again = type === 'barrier' ? sel.placeTower : null;
+      // Türme und Steinwälle: nach dem Setzen gleich weiter platzieren, solange es geht (Ansicht bleibt, wo sie ist)
       sel.cityIdx = city;
       cityTab = 'build';
       act({ type: 'tower', unitType: type, idx: i, city }, {
         after: () => {
           const ci = S.cityAt[city];
-          if (again != null && towersOfCity(S, ci, undefined, 'barrier') < structureLimit(S.cities[ci], 'barrier') && canAfford(S.players[S.current].res, unitCost(S, S.current, 'barrier'))) {
+          if (towersOfCity(S, ci, undefined, type) < structureLimit(S.cities[ci], type) && canAfford(S.players[S.current].res, unitCost(S, S.current, type))) {
             clearSel();
             sel.placeTower = ci;
-            sel.placeType = 'barrier';
+            sel.placeType = type;
           }
         },
       });
-    } else { toast(type === 'barrier' ? 'Wallbau beendet.' : 'Turmbau abgebrochen.'); refresh(); }
+    } else {
+      toast(type === 'barrier' ? 'Wallbau beendet.' : 'Turmbau beendet.');
+      sel.cityIdx = city;
+      cityTab = 'build';
+      refresh();
+    }
     return;
   }
   const occ = buildOcc(S);
@@ -2020,9 +2024,19 @@ function panelKey() {
 function renderPanel() {
   const panel = $('panel');
   const key = panelKey();
-  if (panelScroll.key === key && key) {
-    panelScroll.top = panel.scrollTop;
-    panelScroll.list = panel.querySelector('.build-list')?.scrollTop || 0;
+  if (!key && (sel.placeTower != null || sel.terraform != null || sel.found != null)) {
+    // Platzieren aus dem Stadtmenü: Scrollposition merken, damit das Menü danach an derselben Stelle wieder aufgeht
+    if (panelScroll.key && !panelScroll.hold) {
+      panelScroll.top = panel.scrollTop;
+      panelScroll.list = panel.querySelector('.build-list')?.scrollTop || 0;
+      panelScroll.hold = true;
+    }
+  } else if (panelScroll.key === key && key) {
+    if (panelScroll.hold) panelScroll.hold = false;
+    else {
+      panelScroll.top = panel.scrollTop;
+      panelScroll.list = panel.querySelector('.build-list')?.scrollTop || 0;
+    }
   } else panelScroll = { key, top: 0, list: 0 };
   renderPanelContent(panel);
   // Menü unten: Höhe merken, damit man die Karte bis über das Menü hinaus scrollen kann
@@ -2060,10 +2074,10 @@ function renderPanelContent(panel) {
   if (sel.placeTower != null) {
     panel.append(el('div', { class: 'city-head' },
       el('span', { class: 'title' }, `${UNITS[sel.placeType].name} platzieren`),
-      el('button', { class: 'btn small', onclick: () => { clearSel(); refresh(); } }, sel.placeType === 'barrier' ? 'Fertig' : 'Abbrechen')));
+      el('button', { class: 'btn small', onclick: () => { const idx = S.cities[sel.placeTower].idx; clearSel(); sel.cityIdx = idx; cityTab = 'build'; refresh(); } }, 'Fertig')));
     panel.append(el('div', { class: 'note' }, sel.placeType === 'barrier'
       ? `Tippe helle Felder im Stadtgebiet an – Wallstück für Wallstück (${towersOfCity(S, sel.placeTower, undefined, 'barrier')}/${structureLimit(S.cities[sel.placeTower], 'barrier')}).`
-      : 'Tippe ein helles Feld im Stadtgebiet an.'));
+      : `Tippe helle Felder im Stadtgebiet an – Turm für Turm (${towersOfCity(S, sel.placeTower, undefined, 'tower')}/${structureLimit(S.cities[sel.placeTower], 'tower')}).`));
     return;
   }
   if (sel.magic === 'storm' && sel.unitId != null) {
