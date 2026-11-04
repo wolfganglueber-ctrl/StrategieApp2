@@ -172,6 +172,7 @@ Startwerte und Kampfformel (Commit e094f32, 16.10.) stammen aus dem Vorbild *The
 - Frage offen: Soll die Kampagne auch „viele“ Städte bekommen (derzeit „normal“)?
 - Hinweis: Episch „voll“ braucht zum Erzeugen am PC ~0,6 s.
 - Angebot offen: Feldwahl beim Heranziehen soll auch andere Gegner meiden (Schütze landete im Test neben einem zweiten Gegner).
+- Frage offen (1.26): Soll beim Selbst-Gründen der Abstand 5 auch zu fremden Städten gelten? Derzeit nur zu eigenen; nahe fremden Städten bekommt die neue Siedlung nur freie Felder.
 - Angebot offen: Schwingenfeld (Drache blockiert ein zweites Feld) und freie Schüsse von Schützen/Türmen beim Feuersturm.
 - Ideen von früher: Marschbefehl (automatisches Ziehen über mehrere Runden); Balancing Troll (in Städten mit Mauer sehr zäh) und KI-Heilen (selten genutzt).
 
