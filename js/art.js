@@ -1159,11 +1159,19 @@ function townHouse(ctx, x, y, w, h, s, o) {
     ctx.fillStyle = 'rgba(255,255,220,0.6)';
     ctx.fillRect(wx, wy, ww * 0.45, wh * 0.45);
   };
-  if (wall !== 'log') {
+  if (wall === 'log' && floors === 2) {
+    for (const fx of [-0.25, 0.25]) win(x + fx * w - 0.7 * s, y - h * 0.8, 1.4 * s, 1.4 * s);
+    win(x + w * 0.24, y - h * 0.38, 1.4 * s, 1.4 * s);
+  } else if (wall !== 'log') {
     const ww = Math.max(1.3 * s, w * 0.13), wh = ww * 1.2;
     if (floors === 2) for (const fx of [-0.3, 0, 0.3]) win(x + fx * w - ww / 2, y - h * 0.82, ww, wh);
     for (const fx of [-0.32, 0.32]) win(x + fx * w - ww / 2, y - h * (floors === 2 ? 0.4 : 0.7), ww, wh);
   } else win(x + w * 0.22, y - h * 0.68, 1.4 * s, 1.4 * s);
+  if (wall === 'log' && floors === 2) {
+    // Balkenlage zwischen den Geschossen
+    ctx.fillStyle = '#5a3a1e';
+    ctx.fillRect(x - w / 2, y - h * 0.52, w, 0.9 * s);
+  }
   // Seitenfenster
   ctx.fillStyle = '#ffd36a';
   ctx.fillRect(x + w / 2 + d * 0.35, y - h * 0.72 - d * 0.22, d * 0.3, h * 0.24);
@@ -1503,8 +1511,44 @@ function townGround(ctx, x, y, rx, ry, s, lv) {
   ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
   ctx.stroke();
 }
-// Gibt den Sitzplatz für den kleinen Drachen zurück
-function townStage(ctx, x, y, s, lv, col, walled) {
+// Kleiner Holzturm (Wachturm) auf vier Pfosten mit Plattform und Spitzdach
+function woodTower(ctx, x, y, s, col) {
+  const h = 15 * s, w = 5 * s;
+  shadowEllipse(ctx, x + 1.5 * s, y + 1 * s, 4.5 * s, 1.6 * s, 0.3);
+  ctx.strokeStyle = '#5a3a1e';
+  ctx.lineWidth = 1.1 * s;
+  ctx.beginPath();
+  for (const dx of [-w / 2, w / 2]) {
+    ctx.moveTo(x + dx, y);
+    ctx.lineTo(x + dx * 0.8, y - h);
+  }
+  ctx.moveTo(x - w / 2, y - 1 * s);
+  ctx.lineTo(x + w * 0.42, y - h * 0.5);
+  ctx.moveTo(x + w / 2, y - 1 * s);
+  ctx.lineTo(x - w * 0.42, y - h * 0.5);
+  ctx.moveTo(x - w * 0.45, y - h * 0.5);
+  ctx.lineTo(x + w * 0.45, y - h * 0.5);
+  ctx.stroke();
+  // Plattform mit Brüstung aus Brettern
+  ctx.fillStyle = '#9a6a3c';
+  ctx.fillRect(x - w * 0.75, y - h - 3.6 * s, w * 1.5, 3.6 * s);
+  wallTexture(ctx, 'log', x - w * 0.75, y - h - 3.6 * s, w * 1.5, 3.6 * s, s, 9);
+  ctx.strokeStyle = 'rgba(40,22,8,0.75)';
+  ctx.lineWidth = 0.6 * s;
+  ctx.strokeRect(x - w * 0.75, y - h - 3.6 * s, w * 1.5, 3.6 * s);
+  // Spitzdach in Spielerfarbe
+  ctx.fillStyle = col.main;
+  ctx.beginPath();
+  ctx.moveTo(x - w * 0.95, y - h - 3.6 * s);
+  ctx.lineTo(x, y - h - 10 * s);
+  ctx.lineTo(x + w * 0.95, y - h - 3.6 * s);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.6 * s);
+  return [x, y - h - 10 * s];
+}
+// Gibt den Sitzplatz für den kleinen Drachen zurück; inner: innerhalb der Burg (ohne Zaun/Palisade)
+function townStage(ctx, x, y, s, lv, col, walled, inner = false) {
   const roof = col.main;
   const items = [];
   const H = (hx, hy, w, h, o) => items.push([hy, () => townHouse(ctx, x + hx * s, y + hy * s, w * s, h * s, s, { roof, ...o })]);
@@ -1512,19 +1556,19 @@ function townStage(ctx, x, y, s, lv, col, walled) {
   const R = [0, [17, 10], [23, 14], [25, 15.5], [27, 17], [29, 18]][Math.min(5, lv)];
   townGround(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, lv);
   if (lv === 1) {
-    townFence(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, 'fence', 'back');
+    if (!inner) townFence(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, 'fence', 'back');
     items.push([4, () => townWell(ctx, x + 1 * s, y + 4 * s, s)]);
-    H(-7, 10, 10, 6.5, { wall: 'log', roofKind: 'thatch', seed: 1 });
-    H(8, 14, 9, 6, { wall: 'log', roofKind: 'thatch', seed: 2 });
+    H(-7, 10, 11, 7.5, { wall: 'log', roofKind: 'thatch', seed: 1 });
+    H(9, 14, 10, 7, { wall: 'log', roofKind: 'thatch', seed: 2 });
     items.push([2, () => flag(ctx, x - 12 * s, y + 2 * s, 9 * s, col, s)]);
   } else if (lv === 2) {
-    if (!walled) townFence(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, 'palisade', 'back');
+    if (!walled && !inner) townFence(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, 'palisade', 'back');
     items.push([9, () => townWell(ctx, x + 1 * s, y + 9 * s, s)]);
-    H(-11, 3, 11, 7.5, { wall: 'timber', seed: 3 });
-    H(9, 4, 10, 7, { wall: 'timber', seed: 4 });
-    H(-4, 18, 11, 7.5, { wall: 'timber', seed: 5 });
-    H(13, 17, 8.5, 6.5, { wall: 'log', roofKind: 'thatch', seed: 6 });
-    items.push([0, () => flag(ctx, x + 2 * s, y + 0 * s, 13 * s, col, s)]);
+    H(-12, 4, 10, 10, { wall: 'log', floors: 2, seed: 3 });
+    H(9, 5, 10, 10, { wall: 'log', floors: 2, roofKind: 'thatch', seed: 4 });
+    H(-4, 19, 11, 10.5, { wall: 'log', floors: 2, seed: 5 });
+    H(13, 18, 8.5, 7, { wall: 'log', roofKind: 'thatch', seed: 6 });
+    items.push([1, () => { const t = woodTower(ctx, x - 1 * s, y + 1 * s, s, col); perch = t; flag(ctx, t[0], t[1], 6 * s, col, s); }]);
   } else if (lv === 3) {
     items.push([3, () => { const t = townTower(ctx, x - 14 * s, y + 3 * s, 5 * s, 16 * s, s, { roof, bell: true, cross: true, seed: 11 }); perch = t; }]);
     H(-6, 3, 10, 7, { wall: 'stone', seed: 12 });
@@ -1541,25 +1585,26 @@ function townStage(ctx, x, y, s, lv, col, walled) {
     H(19, 8, 9.5, 10, { wall: 'timber', floors: 2, seed: 24 });
     H(-21, 16, 9, 10, { wall: 'timber', floors: 2, seed: 25 });
     H(-6, 23, 11, 11, { wall: 'timber', floors: 2, seed: 26 });
-    H(9, 24, 10, 10.5, { wall: 'stone', floors: 2, seed: 27 });
-    H(22, 21, 8, 9, { wall: 'stone', floors: 2, seed: 28 });
+    H(9, 24, 10, 10.5, { wall: 'timber', floors: 2, seed: 27 });
+    H(22, 21, 8, 9, { wall: 'timber', floors: 2, seed: 28 });
     items.push([13, () => townStall(ctx, x + 1 * s, y + 13 * s, s, col, 2)]);
   } else {
-    items.push([1, () => { perch = townCathedral(ctx, x - 5 * s, y + 1 * s, s, col, roof); }]);
-    items.push([4, () => { const t = townTower(ctx, x + 15 * s, y + 4 * s, 6 * s, 20 * s, s, { roof, clock: true, seed: 31 }); flag(ctx, t[0], t[1], 8 * s, col, s, true); }]);
-    H(24, 13, 9, 10, { wall: 'timber', floors: 2, seed: 32 });
+    items.push([3, () => { perch = townCathedral(ctx, x - 2 * s, y + 4 * s, s, col, roof); }]);
+    H(18, 2, 9, 10, { wall: 'stone', floors: 2, seed: 30 });
+    H(-20, 1, 9, 10, { wall: 'stone', floors: 2, seed: 31 });
+    H(25, 13, 9, 10, { wall: 'timber', floors: 2, seed: 32 });
     H(-25, 11, 9, 10, { wall: 'timber', floors: 2, seed: 33 });
     H(-20, 22, 10, 11, { wall: 'stone', floors: 2, seed: 34 });
     H(-5, 25, 11, 11, { wall: 'timber', floors: 2, seed: 35 });
     H(10, 26, 10, 10.5, { wall: 'stone', floors: 2, seed: 36 });
     H(24, 24, 8, 9, { wall: 'timber', floors: 2, seed: 37 });
-    items.push([14, () => townStall(ctx, x + 3 * s, y + 15 * s, s, col, 4)]);
-    items.push([15, () => townStall(ctx, x + 11 * s, y + 15 * s, s, col, 0)]);
+    items.push([14, () => townStall(ctx, x + 12 * s, y + 14 * s, s, col, 4)]);
+    items.push([15, () => townStall(ctx, x - 14 * s, y + 15 * s, s, col, 0)]);
   }
   items.sort((a, b) => a[0] - b[0]);
   for (const [, f] of items) f();
-  if (lv === 1) townFence(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, 'fence', 'front');
-  if (lv === 2 && !walled) townFence(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, 'palisade', 'front');
+  if (lv === 1 && !inner) townFence(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, 'fence', 'front');
+  if (lv === 2 && !walled && !inner) townFence(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, 'palisade', 'front');
   return perch;
 }
 
@@ -4390,8 +4435,11 @@ export function drawCastle(ctx, city, x, y, H, col) {
   cornerTower(3);
   cornerTower(0);
   // Bergfried in der Mitte (immer als prächtige Burg)
-  const keep = { ...city, level: 5, stars: city.level, buildings: ['farm', 'mine', 'lumber', 'barracks', 'market', ...(city.buildings || []).filter((b) => b === 'dragonlair')] };
-  drawCity(ctx, keep, x, y - 6 * s, H * 1.45, col);
+  // Stadt innerhalb der Burg wächst mit der Stufe (gleiche Optik wie die übrigen Siedlungen)
+  const lv = Math.min(5, city.level || 1);
+  const ts = (H * 1.25 * [1, 1.15, 1.3, 1.55, 1.75, 1.95][lv]) / 40;
+  const perch = townStage(ctx, x, y - 8 * ts, ts, lv, col, false, true);
+  if (city.buildings?.includes('dragonlair') && perch) miniDragon(ctx, perch[0], perch[1], ts, col);
   // Vorderseite mit Torhaus
   for (const k of [2, 0]) seg(k, true);
   seg(1, true);
