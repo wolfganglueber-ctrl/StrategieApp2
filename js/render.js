@@ -1,7 +1,7 @@
 // Canvas-Renderer: Gelände wird einmal in eine Offscreen-Leinwand gezeichnet,
 // pro Frame kommen nur Markierungen, Einheiten und Effekte dazu.
 import { hexCenter, pixelToIndex, boardSize, SQRT3, getGeo } from './hex.js';
-import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS, PERKS, BOOST_MAX, skillsFor } from './data.js';
+import { PLAYER_COLORS, NEUTRAL_COLOR, UNITS, PERKS, BOOST_MAX, skillsFor, BUILDINGS } from './data.js';
 import { computeTerritory, statsOf, inAura } from './game.js';
 import {
   hash, hexPath, mix, TILE, drawGrapes, drawPit, drawTileTop, drawTileSide, drawForest, drawHill, drawMountain, drawShore, drawCity, drawFigure, drawWallLink, FIG_BOX, drawCastle, drawCourt, CASTLE_BOX,
@@ -1686,6 +1686,26 @@ export class Renderer {
         ctx.fillText(String(v), x + isz + 1, yc + 0.5);
       }));
       ctx.globalAlpha = 1;
+      // Symbole der gebauten Wirtschaftsgebäude als Plaketten-Reihe über dem Ertrag
+      const icons = ['farm', 'lumber', 'mine', 'press', 'market'].filter((b) => city.buildings?.includes(b)).map((b) => BUILDINGS[b].icon);
+      const r = HEX * 0.24, step = r * 2.15;
+      let bx = c.x - ((icons.length - 1) * step) / 2;
+      ctx.save();
+      ctx.font = `${r * 1.3}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      for (const ic of icons) {
+        ctx.fillStyle = 'rgba(10,20,36,0.85)';
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = HEX * 0.05;
+        ctx.beginPath();
+        ctx.arc(bx, y0 - r - 2, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.fillText(ic, bx, y0 - r - 1.5);
+        bx += step;
+      }
+      ctx.restore();
     });
     ctx.restore();
   }
