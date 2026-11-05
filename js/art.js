@@ -1034,8 +1034,8 @@ export function isFortress(city) {
 // 4 Stadt (zweistöckige Häuser, Rathausturm, Kirche) · 5 Großstadt (Häuserring, Kathedrale mit 2 Türmen, Banner)
 const T_WALL = {
   log: ['#9a6a3c', '#6e4724'],
-  timber: ['#f2e4c4', '#cdb98f'],
-  stone: ['#ddd0b4', '#a8987a'],
+  timber: ['#f8eedb', '#d6c6a3'],
+  stone: ['#f3ecdc', '#cbbd9e'],
 };
 function wallTexture(ctx, kind, x, y, w, h, s, seed) {
   ctx.save();
@@ -1072,7 +1072,7 @@ function wallTexture(ctx, kind, x, y, w, h, s, seed) {
     for (let r = 0, yy = y; yy < y + h; yy += rh, r++) {
       for (let xx = x - (r % 2) * 1.6 * s, k = 0; xx < x + w; xx += 3.2 * s, k++) {
         const v = hash(seed * 31 + r * 7 + k) * 0.12 - 0.06;
-        ctx.fillStyle = shade('#d6c8aa', v);
+        ctx.fillStyle = shade('#f0e8d6', v);
         ctx.fillRect(xx + 0.15 * s, yy + 0.15 * s, 3.2 * s - 0.3 * s, rh - 0.3 * s);
       }
     }
@@ -1285,7 +1285,7 @@ function townStall(ctx, x, y, s, col, seed) {
 function townTower(ctx, x, y, w, h, s, o) {
   const { roof = '#a33', clock = false, bell = false, spire = 1.6, cross = false, seed = 3 } = o;
   const d = w * 0.4;
-  ctx.fillStyle = '#a8987a';
+  ctx.fillStyle = '#cbbd9e';
   ctx.beginPath();
   ctx.moveTo(x + w / 2, y);
   ctx.lineTo(x + w / 2 + d, y - d * 0.55);
@@ -1294,7 +1294,7 @@ function townTower(ctx, x, y, w, h, s, o) {
   ctx.closePath();
   ctx.fill();
   outline(ctx, 0.6 * s);
-  ctx.fillStyle = '#ddd0b4';
+  ctx.fillStyle = '#f3ecdc';
   ctx.fillRect(x - w / 2, y - h, w, h);
   wallTexture(ctx, 'stone', x - w / 2, y - h, w, h, s, seed);
   ctx.strokeStyle = 'rgba(50,30,15,0.65)';
@@ -1376,13 +1376,13 @@ function townCathedral(ctx, x, y, s, col, roof) {
   townHouse(ctx, x + 5 * s, y - 5 * s, 16 * s, 13 * s, s, { wall: 'stone', roof: '#59606e', seed: 41 });
   // Fassade
   const fw = 15 * s, fh = 16 * s;
-  ctx.fillStyle = '#ddd0b4';
+  ctx.fillStyle = '#f3ecdc';
   ctx.fillRect(x - fw / 2, y - fh, fw, fh);
   wallTexture(ctx, 'stone', x - fw / 2, y - fh, fw, fh, s, 43);
   ctx.strokeStyle = 'rgba(50,30,15,0.65)';
   ctx.lineWidth = 0.8 * s;
   ctx.strokeRect(x - fw / 2, y - fh, fw, fh);
-  ctx.fillStyle = '#ddd0b4';
+  ctx.fillStyle = '#f3ecdc';
   ctx.beginPath();
   ctx.moveTo(x - fw / 2, y - fh);
   ctx.lineTo(x, y - fh - 6.5 * s);
@@ -1481,7 +1481,7 @@ function townGround(ctx, x, y, rx, ry, s, lv) {
   const g = ctx.createRadialGradient(x - rx * 0.2, y - ry * 0.3, 2, x, y, rx);
   if (lv <= 1) { g.addColorStop(0, '#a88a5a'); g.addColorStop(1, '#7d6440'); }
   else if (lv === 2) { g.addColorStop(0, '#c9ae7e'); g.addColorStop(1, '#9a7d52'); }
-  else { g.addColorStop(0, '#d9ccb0'); g.addColorStop(1, '#a8977a'); }
+  else { g.addColorStop(0, '#efe2c4'); g.addColorStop(1, '#bfa77c'); }
   ctx.fillStyle = g;
   ctx.fill();
   ctx.clip();
@@ -1489,7 +1489,7 @@ function townGround(ctx, x, y, rx, ry, s, lv) {
     // Pflastersteine
     for (let r = 0, yy = y - ry; yy < y + ry; yy += 1.9 * s, r++) {
       for (let xx = x - rx + (r % 2) * 1.3 * s, k = 0; xx < x + rx; xx += 2.6 * s, k++) {
-        ctx.fillStyle = hash(r * 97 + k) > 0.5 ? 'rgba(80,60,35,0.18)' : 'rgba(255,250,235,0.16)';
+        ctx.fillStyle = hash(r * 97 + k) > 0.5 ? 'rgba(80,60,35,0.1)' : 'rgba(255,250,235,0.22)';
         ctx.beginPath();
         ctx.ellipse(xx, yy, 1.1 * s, 0.75 * s, 0, 0, Math.PI * 2);
         ctx.fill();
