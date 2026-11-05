@@ -17,6 +17,6 @@ s = s
   .replace('</body>', '')
   .replace('</html>', '')
   .replace(':root {\n  --bg: #0d2238;', ':root {\n  color-scheme: dark;\n  --bg: #0d2238;');
-s = '<title>Hexkrone</title>\n' + s.replace('<title>Hexkrone</title>', '');
+s = '<title>KnightyKnight</title>\n' + s.replace('<title>KnightyKnight</title>', '');
 writeFileSync(join(root, 'dist/hexkrone-artifact.html'), s);
 console.log(`dist/hexkrone-artifact.html (${(s.length / 1024).toFixed(0)} KB)`);

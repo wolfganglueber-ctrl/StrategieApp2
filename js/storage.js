@@ -12,8 +12,9 @@ function get(key, fallback) {
 function set(key, value) {
   try {
     localStorage.setItem(PREFIX + key, JSON.stringify(value));
+    return true;
   } catch {
-    /* Speicher nicht verfügbar */
+    return false; // Speicher nicht verfügbar oder voll
   }
 }
 function del(key) {
@@ -26,16 +27,27 @@ function del(key) {
 
 export const store = {
   progress: () => get('progress', { stars: {} }),
+  // Burgverteidigung: beste erreichte Welle je Schwierigkeit
+  defenseBest: () => get('defenseBest', {}),
+  setDefenseBest(diff, wave) {
+    const b = get('defenseBest', {});
+    if ((b[diff] || 0) < wave) { b[diff] = wave; set('defenseBest', b); }
+  },
   setStars(levelId, stars) {
     const p = store.progress();
     p.stars[levelId] = Math.max(p.stars[levelId] || 0, stars);
     set('progress', p);
   },
-  settings: () => Object.assign({ speed: 1, vibrate: true, confirmEnd: true, unlockAll: false, fogCampaign: false }, get('settings', {})),
+  settings: () => Object.assign({ speed: 1, sound: true, ambience: 0.6, vibrate: true, confirmEnd: true, unlockAll: false, fog: false }, get('settings', {})),
   saveSettings: (s) => set('settings', s),
   lastSetup: () => get('setup', null),
   saveSetup: (s) => set('setup', s),
   savedGame: () => get('save', null),
   saveGame: (g) => set('save', g),
   clearGame: () => del('save'),
+  // 10 feste Speicherplätze: { name, date, turn, state }
+  SLOTS: 10,
+  slot: (n) => get('slot.' + n, null),
+  saveSlot: (n, data) => set('slot.' + n, data),
+  clearSlot: (n) => del('slot.' + n),
 };

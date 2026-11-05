@@ -1,6 +1,6 @@
 {
-  "name": "Hexkrone",
-  "short_name": "Hexkrone",
+  "name": "KnightyKnight",
+  "short_name": "KnightyKnight",
   "description": "Rundenbasiertes Hex-Strategiespiel",
   "start_url": "./",
   "scope": "./",

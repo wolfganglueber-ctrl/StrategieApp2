@@ -8,7 +8,7 @@ import { MAP_SIZES } from '../js/data.js';
 const games = +(process.argv[2] || 20);
 const A = +(process.argv[3] || 3);
 const B = +(process.argv[4] || 2);
-const size = MAP_SIZES[process.argv[5] || 'M'];
+const size = MAP_SIZES[process.argv[5] || 'XL'];
 const biomes = ['mixed', 'forest', 'mountains', 'islands', 'plains'];
 
 let winsA = 0, winsB = 0, draws = 0, totalTurns = 0, totalActions = 0;
