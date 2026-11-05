@@ -178,6 +178,13 @@ Startwerte und Kampfformel (Commit e094f32, 16.10.) stammen aus dem Vorbild *The
 - Ideen von früher: Marschbefehl (automatisches Ziehen über mehrere Runden); Balancing Troll (in Städten mit Mauer sehr zäh) und KI-Heilen (selten genutzt).
 
 # Nächster Schritt
+**Städte-Design (Wolfgangs Entscheidung, noch nicht umgesetzt), in dieser Reihenfolge, Bilder je Schritt zuerst im Chat zeigen:**
+1. Dorf/Stadt (`drawCity` in js/art.js) – Stufe an Material + Wahrzeichen erkennbar: 1 Weiler (2–3 Holzhütten, Strohdach, Erdboden, Lattenzaun, Brunnen) · 2 Dorf (4–5 Fachwerkhäuser, Dorfplatz, Holzpalisade, Fahne) · 3 Marktflecken (Steinhäuser mit Ziegeldach, Pflaster, Kapelle mit Glockenturm, Marktstände) · 4 Stadt (dichte zweistöckige Häuser, Rathausturm, Kirche) · 5 Großstadt (Häuserring, Kathedrale mit 2 Türmen, Banner). Sterne bleiben zusätzlich. Bessere Texturen: Pflastersteine, Ziegel-/Schindelreihen, Mauerwerk/Fachwerk, leuchtende Fenster.
+2. Hauptstadt (`drawCastle`) wächst mit: 1 Holzburg auf Erdhügel mit Palisade · 2 Steinbergfried + Holzpalisade · 3 Steinmauer mit 2 Ecktürmen · 4 Burg mit 4 Türmen, Torhaus, Palas · 5 Königsburg mit doppeltem Mauerring, hohem Hauptturm, goldenen Spitzen.
+3. Ausgebaute Rohstoffe direkt auf den Feldern im äußeren Ring (render.js Kachel-Puffer): Bauernhof → Äcker mit Furchen/Korn + kleiner Hof; Holzfäller → Baumstümpfe, Holzstapel, Sägehütte; Mine → Stolleneingang mit Grubenholz und Lore; Kelterei → Fässer/Kelterhaus am Traubenhain; Markt → Marktstände in der Stadt.
+4. Völker-Baustile erst später (vorerst einheitlich).
+Vergleichsbild heute: `scratchpad/staedte.mjs` rendert Stufe 1–5 (Dorf, mit Mauer, Hauptstadt) über `import('/js/art.js')`.
+
 Stand 1.27 (Bedienung: Einheitenknöpfe verrutschen nicht, Türme/Wälle nacheinander setzen; Siedlungen selbst gründen: Kreis mit Abstand 5 zu eigenen Städten, eine je Runde, ältere Gebiete bleiben, steigende Kosten). Wolfgang probiert den Modus aus und gibt Rückmeldung. Danach Tierbeine nach dem Wolf-Vorbild auf Pferd, Greif und Raptor übertragen oder Spielthemen (Magier-Besonderheiten, Burgverteidigung Schritt 2).
 
 Ab 1.22: Tierbeine immer nach dem Wolf-Vorbild (Vorderbein gerade, Hinterbein mit Sprunggelenk nach hinten, Pfote nach vorn, keine Trennlinien an Übergängen). Als Nächstes Wolfgang fragen: Beinform auf Pferd, Greif, Raptor usw. übertragen oder Spielthemen (Magier-Besonderheiten, Burgverteidigung Schritt 2). Große Einzelvorschau: `scratchpad/nah.mjs` (Wikinger) / `nahk.mjs` (Königreich).
