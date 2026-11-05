@@ -1373,9 +1373,9 @@ function townTower(ctx, x, y, w, h, s, o) {
 }
 // Kathedrale: Langhaus nach hinten, Westfassade mit zwei Türmen, Rosette und Portal
 function townCathedral(ctx, x, y, s, col, roof) {
-  townHouse(ctx, x + 4 * s, y - 4 * s, 13 * s, 10 * s, s, { wall: 'stone', roof: '#59606e', seed: 41 });
+  townHouse(ctx, x + 5 * s, y - 5 * s, 16 * s, 13 * s, s, { wall: 'stone', roof: '#59606e', seed: 41 });
   // Fassade
-  const fw = 12 * s, fh = 12 * s;
+  const fw = 15 * s, fh = 16 * s;
   ctx.fillStyle = '#ddd0b4';
   ctx.fillRect(x - fw / 2, y - fh, fw, fh);
   wallTexture(ctx, 'stone', x - fw / 2, y - fh, fw, fh, s, 43);
@@ -1385,7 +1385,7 @@ function townCathedral(ctx, x, y, s, col, roof) {
   ctx.fillStyle = '#ddd0b4';
   ctx.beginPath();
   ctx.moveTo(x - fw / 2, y - fh);
-  ctx.lineTo(x, y - fh - 5 * s);
+  ctx.lineTo(x, y - fh - 6.5 * s);
   ctx.lineTo(x + fw / 2, y - fh);
   ctx.closePath();
   ctx.fill();
@@ -1393,38 +1393,38 @@ function townCathedral(ctx, x, y, s, col, roof) {
   // Rosette
   ctx.fillStyle = '#5b8fd6';
   ctx.beginPath();
-  ctx.arc(x, y - fh + 2 * s, 2.3 * s, 0, Math.PI * 2);
+  ctx.arc(x, y - fh + 3 * s, 3 * s, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = '#f2c94c';
   ctx.lineWidth = 0.4 * s;
   for (let k = 0; k < 8; k++) {
     ctx.beginPath();
-    ctx.moveTo(x, y - fh + 2 * s);
-    ctx.lineTo(x + Math.cos((k * Math.PI) / 4) * 2.3 * s, y - fh + 2 * s + Math.sin((k * Math.PI) / 4) * 2.3 * s);
+    ctx.moveTo(x, y - fh + 3 * s);
+    ctx.lineTo(x + Math.cos((k * Math.PI) / 4) * 3 * s, y - fh + 3 * s + Math.sin((k * Math.PI) / 4) * 3 * s);
     ctx.stroke();
   }
   ctx.strokeStyle = '#3b2a1a';
   ctx.lineWidth = 0.6 * s;
   ctx.beginPath();
-  ctx.arc(x, y - fh + 2 * s, 2.3 * s, 0, Math.PI * 2);
+  ctx.arc(x, y - fh + 3 * s, 3 * s, 0, Math.PI * 2);
   ctx.stroke();
   // Portal
   ctx.fillStyle = '#4a2c14';
   ctx.beginPath();
-  ctx.moveTo(x - 2.2 * s, y);
-  ctx.lineTo(x - 2.2 * s, y - 4 * s);
-  ctx.arc(x, y - 4 * s, 2.2 * s, Math.PI, 0);
-  ctx.lineTo(x + 2.2 * s, y);
+  ctx.moveTo(x - 2.8 * s, y);
+  ctx.lineTo(x - 2.8 * s, y - 5.5 * s);
+  ctx.arc(x, y - 5.5 * s, 2.8 * s, Math.PI, 0);
+  ctx.lineTo(x + 2.8 * s, y);
   ctx.closePath();
   ctx.fill();
   // Zwei Türme
   let top = null;
   for (const tx of [-1, 1]) {
-    const t = townTower(ctx, x + tx * 7.2 * s, y + 1 * s, 5 * s, 22 * s, s, { roof, spire: 2.4, cross: true, bell: true, seed: 47 + tx });
+    const t = townTower(ctx, x + tx * 9 * s, y + 1 * s, 6 * s, 32 * s, s, { roof, spire: 2.8, cross: true, bell: true, seed: 47 + tx });
     if (!top || t[1] < top[1]) top = t;
   }
-  banner(ctx, x - 7.2 * s, y - 15 * s, 3.4 * s, 8 * s, col, s);
-  banner(ctx, x + 7.2 * s, y - 15 * s, 3.4 * s, 8 * s, col, s);
+  banner(ctx, x - 9 * s, y - 22 * s, 4 * s, 10 * s, col, s);
+  banner(ctx, x + 9 * s, y - 22 * s, 4 * s, 10 * s, col, s);
   return top;
 }
 // Lattenzaun (Stufe 1) oder Palisade (Stufe 2) entlang eines Halbbogens; half 'back' | 'front'
