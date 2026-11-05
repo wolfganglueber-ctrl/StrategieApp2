@@ -1,7 +1,7 @@
 # Stand
 Spiel-Link: https://claude.ai/artifact/DSHgsarxYi3z7aj65QHMEA (wird bei /fertig aktualisiert)
 
-Version 1.21 (Branch `ccr-8aa711c1-0bv1jz`), Name **KnightyKnight** (intern weiter `hexkrone`), spielbar im Browser/als PWA.
+Version 1.29 (package.json 1.2.9, Branch `ccr-8aa711c1-0bv1jz`), Name **KnightyKnight** (intern weiter `hexkrone`), spielbar im Browser/als PWA.
 - Hexkarte (Wiese, Wald, Hügel, Gebirge, See, Lehm), 4 Kartengrößen (Riesig, Gewaltig, Kolossal, Episch), 5 Landschaften, Karten-Code, Nebel; Städte immer mit ≥ 4 freien Feldern Abstand, Regler „Siedlungsdichte“ 0–100 % (Abstand 8 … 4 freie Felder, Anzahl nach Fläche); Kampagne mit 50 Leveln, Freies Spiel, 10 Speicherplätze, Rückgängig.
 - Wirtschaft: Felder im inneren Ring liefern immer, äußerer Ring je Rohstoff mit Bauernhof/Holzfäller/Mine/Kelterei; 5 Stadtstufen (×1 … ×5, Ausbau 32/8/8 … 74/29/29, Bauplätze 2/3/4/5/6 – Mauer, Türme, Wirtschaft zählen nicht; Versorgung 3/5/7/9/11); Pflug/Sägewerk/Bergbau +50 %; Wiese bearbeiten; Mana aus Traubenhainen/Turm der Weisen.
 - Kampf ohne verborgene Formel: Schaden = Angriff × (100 % − Verteidigung je Angriffsart), unabhängig vom Leben; Durchschlag; feste Zuschläge (Stadt/Mauer/Burg, Rang, Aura); kein Flankenbonus mehr (0.95); Gegenschläge höchstens 2 pro Runde (Trolle 3); Heilung nur durch Zauberer und Einzel-Verbesserungen.
@@ -13,6 +13,8 @@ Version 1.21 (Branch `ccr-8aa711c1-0bv1jz`), Name **KnightyKnight** (intern weit
 - KI in 6 Stufen, seit 0.92 gleichmäßig gestaffelt (Eroberung, Kampf, Ausbau, höhere Einheiten, Verbesserungen); Spieler-Bots zur Abstimmung (0.93); Rohstoffbonus Schwer +10 %, Meister +25 %, Kaiser +45 %, Startguthaben aus. Türme mit Einzel-Verbesserungen und 4 Bauarten.
 - Großes Scrollen auf Episch entschärft (Kacheln begrenzt und vorab berechnet).
 - Spielmodus 🏰 Burgverteidigung: 30 Wellen aus Toren, fester Ertrag inkl. Mana + Beute, Kartenwahl nach jeder Welle (Schritt 1 fertig, Schritt 2 offen – siehe 0.89/0.90).
+- Städte nach Stufen (1.28/1.29): Weiler (3 Holzhütten) · Dorf (Holzhäuser, Holzturm, Palisade) · Marktflecken (Steinhäuser, Glockenturm, Markt) · Stadt (Uhrturm mit Tür, Kapelle, Fachwerk) · Großstadt (Kathedrale mit Langhaus); Stadtmauer ohne Türme mit Torhaus; Hauptstadt wächst in der Burg mit.
+- Siedlungen selbst gründen (1.23–1.26): Kreis im Abstand 5 zu eigenen Städten, eine je Runde, ältere Gebiete bleiben, Kosten steigen um +1.
 
 Versionsverlauf (neueste zuerst):
 - 1.21 Riesentroll neu auf Basis des neuen Trolls (`drawTroll2` mit `giant`, Maßstab 1,35): zweiter Kopf links vorn (überdeckt den rechten), Bauchplatte, Schulterpanzer mit Dornen; Wikinger als Frostvariante. Hexer: „Ur-Raditron“ (`drawCurseTree(ctx, col, true)`: zweites Gesicht im Stamm, dichtere Astkrone, mehr Irrlichter). Alte Zeichnungen `drawGiant`, `ffStitches`, `ffFrost` entfernt.
@@ -175,6 +177,7 @@ Startwerte und Kampfformel (Commit e094f32, 16.10.) stammen aus dem Vorbild *The
 - Frage offen: Soll die Kampagne auch „viele“ Städte bekommen (derzeit „normal“)?
 - Hinweis: Episch „voll“ braucht zum Erzeugen am PC ~0,6 s.
 - Angebot offen: Feldwahl beim Heranziehen soll auch andere Gegner meiden (Schütze landete im Test neben einem zweiten Gegner).
+- Prüfen (1.29): Ragt die größere Stadtmauer (rx 38) im Spiel über das Hexfeld hinaus? Wolfgang schaut es im Spiel an.
 - Frage offen (1.26): Soll beim Selbst-Gründen der Abstand 5 auch zu fremden Städten gelten? Derzeit nur zu eigenen; nahe fremden Städten bekommt die neue Siedlung nur freie Felder.
 - Angebot offen: Schwingenfeld (Drache blockiert ein zweites Feld) und freie Schüsse von Schützen/Türmen beim Feuersturm.
 - Ideen von früher: Marschbefehl (automatisches Ziehen über mehrere Runden); Balancing Troll (in Städten mit Mauer sehr zäh) und KI-Heilen (selten genutzt).
@@ -182,10 +185,12 @@ Startwerte und Kampfformel (Commit e094f32, 16.10.) stammen aus dem Vorbild *The
 # Nächster Schritt
 **Städte-Design (Wolfgangs Entscheidung, noch nicht umgesetzt), in dieser Reihenfolge, Bilder je Schritt zuerst im Chat zeigen:**
 1. ERLEDIGT in 1.28 (mit Wolfgangs Änderungen, siehe 1.28). Dorf/Stadt (`drawCity` in js/art.js) – Stufe an Material + Wahrzeichen erkennbar: 1 Weiler (2–3 Holzhütten, Strohdach, Erdboden, Lattenzaun, Brunnen) · 2 Dorf (4–5 Fachwerkhäuser, Dorfplatz, Holzpalisade, Fahne) · 3 Marktflecken (Steinhäuser mit Ziegeldach, Pflaster, Kapelle mit Glockenturm, Marktstände) · 4 Stadt (dichte zweistöckige Häuser, Rathausturm, Kirche) · 5 Großstadt (Häuserring, Kathedrale mit 2 Türmen, Banner). Sterne bleiben zusätzlich. Bessere Texturen: Pflastersteine, Ziegel-/Schindelreihen, Mauerwerk/Fachwerk, leuchtende Fenster.
-2. Hauptstadt (`drawCastle`) wächst mit: 1 Holzburg auf Erdhügel mit Palisade · 2 Steinbergfried + Holzpalisade · 3 Steinmauer mit 2 Ecktürmen · 4 Burg mit 4 Türmen, Torhaus, Palas · 5 Königsburg mit doppeltem Mauerring, hohem Hauptturm, goldenen Spitzen.
-3. Ausgebaute Rohstoffe direkt auf den Feldern im äußeren Ring (render.js Kachel-Puffer): Bauernhof → Äcker mit Furchen/Korn + kleiner Hof; Holzfäller → Baumstümpfe, Holzstapel, Sägehütte; Mine → Stolleneingang mit Grubenholz und Lore; Kelterei → Fässer/Kelterhaus am Traubenhain; Markt → Marktstände in der Stadt.
+2. OFFEN: Hauptstadt (`drawCastle`) wächst mit: 1 Holzburg auf Erdhügel mit Palisade · 2 Steinbergfried + Holzpalisade · 3 Steinmauer mit 2 Ecktürmen · 4 Burg mit 4 Türmen, Torhaus, Palas · 5 Königsburg mit doppeltem Mauerring, hohem Hauptturm, goldenen Spitzen.
+3. OFFEN: Ausgebaute Rohstoffe direkt auf den Feldern im äußeren Ring (render.js Kachel-Puffer): Bauernhof → Äcker mit Furchen/Korn + kleiner Hof; Holzfäller → Baumstümpfe, Holzstapel, Sägehütte; Mine → Stolleneingang mit Grubenholz und Lore; Kelterei → Fässer/Kelterhaus am Traubenhain; Markt → Marktstände in der Stadt.
 4. Völker-Baustile erst später (vorerst einheitlich).
 Vergleichsbild heute: `scratchpad/staedte.mjs` rendert Stufe 1–5 (Dorf, mit Mauer, Hauptstadt) über `import('/js/art.js')`.
+
+**In einem Satz:** Städte-Plan Schritt 2 (wachsende Burg der Hauptstadt) mit Bildern im Chat vorschlagen, danach Schritt 3 (Rohstoffe auf den Feldern).
 
 Stand 1.29 (Städte nach Stufen, Mauer ohne Türme; Bedienung: Einheitenknöpfe verrutschen nicht, Türme/Wälle nacheinander setzen; Siedlungen selbst gründen: Kreis mit Abstand 5 zu eigenen Städten, eine je Runde, ältere Gebiete bleiben, steigende Kosten). Wolfgang probiert den Modus aus und gibt Rückmeldung. Danach Tierbeine nach dem Wolf-Vorbild auf Pferd, Greif und Raptor übertragen oder Spielthemen (Magier-Besonderheiten, Burgverteidigung Schritt 2).
 
