@@ -1028,6 +1028,541 @@ export function isFortress(city) {
 }
 
 // Bild der Stadt: Stufe 1–5 (Sterne = Stufe)
+// ---------------------------------------------------------------- Dorf/Stadt nach Stufen (Wolfgangs Plan)
+// 1 Weiler (Holzhütten, Strohdach, Erdboden, Lattenzaun, Brunnen) · 2 Dorf (Fachwerk, Dorfplatz, Palisade, Fahne)
+// 3 Marktflecken (Steinhäuser, Ziegeldach, Pflaster, Kapelle mit Glockenturm, Marktstände)
+// 4 Stadt (zweistöckige Häuser, Rathausturm, Kirche) · 5 Großstadt (Häuserring, Kathedrale mit 2 Türmen, Banner)
+const T_WALL = {
+  log: ['#9a6a3c', '#6e4724'],
+  timber: ['#f2e4c4', '#cdb98f'],
+  stone: ['#ddd0b4', '#a8987a'],
+};
+function wallTexture(ctx, kind, x, y, w, h, s, seed) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  if (kind === 'log') {
+    ctx.strokeStyle = 'rgba(50,28,10,0.55)';
+    ctx.lineWidth = 0.5 * s;
+    for (let yy = y + 1.4 * s; yy < y + h; yy += 1.6 * s) {
+      ctx.beginPath();
+      ctx.moveTo(x, yy);
+      ctx.lineTo(x + w, yy);
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,220,170,0.18)';
+    for (let yy = y + 0.3 * s; yy < y + h; yy += 1.6 * s) ctx.fillRect(x, yy, w, 0.5 * s);
+  } else if (kind === 'timber') {
+    ctx.strokeStyle = '#5a3a22';
+    ctx.lineWidth = 0.9 * s;
+    ctx.strokeRect(x, y, w, h);
+    ctx.beginPath();
+    ctx.moveTo(x, y + h * 0.5);
+    ctx.lineTo(x + w, y + h * 0.5);
+    ctx.moveTo(x + w * 0.5, y);
+    ctx.lineTo(x + w * 0.5, y + h);
+    ctx.moveTo(x, y + h * 0.5);
+    ctx.lineTo(x + w * 0.5, y);
+    ctx.moveTo(x + w, y + h * 0.5);
+    ctx.lineTo(x + w * 0.5, y);
+    ctx.stroke();
+  } else {
+    const rh = 1.7 * s;
+    for (let r = 0, yy = y; yy < y + h; yy += rh, r++) {
+      for (let xx = x - (r % 2) * 1.6 * s, k = 0; xx < x + w; xx += 3.2 * s, k++) {
+        const v = hash(seed * 31 + r * 7 + k) * 0.12 - 0.06;
+        ctx.fillStyle = shade('#d6c8aa', v);
+        ctx.fillRect(xx + 0.15 * s, yy + 0.15 * s, 3.2 * s - 0.3 * s, rh - 0.3 * s);
+      }
+    }
+  }
+  ctx.restore();
+}
+function roofTexture(ctx, kind, path, color, s, top, bottom) {
+  ctx.save();
+  path();
+  ctx.clip();
+  if (kind === 'thatch') {
+    ctx.strokeStyle = 'rgba(90,60,20,0.45)';
+    ctx.lineWidth = 0.4 * s;
+    for (let yy = top + 1 * s; yy < bottom; yy += 1.3 * s) {
+      for (let xx = -60 * s; xx < 60 * s; xx += 1.4 * s) {
+        ctx.beginPath();
+        ctx.moveTo(ctx.__cx + xx, yy);
+        ctx.lineTo(ctx.__cx + xx + 0.4 * s, yy + 1.1 * s);
+        ctx.stroke();
+      }
+    }
+  } else {
+    ctx.strokeStyle = shade(color, -0.35);
+    ctx.lineWidth = 0.45 * s;
+    for (let yy = top + 1.6 * s, r = 0; yy < bottom; yy += 1.6 * s, r++) {
+      ctx.beginPath();
+      ctx.moveTo(ctx.__cx - 60 * s, yy);
+      ctx.lineTo(ctx.__cx + 60 * s, yy);
+      ctx.stroke();
+      for (let xx = -60 * s + (r % 2) * 1.2 * s; xx < 60 * s; xx += 2.4 * s) {
+        ctx.beginPath();
+        ctx.moveTo(ctx.__cx + xx, yy - 1.6 * s);
+        ctx.lineTo(ctx.__cx + xx, yy);
+        ctx.stroke();
+      }
+    }
+  }
+  ctx.restore();
+}
+// Haus: x Mitte der Vorderseite, y Grundlinie; wall 'log' | 'timber' | 'stone'; roofKind 'thatch' | 'tile'; floors 1–2
+function townHouse(ctx, x, y, w, h, s, o) {
+  const { wall = 'stone', roofKind = 'tile', roof = '#a33', floors = 1, seed = 1 } = o;
+  const d = w * 0.45, rh = h * (roofKind === 'thatch' ? 0.95 : 0.75);
+  const [wc, wd] = T_WALL[wall];
+  shadowEllipse(ctx, x + d * 0.6, y + 1.5 * s, w * 0.85, 3 * s, 0.3);
+  // Seitenwand
+  ctx.fillStyle = wd;
+  ctx.beginPath();
+  ctx.moveTo(x + w / 2, y);
+  ctx.lineTo(x + w / 2 + d, y - d * 0.55);
+  ctx.lineTo(x + w / 2 + d, y - h - d * 0.55);
+  ctx.lineTo(x + w / 2, y - h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(50,30,15,0.55)';
+  ctx.lineWidth = 0.7 * s;
+  ctx.stroke();
+  // Front
+  ctx.fillStyle = wc;
+  ctx.fillRect(x - w / 2, y - h, w, h);
+  if (wall === 'timber' && floors === 2) {
+    wallTexture(ctx, 'stone', x - w / 2, y - h / 2, w, h / 2, s, seed);
+    wallTexture(ctx, 'timber', x - w / 2, y - h, w, h / 2, s, seed);
+  } else wallTexture(ctx, wall, x - w / 2, y - h, w, h, s, seed);
+  ctx.strokeStyle = 'rgba(50,30,15,0.65)';
+  ctx.lineWidth = 0.8 * s;
+  ctx.strokeRect(x - w / 2, y - h, w, h);
+  // Tür
+  ctx.fillStyle = wall === 'log' ? '#4a2c14' : '#6b4423';
+  ctx.beginPath();
+  const dw = w * 0.2, dh = Math.min(h * (floors === 2 ? 0.32 : 0.55), 5.5 * s);
+  ctx.moveTo(x - dw, y);
+  ctx.lineTo(x - dw, y - dh + dw);
+  ctx.arc(x, y - dh + dw, dw, Math.PI, 0);
+  ctx.lineTo(x + dw, y);
+  ctx.closePath();
+  ctx.fill();
+  // Fenster (leuchtend)
+  const win = (wx, wy, ww, wh) => {
+    ctx.fillStyle = '#3b2a1a';
+    ctx.fillRect(wx - 0.3 * s, wy - 0.3 * s, ww + 0.6 * s, wh + 0.6 * s);
+    ctx.fillStyle = '#ffd36a';
+    ctx.fillRect(wx, wy, ww, wh);
+    ctx.fillStyle = 'rgba(255,255,220,0.6)';
+    ctx.fillRect(wx, wy, ww * 0.45, wh * 0.45);
+  };
+  if (wall !== 'log') {
+    const ww = Math.max(1.3 * s, w * 0.13), wh = ww * 1.2;
+    if (floors === 2) for (const fx of [-0.3, 0, 0.3]) win(x + fx * w - ww / 2, y - h * 0.82, ww, wh);
+    for (const fx of [-0.32, 0.32]) win(x + fx * w - ww / 2, y - h * (floors === 2 ? 0.4 : 0.7), ww, wh);
+  } else win(x + w * 0.22, y - h * 0.68, 1.4 * s, 1.4 * s);
+  // Seitenfenster
+  ctx.fillStyle = '#ffd36a';
+  ctx.fillRect(x + w / 2 + d * 0.35, y - h * 0.72 - d * 0.22, d * 0.3, h * 0.24);
+  // Dach
+  const rc = roofKind === 'thatch' ? '#c9a14e' : roof;
+  const ov = (roofKind === 'thatch' ? 1.8 : 1) * s;
+  ctx.fillStyle = shade(rc, -0.28);
+  ctx.beginPath();
+  ctx.moveTo(x, y - h - rh);
+  ctx.lineTo(x + w / 2 + ov, y - h + (roofKind === 'thatch' ? 1 * s : 0));
+  ctx.lineTo(x + w / 2 + d + ov, y - h - d * 0.55 + (roofKind === 'thatch' ? 1 * s : 0));
+  ctx.lineTo(x + d, y - h - rh - d * 0.55);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(40,20,10,0.6)';
+  ctx.lineWidth = 0.7 * s;
+  ctx.stroke();
+  const front = () => {
+    ctx.beginPath();
+    ctx.moveTo(x - w / 2 - ov, y - h + (roofKind === 'thatch' ? 1 * s : 0));
+    ctx.lineTo(x, y - h - rh);
+    ctx.lineTo(x + w / 2 + ov, y - h + (roofKind === 'thatch' ? 1 * s : 0));
+    ctx.closePath();
+  };
+  const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+  g.addColorStop(0, shade(rc, 0.18));
+  g.addColorStop(1, shade(rc, -0.12));
+  ctx.fillStyle = g;
+  front();
+  ctx.fill();
+  ctx.__cx = x;
+  roofTexture(ctx, roofKind, front, rc, s, y - h - rh, y - h + 1 * s);
+  front();
+  ctx.strokeStyle = 'rgba(40,20,10,0.65)';
+  ctx.lineWidth = 0.8 * s;
+  ctx.stroke();
+  if (roofKind === 'thatch') {
+    ctx.strokeStyle = '#8a6a2a';
+    ctx.lineWidth = 1.1 * s;
+    ctx.beginPath();
+    ctx.moveTo(x, y - h - rh);
+    ctx.lineTo(x + d, y - h - rh - d * 0.55);
+    ctx.stroke();
+  }
+}
+function townWell(ctx, x, y, s) {
+  shadowEllipse(ctx, x + 1 * s, y + 1 * s, 4 * s, 1.6 * s, 0.3);
+  ctx.fillStyle = stone(ctx, x - 3.2 * s, x + 3.2 * s);
+  ctx.beginPath();
+  ctx.ellipse(x, y, 3.2 * s, 1.4 * s, 0, 0, Math.PI);
+  ctx.lineTo(x - 3.2 * s, y - 2.6 * s);
+  ctx.ellipse(x, y - 2.6 * s, 3.2 * s, 1.4 * s, 0, Math.PI, 0, true);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.6 * s);
+  ctx.fillStyle = '#2a4a6a';
+  ctx.beginPath();
+  ctx.ellipse(x, y - 2.6 * s, 2.4 * s, 0.9 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#5a3a1e';
+  ctx.lineWidth = 0.8 * s;
+  ctx.beginPath();
+  ctx.moveTo(x - 2.6 * s, y - 2.4 * s);
+  ctx.lineTo(x - 2.6 * s, y - 7 * s);
+  ctx.moveTo(x + 2.6 * s, y - 2.4 * s);
+  ctx.lineTo(x + 2.6 * s, y - 7 * s);
+  ctx.moveTo(x - 2.6 * s, y - 5.6 * s);
+  ctx.lineTo(x + 2.6 * s, y - 5.6 * s);
+  ctx.stroke();
+  ctx.fillStyle = '#8a5a30';
+  ctx.beginPath();
+  ctx.moveTo(x - 4 * s, y - 6.6 * s);
+  ctx.lineTo(x, y - 9.4 * s);
+  ctx.lineTo(x + 4 * s, y - 6.6 * s);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.5 * s);
+}
+function townStall(ctx, x, y, s, col, seed) {
+  shadowEllipse(ctx, x + 1 * s, y + 0.8 * s, 4 * s, 1.4 * s, 0.25);
+  ctx.fillStyle = '#7a5230';
+  ctx.fillRect(x - 3.4 * s, y - 2.2 * s, 6.8 * s, 2.2 * s);
+  ctx.strokeStyle = '#4a3018';
+  ctx.lineWidth = 0.6 * s;
+  ctx.beginPath();
+  ctx.moveTo(x - 3.2 * s, y);
+  ctx.lineTo(x - 3.2 * s, y - 6 * s);
+  ctx.moveTo(x + 3.2 * s, y);
+  ctx.lineTo(x + 3.2 * s, y - 6 * s);
+  ctx.stroke();
+  for (let k = 0; k < 5; k++) {
+    ctx.fillStyle = ['#e2483a', '#f2c94c', '#7cb342', '#e8893a', '#9b59b6'][(seed + k) % 5];
+    ctx.beginPath();
+    ctx.arc(x - 2.4 * s + k * 1.2 * s, y - 2.6 * s, 0.6 * s, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (let k = 0; k < 4; k++) {
+    ctx.fillStyle = k % 2 ? '#f4ecdc' : col.main;
+    ctx.beginPath();
+    ctx.moveTo(x - 4 * s + k * 2 * s, y - 6.6 * s);
+    ctx.lineTo(x - 2 * s + k * 2 * s, y - 6.6 * s);
+    ctx.lineTo(x - 2 * s + k * 2 * s, y - 5 * s);
+    ctx.lineTo(x - 4 * s + k * 2 * s, y - 5 * s);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(40,25,10,0.6)';
+  ctx.strokeRect(x - 4 * s, y - 6.6 * s, 8 * s, 1.6 * s);
+}
+// Quadratischer Steinturm mit Pyramidendach (Glockenturm, Rathausturm, Kathedralturm)
+function townTower(ctx, x, y, w, h, s, o) {
+  const { roof = '#a33', clock = false, bell = false, spire = 1.6, cross = false, seed = 3 } = o;
+  const d = w * 0.4;
+  ctx.fillStyle = '#a8987a';
+  ctx.beginPath();
+  ctx.moveTo(x + w / 2, y);
+  ctx.lineTo(x + w / 2 + d, y - d * 0.55);
+  ctx.lineTo(x + w / 2 + d, y - h - d * 0.55);
+  ctx.lineTo(x + w / 2, y - h);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.6 * s);
+  ctx.fillStyle = '#ddd0b4';
+  ctx.fillRect(x - w / 2, y - h, w, h);
+  wallTexture(ctx, 'stone', x - w / 2, y - h, w, h, s, seed);
+  ctx.strokeStyle = 'rgba(50,30,15,0.65)';
+  ctx.lineWidth = 0.7 * s;
+  ctx.strokeRect(x - w / 2, y - h, w, h);
+  if (bell) {
+    ctx.fillStyle = '#2b2118';
+    ctx.beginPath();
+    ctx.moveTo(x - w * 0.25, y - h + 5 * s);
+    ctx.lineTo(x - w * 0.25, y - h + 2.6 * s);
+    ctx.arc(x, y - h + 2.6 * s, w * 0.25, Math.PI, 0);
+    ctx.lineTo(x + w * 0.25, y - h + 5 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#e8b33a';
+    ctx.beginPath();
+    ctx.arc(x, y - h + 3.6 * s, w * 0.14, Math.PI, 0);
+    ctx.lineTo(x + w * 0.18, y - h + 4.4 * s);
+    ctx.lineTo(x - w * 0.18, y - h + 4.4 * s);
+    ctx.fill();
+  }
+  if (clock) {
+    const cy = y - h + 4 * s;
+    ctx.fillStyle = '#f7f1e2';
+    ctx.beginPath();
+    ctx.arc(x, cy, w * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#3b2a1a';
+    ctx.lineWidth = 0.6 * s;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, cy);
+    ctx.lineTo(x, cy - w * 0.22);
+    ctx.moveTo(x, cy);
+    ctx.lineTo(x + w * 0.16, cy + w * 0.05);
+    ctx.stroke();
+  }
+  // Fensterschlitz
+  ctx.fillStyle = '#ffd36a';
+  ctx.fillRect(x - 0.5 * s, y - h * 0.45, 1 * s, 2.4 * s);
+  // Pyramidendach
+  const rh = w * spire;
+  ctx.fillStyle = shade(roof, -0.3);
+  ctx.beginPath();
+  ctx.moveTo(x + w / 2 + 0.8 * s, y - h);
+  ctx.lineTo(x + w / 2 + d + 0.8 * s, y - h - d * 0.55);
+  ctx.lineTo(x + d * 0.5, y - h - rh - d * 0.3);
+  ctx.closePath();
+  ctx.fill();
+  const front = () => {
+    ctx.beginPath();
+    ctx.moveTo(x - w / 2 - 0.8 * s, y - h);
+    ctx.lineTo(x + d * 0.5, y - h - rh - d * 0.3);
+    ctx.lineTo(x + w / 2 + 0.8 * s, y - h);
+    ctx.closePath();
+  };
+  ctx.fillStyle = shade(roof, 0.05);
+  front();
+  ctx.fill();
+  ctx.__cx = x;
+  roofTexture(ctx, 'tile', front, roof, s, y - h - rh, y - h);
+  front();
+  outline(ctx, 0.6 * s);
+  const tx = x + d * 0.5, ty = y - h - rh - d * 0.3;
+  if (cross) {
+    ctx.strokeStyle = '#e8c35a';
+    ctx.lineWidth = 0.8 * s;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx, ty - 3.4 * s);
+    ctx.moveTo(tx - 1.3 * s, ty - 2.3 * s);
+    ctx.lineTo(tx + 1.3 * s, ty - 2.3 * s);
+    ctx.stroke();
+  }
+  return [tx, ty];
+}
+// Kathedrale: Langhaus nach hinten, Westfassade mit zwei Türmen, Rosette und Portal
+function townCathedral(ctx, x, y, s, col, roof) {
+  townHouse(ctx, x + 4 * s, y - 4 * s, 13 * s, 10 * s, s, { wall: 'stone', roof: '#59606e', seed: 41 });
+  // Fassade
+  const fw = 12 * s, fh = 12 * s;
+  ctx.fillStyle = '#ddd0b4';
+  ctx.fillRect(x - fw / 2, y - fh, fw, fh);
+  wallTexture(ctx, 'stone', x - fw / 2, y - fh, fw, fh, s, 43);
+  ctx.strokeStyle = 'rgba(50,30,15,0.65)';
+  ctx.lineWidth = 0.8 * s;
+  ctx.strokeRect(x - fw / 2, y - fh, fw, fh);
+  ctx.fillStyle = '#ddd0b4';
+  ctx.beginPath();
+  ctx.moveTo(x - fw / 2, y - fh);
+  ctx.lineTo(x, y - fh - 5 * s);
+  ctx.lineTo(x + fw / 2, y - fh);
+  ctx.closePath();
+  ctx.fill();
+  outline(ctx, 0.7 * s);
+  // Rosette
+  ctx.fillStyle = '#5b8fd6';
+  ctx.beginPath();
+  ctx.arc(x, y - fh + 2 * s, 2.3 * s, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#f2c94c';
+  ctx.lineWidth = 0.4 * s;
+  for (let k = 0; k < 8; k++) {
+    ctx.beginPath();
+    ctx.moveTo(x, y - fh + 2 * s);
+    ctx.lineTo(x + Math.cos((k * Math.PI) / 4) * 2.3 * s, y - fh + 2 * s + Math.sin((k * Math.PI) / 4) * 2.3 * s);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = '#3b2a1a';
+  ctx.lineWidth = 0.6 * s;
+  ctx.beginPath();
+  ctx.arc(x, y - fh + 2 * s, 2.3 * s, 0, Math.PI * 2);
+  ctx.stroke();
+  // Portal
+  ctx.fillStyle = '#4a2c14';
+  ctx.beginPath();
+  ctx.moveTo(x - 2.2 * s, y);
+  ctx.lineTo(x - 2.2 * s, y - 4 * s);
+  ctx.arc(x, y - 4 * s, 2.2 * s, Math.PI, 0);
+  ctx.lineTo(x + 2.2 * s, y);
+  ctx.closePath();
+  ctx.fill();
+  // Zwei Türme
+  let top = null;
+  for (const tx of [-1, 1]) {
+    const t = townTower(ctx, x + tx * 7.2 * s, y + 1 * s, 5 * s, 22 * s, s, { roof, spire: 2.4, cross: true, bell: true, seed: 47 + tx });
+    if (!top || t[1] < top[1]) top = t;
+  }
+  banner(ctx, x - 7.2 * s, y - 15 * s, 3.4 * s, 8 * s, col, s);
+  banner(ctx, x + 7.2 * s, y - 15 * s, 3.4 * s, 8 * s, col, s);
+  return top;
+}
+// Lattenzaun (Stufe 1) oder Palisade (Stufe 2) entlang eines Halbbogens; half 'back' | 'front'
+function townFence(ctx, x, y, rx, ry, s, kind, half) {
+  const pts = [];
+  const n = kind === 'palisade' ? 34 : 16;
+  for (let k = 0; k <= n; k++) {
+    const t = (half === 'front' ? 0 : Math.PI) + (Math.PI * k) / n;
+    pts.push([x + rx * Math.cos(t), y + ry * Math.sin(t)]);
+  }
+  if (half === 'front') {
+    // Tor vorne offen lassen
+  }
+  if (kind === 'fence') {
+    ctx.strokeStyle = half === 'front' ? '#8a5a30' : '#6e4724';
+    ctx.lineWidth = 0.7 * s;
+    for (const off of [1.4, 2.8]) {
+      ctx.beginPath();
+      pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py - off * s) : ctx.moveTo(px, py - off * s)));
+      ctx.stroke();
+    }
+    ctx.lineWidth = 0.9 * s;
+    for (const [px, py] of pts) {
+      if (half === 'front' && Math.abs(px - x) < 3 * s && py > y) continue;
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px, py - 3.6 * s);
+      ctx.stroke();
+    }
+  } else {
+    for (const [px, py] of pts) {
+      if (half === 'front' && Math.abs(px - x) < 3.4 * s && py > y) continue;
+      const h = 5.5 * s;
+      ctx.fillStyle = half === 'front' ? '#9a6a3c' : '#6e4724';
+      ctx.beginPath();
+      ctx.moveTo(px - 1 * s, py);
+      ctx.lineTo(px - 1 * s, py - h);
+      ctx.lineTo(px, py - h - 1.4 * s);
+      ctx.lineTo(px + 1 * s, py - h);
+      ctx.lineTo(px + 1 * s, py);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(40,22,8,0.7)';
+      ctx.lineWidth = 0.4 * s;
+      ctx.stroke();
+    }
+  }
+}
+// Boden: Erde (1), festgetretener Dorfplatz (2), Pflaster (3–5)
+function townGround(ctx, x, y, rx, ry, s, lv) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+  const g = ctx.createRadialGradient(x - rx * 0.2, y - ry * 0.3, 2, x, y, rx);
+  if (lv <= 1) { g.addColorStop(0, '#a88a5a'); g.addColorStop(1, '#7d6440'); }
+  else if (lv === 2) { g.addColorStop(0, '#c9ae7e'); g.addColorStop(1, '#9a7d52'); }
+  else { g.addColorStop(0, '#d9ccb0'); g.addColorStop(1, '#a8977a'); }
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.clip();
+  if (lv >= 3) {
+    // Pflastersteine
+    for (let r = 0, yy = y - ry; yy < y + ry; yy += 1.9 * s, r++) {
+      for (let xx = x - rx + (r % 2) * 1.3 * s, k = 0; xx < x + rx; xx += 2.6 * s, k++) {
+        ctx.fillStyle = hash(r * 97 + k) > 0.5 ? 'rgba(80,60,35,0.18)' : 'rgba(255,250,235,0.16)';
+        ctx.beginPath();
+        ctx.ellipse(xx, yy, 1.1 * s, 0.75 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  } else {
+    for (let k = 0; k < 26; k++) {
+      ctx.fillStyle = lv <= 1 ? 'rgba(70,110,40,0.55)' : 'rgba(90,70,40,0.25)';
+      const px = x + (hash(k * 13 + lv) - 0.5) * rx * 2, py = y + (hash(k * 29 + lv) - 0.5) * ry * 2;
+      ctx.beginPath();
+      ctx.ellipse(px, py, 1.4 * s, 0.6 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(70,50,25,0.5)';
+  ctx.lineWidth = 1.1 * s;
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+  ctx.stroke();
+}
+// Gibt den Sitzplatz für den kleinen Drachen zurück
+function townStage(ctx, x, y, s, lv, col, walled) {
+  const roof = col.main;
+  const items = [];
+  const H = (hx, hy, w, h, o) => items.push([hy, () => townHouse(ctx, x + hx * s, y + hy * s, w * s, h * s, s, { roof, ...o })]);
+  let perch = null;
+  const R = [0, [17, 10], [23, 14], [25, 15.5], [27, 17], [29, 18]][Math.min(5, lv)];
+  townGround(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, lv);
+  if (lv === 1) {
+    townFence(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, 'fence', 'back');
+    items.push([4, () => townWell(ctx, x + 1 * s, y + 4 * s, s)]);
+    H(-7, 10, 10, 6.5, { wall: 'log', roofKind: 'thatch', seed: 1 });
+    H(8, 14, 9, 6, { wall: 'log', roofKind: 'thatch', seed: 2 });
+    items.push([2, () => flag(ctx, x - 12 * s, y + 2 * s, 9 * s, col, s)]);
+  } else if (lv === 2) {
+    if (!walled) townFence(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, 'palisade', 'back');
+    items.push([9, () => townWell(ctx, x + 1 * s, y + 9 * s, s)]);
+    H(-11, 3, 11, 7.5, { wall: 'timber', seed: 3 });
+    H(9, 4, 10, 7, { wall: 'timber', seed: 4 });
+    H(-4, 18, 11, 7.5, { wall: 'timber', seed: 5 });
+    H(13, 17, 8.5, 6.5, { wall: 'log', roofKind: 'thatch', seed: 6 });
+    items.push([0, () => flag(ctx, x + 2 * s, y + 0 * s, 13 * s, col, s)]);
+  } else if (lv === 3) {
+    items.push([3, () => { const t = townTower(ctx, x - 14 * s, y + 3 * s, 5 * s, 16 * s, s, { roof, bell: true, cross: true, seed: 11 }); perch = t; }]);
+    H(-6, 3, 10, 7, { wall: 'stone', seed: 12 });
+    H(9, -1, 11, 7.5, { wall: 'stone', seed: 13 });
+    H(19, 10, 9, 6.5, { wall: 'timber', seed: 14 });
+    H(-19, 15, 9, 6.5, { wall: 'stone', seed: 15 });
+    H(-6, 22, 11, 7.5, { wall: 'stone', seed: 16 });
+    H(11, 23, 9, 6.5, { wall: 'stone', seed: 17 });
+    items.push([11, () => townStall(ctx, x + 1 * s, y + 11 * s, s, col, 1)]);
+    items.push([13, () => townStall(ctx, x + 9 * s, y + 13 * s, s, col, 3)]);
+  } else if (lv === 4) {
+    items.push([2, () => { const t = townTower(ctx, x + 6 * s, y + 2 * s, 6.5 * s, 22 * s, s, { roof, clock: true, seed: 21 }); perch = t; flag(ctx, t[0], t[1], 8 * s, col, s); }]);
+    items.push([3, () => { townHouse(ctx, x - 12 * s, y + 3 * s, 11 * s, 8 * s, s, { wall: 'stone', roof, seed: 22 }); townTower(ctx, x - 18 * s, y + 3 * s, 4.5 * s, 17 * s, s, { roof, bell: true, cross: true, seed: 23 }); }]);
+    H(19, 8, 9.5, 10, { wall: 'timber', floors: 2, seed: 24 });
+    H(-21, 16, 9, 10, { wall: 'timber', floors: 2, seed: 25 });
+    H(-6, 23, 11, 11, { wall: 'timber', floors: 2, seed: 26 });
+    H(9, 24, 10, 10.5, { wall: 'stone', floors: 2, seed: 27 });
+    H(22, 21, 8, 9, { wall: 'stone', floors: 2, seed: 28 });
+    items.push([13, () => townStall(ctx, x + 1 * s, y + 13 * s, s, col, 2)]);
+  } else {
+    items.push([1, () => { perch = townCathedral(ctx, x - 5 * s, y + 1 * s, s, col, roof); }]);
+    items.push([4, () => { const t = townTower(ctx, x + 15 * s, y + 4 * s, 6 * s, 20 * s, s, { roof, clock: true, seed: 31 }); flag(ctx, t[0], t[1], 8 * s, col, s, true); }]);
+    H(24, 13, 9, 10, { wall: 'timber', floors: 2, seed: 32 });
+    H(-25, 11, 9, 10, { wall: 'timber', floors: 2, seed: 33 });
+    H(-20, 22, 10, 11, { wall: 'stone', floors: 2, seed: 34 });
+    H(-5, 25, 11, 11, { wall: 'timber', floors: 2, seed: 35 });
+    H(10, 26, 10, 10.5, { wall: 'stone', floors: 2, seed: 36 });
+    H(24, 24, 8, 9, { wall: 'timber', floors: 2, seed: 37 });
+    items.push([14, () => townStall(ctx, x + 3 * s, y + 15 * s, s, col, 4)]);
+    items.push([15, () => townStall(ctx, x + 11 * s, y + 15 * s, s, col, 0)]);
+  }
+  items.sort((a, b) => a[0] - b[0]);
+  for (const [, f] of items) f();
+  if (lv === 1) townFence(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, 'fence', 'front');
+  if (lv === 2 && !walled) townFence(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, 'palisade', 'front');
+  return perch;
+}
+
 const CITY_LOOK = [0, 1, 2, 3, 4, 5];
 export function drawCity(ctx, city, x, y, H, col) {
   if (city.stars == null) city = { ...city, stars: city.level, level: CITY_LOOK[city.level] ?? city.level };
@@ -1035,17 +1570,20 @@ export function drawCity(ctx, city, x, y, H, col) {
   const big = isFortress(city);
   const walled = !!city.buildings?.includes('wall');
   let perch = null; // Sitzplatz für den kleinen Drachen (Drachenhöhle)
+  const townLook = !big && !city.capital;
   // Pflaster
-  const g = ctx.createRadialGradient(x - 6 * s, y, 2, x, y + 4 * s, 26 * s);
-  g.addColorStop(0, '#efe2c4');
-  g.addColorStop(1, '#bfa77c');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.ellipse(x, y + 6 * s, (big ? 30 : 27) * s, (big ? 18 : 17) * s, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(90,65,35,0.5)';
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
+  const g = townLook ? null : ctx.createRadialGradient(x - 6 * s, y, 2, x, y + 4 * s, 26 * s);
+  if (g) {
+    g.addColorStop(0, '#efe2c4');
+    g.addColorStop(1, '#bfa77c');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(x, y + 6 * s, (big ? 30 : 27) * s, (big ? 18 : 17) * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(90,65,35,0.5)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
   if (walled) cityWall(ctx, x, y, s, col, 'back', big);
   const roof = col.main;
   if (big) {
@@ -1084,6 +1622,8 @@ export function drawCity(ctx, city, x, y, H, col) {
     if (city.level >= 3) house(ctx, x - 20 * s, y + 22 * s + dy, 9 * s, 7 * s, roof, s);
     if (city.level >= 4) house(ctx, x + 4 * s, y + 24 * s + dy, 9 * s, 7 * s, roof, s);
     if (city.level >= 5) house(ctx, x + 22 * s, y + 24 * s + dy, 8 * s, 6 * s, roof, s);
+  } else if (townLook) {
+    perch = townStage(ctx, x, y, s, city.level, col, walled);
   } else {
     const dy = walled ? -3 : 0;
     const layouts = {
