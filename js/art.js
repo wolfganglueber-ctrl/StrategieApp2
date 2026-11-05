@@ -1127,7 +1127,7 @@ function townHouse(ctx, x, y, w, h, s, o) {
   ctx.lineTo(x + w / 2, y - h);
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = 'rgba(50,30,15,0.55)';
+  ctx.strokeStyle = 'rgba(70,70,70,0.55)';
   ctx.lineWidth = 0.7 * s;
   ctx.stroke();
   // Front
@@ -1137,7 +1137,7 @@ function townHouse(ctx, x, y, w, h, s, o) {
     wallTexture(ctx, 'stone', x - w / 2, y - h / 2, w, h / 2, s, seed);
     wallTexture(ctx, 'timber', x - w / 2, y - h, w, h / 2, s, seed);
   } else wallTexture(ctx, wall, x - w / 2, y - h, w, h, s, seed);
-  ctx.strokeStyle = 'rgba(50,30,15,0.65)';
+  ctx.strokeStyle = 'rgba(70,70,70,0.65)';
   ctx.lineWidth = 0.8 * s;
   ctx.strokeRect(x - w / 2, y - h, w, h);
   // Tür
@@ -1297,7 +1297,7 @@ function townTower(ctx, x, y, w, h, s, o) {
   ctx.fillStyle = '#f3ecdc';
   ctx.fillRect(x - w / 2, y - h, w, h);
   wallTexture(ctx, 'stone', x - w / 2, y - h, w, h, s, seed);
-  ctx.strokeStyle = 'rgba(50,30,15,0.65)';
+  ctx.strokeStyle = 'rgba(70,70,70,0.65)';
   ctx.lineWidth = 0.7 * s;
   ctx.strokeRect(x - w / 2, y - h, w, h);
   if (bell) {
@@ -1379,7 +1379,7 @@ function townCathedral(ctx, x, y, s, col, roof) {
   ctx.fillStyle = '#f3ecdc';
   ctx.fillRect(x - fw / 2, y - fh, fw, fh);
   wallTexture(ctx, 'stone', x - fw / 2, y - fh, fw, fh, s, 43);
-  ctx.strokeStyle = 'rgba(50,30,15,0.65)';
+  ctx.strokeStyle = 'rgba(70,70,70,0.65)';
   ctx.lineWidth = 0.8 * s;
   ctx.strokeRect(x - fw / 2, y - fh, fw, fh);
   ctx.fillStyle = '#f3ecdc';
