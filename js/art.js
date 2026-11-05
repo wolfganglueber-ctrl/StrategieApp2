@@ -1549,6 +1549,17 @@ function woodTower(ctx, x, y, s, col) {
 }
 // Gibt den Sitzplatz für den kleinen Drachen zurück; inner: innerhalb der Burg (ohne Zaun/Palisade)
 function townStage(ctx, x, y, s, lv, col, walled, inner = false) {
+  // Kein Schlagschatten je Stein/Ziegel (die Karte zeichnet Städte mit Schatten – das machte Fugen dunkel); Häuser haben eigene Bodenschatten
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0)';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+  const perch = townStageInner(ctx, x, y, s, lv, col, walled, inner);
+  ctx.restore();
+  return perch;
+}
+function townStageInner(ctx, x, y, s, lv, col, walled, inner) {
   const roof = col.main;
   const items = [];
   const H = (hx, hy, w, h, o) => items.push([hy, () => townHouse(ctx, x + hx * s, y + hy * s, w * s, h * s, s, { roof, ...o })]);
