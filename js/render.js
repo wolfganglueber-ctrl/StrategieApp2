@@ -1089,8 +1089,7 @@ export class Renderer {
       ctx.shadowBlur = 5;
       ctx.shadowOffsetX = 3;
       ctx.shadowOffsetY = 2;
-      // Mit Mauer wirkt die Stadt durch den Mauerring ohnehin größer – etwas kleiner zeichnen
-      const sc = (CITY_SCALE[city.level] || 2.2) * (city.buildings?.includes('wall') ? 0.8 : 1);
+      const sc = CITY_SCALE[city.level] || 2.2;
       drawCity(ctx, city, c.x, c.y - HEX * 0.25 * (sc - 1), HEX * sc, colorOf(city.owner));
       ctx.restore();
     }
@@ -1668,7 +1667,13 @@ export class Renderer {
       const rows = [['food', 'wood'], ['ore', 'mana']];
       const cellW = isz + 1 + Math.max(numW, ...['food', 'wood', 'ore', 'mana'].map((k) => ctx.measureText(String(y[k] || 0)).width));
       const w = cellW * 2 + gap + pad * 2, h = rowH * 2 + pad * 2;
-      const x0 = c.x - w / 2, y0 = c.y - HEX * (city.castle ? 2.15 : 1.3) - h / 2;
+      let y0 = c.y - HEX * (city.castle ? 2.15 : 1.3) - h / 2;
+      if (!city.castle && city.buildings?.includes('wall')) {
+        // über die (mit der Stadt wachsende) Mauer setzen
+        const sc = CITY_SCALE[city.level] || 2.2;
+        y0 = Math.min(y0, c.y - HEX * (0.25 * (sc - 1) + 0.82 * sc) - h);
+      }
+      const x0 = c.x - w / 2;
       ctx.fillStyle = 'rgba(10,20,36,0.8)';
       ctx.strokeStyle = colorOf(city.owner).main;
       ctx.lineWidth = 1.2;
