@@ -1702,7 +1702,8 @@ export function drawCity(ctx, city, x, y, H, col) {
   const big = isFortress(city);
   const walled = !!city.buildings?.includes('wall');
   let perch = null; // Sitzplatz für den kleinen Drachen (Drachenhöhle)
-  const townLook = !big && !city.capital;
+  // Neutrale Siedlungen behalten das alte Dorfbild (Wunsch von Wolfgang), Spielerstädte zeigen die Stufen-Stadt
+  const townLook = !big && !city.capital && city.owner >= 0;
   // Pflaster
   const g = townLook ? null : ctx.createRadialGradient(x - 6 * s, y, 2, x, y + 4 * s, 26 * s);
   if (g) {
@@ -1797,27 +1798,6 @@ export function drawCity(ctx, city, x, y, H, col) {
       perch = [rx, ry - 12 * s];
     }
     miniDragon(ctx, perch[0], perch[1], s, col);
-  }
-  // Stufenanzeige
-  const lv = city.stars ?? city.level;
-  if (lv > 1) {
-    // Ab Stufe 6 enger und kleiner, damit 8 Sterne aufs Feld passen
-    const sp = lv > 5 ? 7.5 : 10, sk = lv > 5 ? 0.8 : 1;
-    for (let k = 0; k < lv; k++) {
-      const px = x - ((lv - 1) * sp * s) / 2 + k * sp * s, py = y + 29 * s;
-      ctx.fillStyle = k >= 5 ? '#ffb02e' : '#ffd34d';
-      ctx.strokeStyle = '#6b4a00';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (let i = 0; i < 10; i++) {
-        const a = -Math.PI / 2 + (i * Math.PI) / 5, r = (i % 2 ? 2 * s : 4.5 * s) * sk;
-        if (i === 0) ctx.moveTo(px + r * Math.cos(a), py + r * Math.sin(a));
-        else ctx.lineTo(px + r * Math.cos(a), py + r * Math.sin(a));
-      }
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
   }
 }
 

@@ -1654,7 +1654,7 @@ export class Renderer {
   // Ertrag jeder Stadt über ihr: alle vier Rohstoffe als kleines 2×2-Raster (Nahrung, Holz / Erz, Mana), Werte aus main.js
   drawYields(ctx, fog, vr) {
     const s = this.state;
-    const fs = HEX * 0.32, isz = HEX * 0.34, pad = HEX * 0.08, gap = HEX * 0.09, rowH = isz + HEX * 0.02;
+    const fs = HEX * 0.32, isz = HEX * 0.34, pad = HEX * 0.08, rowH = isz + HEX * 0.02;
     ctx.save();
     ctx.font = `800 ${fs}px system-ui, sans-serif`;
     ctx.textBaseline = 'middle';
@@ -1663,54 +1663,53 @@ export class Renderer {
       const y = this.cityYields[ci];
       if (!y || (fog && !fog.explored?.[city.idx])) return;
       const c = this.center(city.idx);
-      if (c.x < vr.x0 - HEX * 2 || c.x > vr.x1 + HEX * 2 || c.y < vr.y0 - HEX * 3 || c.y > vr.y1 + HEX * 2) return;
-      const rows = [['food', 'wood'], ['ore', 'mana']];
-      const cellW = isz + 1 + Math.max(numW, ...['food', 'wood', 'ore', 'mana'].map((k) => ctx.measureText(String(y[k] || 0)).width));
-      const w = cellW * 2 + gap + pad * 2, h = rowH * 2 + pad * 2;
-      let y0 = c.y - HEX * (city.castle ? 2.15 : 1.3) - h / 2;
-      if (!city.castle && city.buildings?.includes('wall')) {
-        // über die (mit der Stadt wachsende) Mauer setzen
-        const sc = CITY_SCALE[city.level] || 2.2;
-        y0 = Math.min(y0, c.y - HEX * (0.25 * (sc - 1) + 0.82 * sc) - h);
-      }
-      const x0 = c.x - w / 2;
-      ctx.fillStyle = 'rgba(10,20,36,0.8)';
+      if (c.x < vr.x0 - HEX * 2 || c.x > vr.x1 + HEX * 5 || c.y < vr.y0 - HEX * 3 || c.y > vr.y1 + HEX * 2) return;
+      // Zeilen untereinander: Symbol, Zahl; davor (außen) das Gebäude-Symbol, wenn der Rohstoff ausgebaut ist
+      const ECO = { food: 'farm', wood: 'lumber', ore: 'mine', mana: 'press' };
+      // Zeilen mit 0 ausblenden; ausgebaute Rohstoffe bleiben auch bei 0 sichtbar (Symbol)
+      const RES4 = ['food', 'wood', 'ore', 'mana'].filter((k) => (y[k] || 0) > 0 || city.buildings?.includes(ECO[k]));
+      if (!RES4.length) return;
+      const txtW = Math.max(numW * 0.5, ...RES4.map((k) => ctx.measureText(String(y[k] || 0)).width));
+      const w = pad + isz + fs * 0.3 + txtW + pad * 1.5, h = rowH * RES4.length + pad * 2;
+      // links neben der Stadt, vertikal mittig (etwas über der Feldmitte)
+      const sc = city.castle ? 2.4 : CITY_SCALE[city.level] || 2.2;
+      const half = HEX * (city.castle ? 2 : city.buildings?.includes('wall') ? 0.95 * sc : 0.7 * sc);
+      const yMid = c.y - HEX * (city.castle ? 0.5 : 0.25 * sc);
+      const x0 = c.x - half - w, y0 = yMid - h / 2;
+      ctx.fillStyle = 'rgba(10,20,36,0.45)';
       ctx.strokeStyle = colorOf(city.owner).main;
       ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.roundRect(x0, y0, w, h, HEX * 0.12);
       ctx.fill();
       ctx.stroke();
-      rows.forEach((row, r) => row.forEach((k, col) => {
-        const x = x0 + pad + col * (cellW + gap), yc = y0 + pad + r * rowH + rowH / 2;
+      const br = rowH * 0.48;
+      RES4.forEach((k, r) => {
+        const x = x0 + pad, yc = y0 + pad + r * rowH + rowH / 2;
         const v = y[k] || 0;
-        ctx.globalAlpha = v > 0 ? 1 : 0.45;
+        if (city.buildings?.includes(ECO[k])) {
+          const bx = x0 - br - HEX * 0.04;
+          ctx.save();
+          ctx.fillStyle = 'rgba(10,20,36,0.85)';
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = HEX * 0.045;
+          ctx.beginPath();
+          ctx.arc(bx, yc, br, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.font = `${br * 1.25}px system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#fff';
+          ctx.fillText(BUILDINGS[ECO[k]].icon, bx, yc + 0.5);
+          ctx.restore();
+        }
+        ctx.globalAlpha = v > 0 ? 1 : 0.5;
         const img = this.resIcons?.[k];
         if (img?.complete) ctx.drawImage(img, x, yc - isz / 2, isz, isz);
-        ctx.fillStyle = v > 0 ? '#f8fafc' : '#94a3b8';
-        ctx.fillText(String(v), x + isz + 1, yc + 0.5);
-      }));
-      ctx.globalAlpha = 1;
-      // Symbole der gebauten Wirtschaftsgebäude als Plaketten-Reihe über dem Ertrag
-      const icons = ['farm', 'lumber', 'mine', 'press', 'market'].filter((b) => city.buildings?.includes(b)).map((b) => BUILDINGS[b].icon);
-      const r = HEX * 0.24, step = r * 2.15;
-      let bx = c.x - ((icons.length - 1) * step) / 2;
-      ctx.save();
-      ctx.font = `${r * 1.3}px system-ui, sans-serif`;
-      ctx.textAlign = 'center';
-      for (const ic of icons) {
-        ctx.fillStyle = 'rgba(10,20,36,0.85)';
-        ctx.strokeStyle = '#facc15';
-        ctx.lineWidth = HEX * 0.05;
-        ctx.beginPath();
-        ctx.arc(bx, y0 - r - 2, r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = '#fff';
-        ctx.fillText(ic, bx, y0 - r - 1.5);
-        bx += step;
-      }
-      ctx.restore();
+        ctx.fillStyle = v > 0 ? '#f8fafc' : '#cbd5e1';
+        ctx.fillText(String(v), x + isz + fs * 0.3, yc + 0.5);
+        ctx.globalAlpha = 1;
+      });
     });
     ctx.restore();
   }
