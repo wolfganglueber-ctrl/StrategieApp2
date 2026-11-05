@@ -701,7 +701,7 @@ function merlons(ctx, x0, x1, y, s, n) {
 }
 
 // Runder Wehrturm mit Zinnenkranz und Kegeldach in Spielerfarbe
-function turret(ctx, x, y, r, h, col, s, roof = true) {
+function turret(ctx, x, y, r, h, col, s, roof = true, rk = 2.6) {
   shadowEllipse(ctx, x + r * 0.5, y + 1 * s, r * 1.3, r * 0.45, 0.3);
   ctx.fillStyle = stone(ctx, x - r, x + r);
   ctx.fillRect(x - r, y - h, r * 2, h);
@@ -738,19 +738,19 @@ function turret(ctx, x, y, r, h, col, s, roof = true) {
     ctx.fillStyle = rg;
     ctx.beginPath();
     ctx.moveTo(x - r - 0.5 * s, top - 2 * s);
-    ctx.lineTo(x, top - 2 * s - r * 2.6);
+    ctx.lineTo(x, top - 2 * s - r * rk);
     ctx.lineTo(x + r + 0.5 * s, top - 2 * s);
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = 'rgba(40,20,10,0.6)';
     ctx.stroke();
   }
-  return roof ? top - 2 * s - r * 2.6 : top - 5 * s;
+  return roof ? top - 2 * s - r * rk : top - 5 * s;
 }
 
 // Dicke Stadtmauer als Ring mit Wehrgang; erst die hintere Hälfte (vor den Häusern), dann die vordere
 function cityWall(ctx, x, y, s, col, half, big) {
-  const cx = x, cy = y + 7 * s, rx = 33 * s, ry = 20.5 * s;
+  const cx = x, cy = y + 7 * s, rx = 38 * s, ry = 23.5 * s;
   const wh = (big ? 14 : 12) * s, thick = 5 * s;
   const a0 = half === 'back' ? Math.PI : 0, a1 = half === 'back' ? Math.PI * 2 : Math.PI;
   const N = 18;
@@ -820,18 +820,8 @@ function cityWall(ctx, x, y, s, col, half, big) {
   ctx.beginPath();
   ctx.ellipse(cx, cy, rx, ry, 0, a0, a1);
   ctx.stroke();
-  const tr = 5.2 * s, th = wh + 8 * s;
-  if (half === 'back') {
-    for (const a of [Math.PI * 1.22, Math.PI * 1.78]) {
-      const [tx, ty] = pt(a);
-      turret(ctx, tx, ty, tr, th, col, s, true);
-    }
-  } else {
-    // Seitentürme und Torhaus
-    for (const a of [Math.PI * 0.02, Math.PI * 0.98]) {
-      const [tx, ty] = pt(a);
-      turret(ctx, tx, ty, tr, th, col, s, true);
-    }
+  if (half !== 'back') {
+    // Torhaus
     const [gx, gy] = pt(Math.PI / 2);
     const gw = 14 * s, gh = wh + 7 * s;
     ctx.fillStyle = stone(ctx, gx - gw / 2, gx + gw / 2);
@@ -1283,7 +1273,7 @@ function townStall(ctx, x, y, s, col, seed) {
 }
 // Quadratischer Steinturm mit Pyramidendach (Glockenturm, Rathausturm, Kathedralturm)
 function townTower(ctx, x, y, w, h, s, o) {
-  const { roof = '#a33', clock = false, bell = false, spire = 1.6, cross = false, seed = 3 } = o;
+  const { roof = '#a33', clock = false, bell = false, spire = 1.6, cross = false, door = false, seed = 3 } = o;
   const d = w * 0.4;
   ctx.fillStyle = '#cbbd9e';
   ctx.beginPath();
@@ -1335,6 +1325,20 @@ function townTower(ctx, x, y, w, h, s, o) {
   // Fensterschlitz
   ctx.fillStyle = '#ffd36a';
   ctx.fillRect(x - 0.5 * s, y - h * 0.45, 1 * s, 2.4 * s);
+  if (door) {
+    const dw = Math.min(w * 0.24, 1.6 * s), dh = 4.5 * s;
+    ctx.fillStyle = '#6b4423';
+    ctx.beginPath();
+    ctx.moveTo(x - dw, y);
+    ctx.lineTo(x - dw, y - dh + dw);
+    ctx.arc(x, y - dh + dw, dw, Math.PI, 0);
+    ctx.lineTo(x + dw, y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#3b2a1a';
+    ctx.lineWidth = 0.4 * s;
+    ctx.stroke();
+  }
   // Pyramidendach
   const rh = w * spire;
   ctx.fillStyle = shade(roof, -0.3);
@@ -1373,9 +1377,80 @@ function townTower(ctx, x, y, w, h, s, o) {
 }
 // Kathedrale: Langhaus nach hinten, Westfassade mit zwei Türmen, Rosette und Portal
 function townCathedral(ctx, x, y, s, col, roof) {
-  townHouse(ctx, x + 5 * s, y - 5 * s, 16 * s, 13 * s, s, { wall: 'stone', roof: '#59606e', seed: 41 });
   // Fassade
   const fw = 15 * s, fh = 16 * s;
+  // Langhaus: läuft in derselben Flucht wie die Häuser nach hinten und steht auf dem Boden
+  const D = 18 * s, k = 0.55, gh = 6.5 * s, ex = x + fw / 2;
+  shadowEllipse(ctx, ex + D * 0.5, y - D * k * 0.5 + 1.5 * s, D * 0.8, 3 * s, 0.3);
+  ctx.fillStyle = '#cbbd9e';
+  ctx.beginPath();
+  ctx.moveTo(ex, y);
+  ctx.lineTo(ex + D, y - D * k);
+  ctx.lineTo(ex + D, y - fh - D * k);
+  ctx.lineTo(ex, y - fh);
+  ctx.closePath();
+  ctx.fill();
+  ctx.save();
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(90,75,55,0.28)';
+  ctx.lineWidth = 0.4 * s;
+  for (let yy = 2 * s; yy < fh; yy += 2 * s) {
+    ctx.beginPath();
+    ctx.moveTo(ex, y - yy);
+    ctx.lineTo(ex + D, y - yy - D * k);
+    ctx.stroke();
+  }
+  ctx.restore();
+  // hohe Spitzbogenfenster und Strebepfeiler
+  for (let i = 0; i < 3; i++) {
+    const f = (i + 0.8) / 3.4, wx = ex + D * f, wy = y - D * k * f;
+    ctx.fillStyle = '#5b8fd6';
+    ctx.beginPath();
+    ctx.moveTo(wx - 1 * s, wy - 3 * s + 0.55 * s);
+    ctx.lineTo(wx - 1 * s, wy - 9 * s + 0.55 * s);
+    ctx.lineTo(wx, wy - 11 * s);
+    ctx.lineTo(wx + 1 * s, wy - 9 * s - 0.55 * s);
+    ctx.lineTo(wx + 1 * s, wy - 3 * s - 0.55 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#3b2a1a';
+    ctx.lineWidth = 0.4 * s;
+    ctx.stroke();
+    const bf = f + 0.5 / 3.4, bx = ex + D * bf, by = y - D * k * bf;
+    ctx.fillStyle = '#b5a785';
+    ctx.fillRect(bx - 0.7 * s, by - fh + 3 * s, 1.4 * s, fh - 3 * s);
+  }
+  ctx.beginPath();
+  ctx.moveTo(ex, y);
+  ctx.lineTo(ex + D, y - D * k);
+  ctx.lineTo(ex + D, y - fh - D * k);
+  ctx.lineTo(ex, y - fh);
+  ctx.closePath();
+  ctx.strokeStyle = 'rgba(70,70,70,0.65)';
+  ctx.lineWidth = 0.7 * s;
+  ctx.stroke();
+  // Dach des Langhauses: First von der Giebelspitze aus in derselben Flucht
+  const slate = '#59606e';
+  ctx.fillStyle = shade(slate, -0.25);
+  ctx.beginPath();
+  ctx.moveTo(x, y - fh - gh);
+  ctx.lineTo(ex + 0.8 * s, y - fh + 0.4 * s);
+  ctx.lineTo(ex + D + 0.8 * s, y - fh - D * k + 0.4 * s);
+  ctx.lineTo(x + D, y - fh - gh - D * k);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(40,20,10,0.6)';
+  ctx.lineWidth = 0.7 * s;
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 0.4 * s;
+  for (let i = 1; i < 6; i++) {
+    const f = i / 6;
+    ctx.beginPath();
+    ctx.moveTo(x + (ex - x) * f, y - fh - gh + (gh + 0.4 * s) * f);
+    ctx.lineTo(x + D + (ex - x) * f, y - fh - gh - D * k + (gh + 0.4 * s) * f);
+    ctx.stroke();
+  }
   ctx.fillStyle = '#f3ecdc';
   ctx.fillRect(x - fw / 2, y - fh, fw, fh);
   wallTexture(ctx, 'stone', x - fw / 2, y - fh, fw, fh, s, 43);
@@ -1564,14 +1639,15 @@ function townStageInner(ctx, x, y, s, lv, col, walled, inner) {
   const items = [];
   const H = (hx, hy, w, h, o) => items.push([hy, () => townHouse(ctx, x + hx * s, y + hy * s, w * s, h * s, s, { roof, ...o })]);
   let perch = null;
-  const R = [0, [17, 10], [23, 14], [25, 15.5], [27, 17], [29, 18]][Math.min(5, lv)];
+  const R = [0, [25, 15], [23, 14], [25, 15.5], [27, 17], [29, 18]][Math.min(5, lv)];
   townGround(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, lv);
   if (lv === 1) {
     if (!inner) townFence(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, 'fence', 'back');
-    items.push([4, () => townWell(ctx, x + 1 * s, y + 4 * s, s)]);
-    H(-7, 10, 11, 7.5, { wall: 'log', roofKind: 'thatch', seed: 1 });
-    H(9, 14, 10, 7, { wall: 'log', roofKind: 'thatch', seed: 2 });
-    items.push([2, () => flag(ctx, x - 12 * s, y + 2 * s, 9 * s, col, s)]);
+    items.push([8, () => townWell(ctx, x + 1 * s, y + 8 * s, s)]);
+    H(-11, 7, 11, 7.5, { wall: 'log', roofKind: 'thatch', seed: 1 });
+    H(11, 9, 10, 7, { wall: 'log', roofKind: 'thatch', seed: 2 });
+    H(-1, 19, 8.5, 6, { wall: 'log', roofKind: 'thatch', seed: 7 });
+    items.push([2, () => flag(ctx, x - 17 * s, y + 3 * s, 9 * s, col, s)]);
   } else if (lv === 2) {
     if (!walled && !inner) townFence(ctx, x, y + 8 * s, R[0] * s, R[1] * s, s, 'palisade', 'back');
     items.push([9, () => townWell(ctx, x + 1 * s, y + 9 * s, s)]);
@@ -1591,8 +1667,8 @@ function townStageInner(ctx, x, y, s, lv, col, walled, inner) {
     items.push([11, () => townStall(ctx, x + 1 * s, y + 11 * s, s, col, 1)]);
     items.push([13, () => townStall(ctx, x + 9 * s, y + 13 * s, s, col, 3)]);
   } else if (lv === 4) {
-    items.push([2, () => { const t = townTower(ctx, x + 6 * s, y + 2 * s, 6.5 * s, 22 * s, s, { roof, clock: true, seed: 21 }); perch = t; flag(ctx, t[0], t[1], 8 * s, col, s); }]);
-    items.push([3, () => { townHouse(ctx, x - 12 * s, y + 3 * s, 11 * s, 8 * s, s, { wall: 'stone', roof, seed: 22 }); townTower(ctx, x - 18 * s, y + 3 * s, 4.5 * s, 17 * s, s, { roof, bell: true, cross: true, seed: 23 }); }]);
+    items.push([2, () => { const t = townTower(ctx, x + 6 * s, y + 2 * s, 6.5 * s, 22 * s, s, { roof, clock: true, door: true, seed: 21 }); perch = t; flag(ctx, t[0], t[1], 8 * s, col, s); }]);
+    items.push([3, () => { townHouse(ctx, x - 12 * s, y + 3 * s, 11 * s, 8 * s, s, { wall: 'stone', roof, seed: 22 }); townTower(ctx, x - 18 * s, y + 3 * s, 4.5 * s, 17 * s, s, { roof, bell: true, cross: true, door: true, seed: 23 }); }]);
     H(19, 8, 9.5, 10, { wall: 'timber', floors: 2, seed: 24 });
     H(-21, 16, 9, 10, { wall: 'timber', floors: 2, seed: 25 });
     H(-6, 23, 11, 11, { wall: 'timber', floors: 2, seed: 26 });
@@ -1600,7 +1676,7 @@ function townStageInner(ctx, x, y, s, lv, col, walled, inner) {
     H(22, 21, 8, 9, { wall: 'timber', floors: 2, seed: 28 });
     items.push([13, () => townStall(ctx, x + 1 * s, y + 13 * s, s, col, 2)]);
   } else {
-    items.push([3, () => { perch = townCathedral(ctx, x - 2 * s, y + 4 * s, s, col, roof); }]);
+    items.push([1.5, () => { perch = townCathedral(ctx, x - 2 * s, y + 4 * s, s, col, roof); }]);
     H(18, 2, 9, 10, { wall: 'stone', floors: 2, seed: 30 });
     H(-20, 1, 9, 10, { wall: 'stone', floors: 2, seed: 31 });
     H(25, 13, 9, 10, { wall: 'timber', floors: 2, seed: 32 });
